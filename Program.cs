@@ -2,10 +2,12 @@ using SengokuProvider.API.Services.Common;
 
 var builder = WebApplication.CreateBuilder(args);
 
+//constant config variables
+var connectionString = builder.Configuration.GetConnectionString("AlexandriaConnectionString");
 // Add services to the container.
-builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(conn =>
+builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(provider =>
 {
-    return new CommonDatabaseService(Environment.GetEnvironmentVariable("AlexandriaConnectionString"));
+    return new CommonDatabaseService(connectionString);
 });
 
 builder.Services.AddControllers();
