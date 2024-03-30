@@ -13,6 +13,11 @@ namespace SengokuProvider.API.Services.Common
             _connectionString = connectionString;
         }
 
+        public Task<int> CreateAssociativeTable()
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task<int> CreateTable(string tableName, Tuple<string, string>[] columnDefinitions)
         {
             if (!IsValidIdentifier(tableName) || columnDefinitions.Any(cn => !IsValidIdentifier(cn.Item1)) || columnDefinitions == null)
@@ -33,43 +38,17 @@ namespace SengokuProvider.API.Services.Common
                 return await conn.ExecuteAsync(createTableCommand);
             }
         }
-        public async Task<int> CreateAssociativeTable()
-        {
-            using (var conn = new NpgsqlConnection(_connectionString))
-            {
-                conn.Open();
-                var createAssociativeTables = @"
-                CREATE TABLE IF NOT EXISTS players_events (
-                    player_id INTEGER REFERENCES players(id),
-                    event_id INTEGER REFERENCES events(id),
-                    PRIMARY KEY (player_id, event_id)
-                );
-
-                CREATE TABLE IF NOT EXISTS players_legends (
-                    player_id INTEGER REFERENCES players(id),
-                    legend_id INTEGER REFERENCES legends(id),
-                    PRIMARY KEY (player_id, legend_id)
-                );
-
-                CREATE TABLE IF NOT EXISTS events_legends (
-                    event_id INTEGER REFERENCES events(id),
-                    legend_id INTEGER REFERENCES legends(id),
-                    PRIMARY KEY (event_id, legend_id)
-                );";
-
-                return await conn.ExecuteAsync(createAssociativeTables);
-            }
-        }
-        public Task<CreateTableCommand> ParseRequest(CreateTableCommand command)
+        public Task<T> ParseRequest<T>(T command) where T : ICommand
         {
             if (command == null)
             {
-                return Task.FromResult(new CreateTableCommand { TableName = "BadRequest", Response = "Request cannot be empty" });
+                throw new ArgumentNullException(nameof(command), "Request cannot be empty");
             }
 
-            if (string.IsNullOrEmpty(command.TableName) || command.TableDefinitions == null || command.TableDefinitions.Length == 0)
+            if (!command.Validate())
             {
-                return Task.FromResult(new CreateTableCommand { TableName = "BadRequest", Response = "TableName and TableDefinitions cannot be empty" });
+                command.Response = "BadRequest: Validation failed";
+                return Task.FromResult(command);
             }
 
             command.Response = "Success";
