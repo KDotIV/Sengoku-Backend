@@ -1,4 +1,5 @@
 using SengokuProvider.API.Services.Common;
+using SengokuProvider.API.Services.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,11 +10,14 @@ builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(provid
 {
     return new CommonDatabaseService(connectionString);
 });
+builder.Services.AddScoped<IUserService, UserService>(provider =>
+{
+    return new UserService(connectionString);
+});
 
 builder.Services.AddTransient<CommandProcessor>();
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

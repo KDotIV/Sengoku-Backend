@@ -45,12 +45,12 @@ namespace SengokuProvider.API.Controllers
                 }
 
                 _logger.LogError("CreateTable execution failed.");
-                return new ObjectResult("Error message") { StatusCode = StatusCodes.Status500InternalServerError };
+                return new ObjectResult("Unexpected Error Occured");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error creating table.");
-                return new ObjectResult("Error message") { StatusCode = StatusCodes.Status500InternalServerError };
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
     }

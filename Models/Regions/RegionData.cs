@@ -1,4 +1,8 @@
-﻿namespace SengokuProvider.API.Models
+﻿using SengokuProvider.API.Models.Events;
+using SengokuProvider.API.Models.Legends;
+using SengokuProvider.API.Models.Players;
+
+namespace SengokuProvider.API.Models.Regions
 {
     public class RegionData
     {

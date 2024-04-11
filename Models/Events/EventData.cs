@@ -1,4 +1,7 @@
-﻿namespace SengokuProvider.API.Models
+﻿using SengokuProvider.API.Models.Legends;
+using SengokuProvider.API.Models.Players;
+
+namespace SengokuProvider.API.Models.Events
 {
     public class EventData
     {

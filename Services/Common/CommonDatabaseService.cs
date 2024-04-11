@@ -1,6 +1,5 @@
 ﻿using Dapper;
 using Npgsql;
-using SengokuProvider.API.Models.Common;
 
 namespace SengokuProvider.API.Services.Common
 {
@@ -38,25 +37,8 @@ namespace SengokuProvider.API.Services.Common
                 return await conn.ExecuteAsync(createTableCommand);
             }
         }
-        public Task<T> ParseRequest<T>(T command) where T : ICommand
-        {
-            if (command == null)
-            {
-                throw new ArgumentNullException(nameof(command), "Request cannot be empty");
-            }
-
-            if (!command.Validate())
-            {
-                command.Response = "BadRequest: Validation failed";
-                return Task.FromResult(command);
-            }
-
-            command.Response = "Success";
-            return Task.FromResult(command);
-        }
         private bool IsValidIdentifier(string identifier)
         {
-            // Basic validation to ensure identifier consists only of letters, digits, and underscores, and does not start with a digit
             return !string.IsNullOrWhiteSpace(identifier) &&
                    identifier.All(c => char.IsLetterOrDigit(c) || c == '_') &&
                    !char.IsDigit(identifier[0]);
