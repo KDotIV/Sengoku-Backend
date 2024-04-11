@@ -1,4 +1,5 @@
-﻿using SengokuProvider.API.Models.Legends;
+﻿using SengokuProvider.API.Models.Common;
+using SengokuProvider.API.Models.Legends;
 using SengokuProvider.API.Models.Players;
 
 namespace SengokuProvider.API.Models.Events
@@ -9,8 +10,8 @@ namespace SengokuProvider.API.Models.Events
         public required string EventName { get; set; }
         public string? EventDescription { get; set; }
         public required int Region { get; set; }
-        public Game[]? Games { get; set; }
-        public PlayerData[]? PlayerData { get; set; }
-        public LegendData[]? LegendData { get; set; }
+        public List<Game>? Games { get; set; }
+        public List<PlayerData>? PlayerData { get; set; }
+        public List<LegendData>? LegendData { get; set; }
     }
 }
