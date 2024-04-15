@@ -4,6 +4,6 @@ namespace SengokuProvider.API.Services.Events
 {
     public interface IEventService
     {
-        public Task<int> IntakeTournamentData(TournamentIntakeCommand intakeCommand);
+        public Task<Tuple<int, int>> IntakeTournamentData(TournamentIntakeCommand intakeCommand);
     }
 }

@@ -1,19 +1,21 @@
 ﻿using Dapper;
 using Npgsql;
-using System.Text.RegularExpressions;
+using SengokuProvider.API.Services.Common;
 
 namespace SengokuProvider.API.Services.Users
 {
-    public class UserService : IUserService
+    internal class UserService : IUserService
     {
         private readonly string _connectionString;
-        public UserService(string connectionString)
+        private readonly IntakeValidator _validator;
+        public UserService(string connectionString, IntakeValidator validator)
         {
             _connectionString = connectionString;
+            _validator = validator;
         }
         public async Task<int> CreateUser(string username, string email, string password)
         {
-            if (!IsValidIdentifier(username) || !IsValidIdentifier(email) || !IsValidIdentifier(password))
+            if (!_validator.IsValidIdentifier(username) || !_validator.IsValidIdentifier(email) || !_validator.IsValidIdentifier(password))
             {
                 throw new ArgumentException("Invalid input data");
             }
@@ -32,20 +34,6 @@ namespace SengokuProvider.API.Services.Users
                     return await command.ExecuteNonQueryAsync();
                 }
             }
-        }
-        private bool IsValidIdentifier(string input)
-        {
-            // Basic check for common SQL injection patterns
-            if (string.IsNullOrWhiteSpace(input) || input.Contains(';') ||
-                input.Contains("'") || input.Contains("--") ||
-                input.Contains("/*") || input.Contains("*/"))
-            {
-                return false;
-            }
-
-            // Regular expression to validate the input
-            var regex = new Regex("^[a-zA-Z0-9_@.-]+$");
-            return regex.IsMatch(input);
         }
         private bool CheckDuplicatedUser(string input)
         {

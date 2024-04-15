@@ -3,7 +3,7 @@ using Npgsql;
 
 namespace SengokuProvider.API.Services.Common
 {
-    public class CommonDatabaseService : ICommonDatabaseService
+    internal class CommonDatabaseService : ICommonDatabaseService
     {
         private readonly string _connectionString;
 

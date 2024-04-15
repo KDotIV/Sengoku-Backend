@@ -6,10 +6,11 @@ namespace SengokuProvider.API.Models.Events
     public class TournamentIntakeCommand : ICommand
     {
         public required int Page { get; set; }
-        public required string StateCode { get; set; }
+        public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
-        public required string[] Filters { get; set; }
+        public string[]? Filters { get; set; }
+        public string[]? Variables { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -18,7 +19,7 @@ namespace SengokuProvider.API.Models.Events
                 !string.IsNullOrEmpty(StateCode) &&
                 StartDate > 0 &&
                 EndDate > 0 &&
-                Filters.Length > 0)
+                Filters.Length >= 0 && Filters != null)
                 return true;
             else return false;
         }
@@ -31,7 +32,10 @@ namespace SengokuProvider.API.Models.Events
 
         public bool Validate()
         {
-            throw new NotImplementedException();
+            if (EventId > 0 &&
+                UpdateParameters != null &&
+                UpdateParameters.Count > 0) return true;
+            else return false;
         }
     }
 }
