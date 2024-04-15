@@ -28,9 +28,6 @@ namespace SengokuProvider.API.Services.Events
         }
         public async Task<Tuple<int, int>> IntakeTournamentData(TournamentIntakeCommand intakeCommand)
         {
-
-            /*            if (!_validator.IsValidIdentifier(intakeCommand.Filters) || !_validator.IsValidIdentifier(intakeCommand.StateCode))
-                            throw new ArgumentException("Invalid input data");*/
             try
             {
                 var currentQuery = BuildGraphQLQuery(intakeCommand);
@@ -250,7 +247,7 @@ namespace SengokuProvider.API.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        private Task<EventQueryResult> QueryStartggTournaments(string query, string[] variables)
+        private async Task<EventQueryResult> QueryStartggTournaments(string query, string[] variables)
         {
             var currentVariable = ParseVariables(variables);
 
@@ -270,14 +267,14 @@ namespace SengokuProvider.API.Services.Events
             };
             try
             {
-                var response = _client.SendQueryAsync<JObject>(request).Result.Data;
-                if (response == null) throw new Exception($"Failed to retrieve tournament data. {response}");
+                var response = await _client.SendQueryAsync<JObject>(request);
+                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
 
-                var tempJson = JsonConvert.SerializeObject(response, Formatting.Indented);
+                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
 
                 var eventData = JsonConvert.DeserializeObject<EventQueryResult>(tempJson);
 
-                return Task.FromResult<EventQueryResult>(eventData);
+                return eventData;
             }
             catch (Exception ex)
             {
