@@ -24,6 +24,20 @@ namespace SengokuProvider.API.Models.Events
             else return false;
         }
     }
+    public class GetTournamentsByLocationCommand : ICommand
+    {
+        public required int RegionId { get; set; }
+        public required int PerPage { get; set; }
+        public bool Sorted { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (RegionId > 0 &&
+                PerPage > 0) return true;
+            else return false;
+        }
+    }
     public class UpdateEventCommand : ICommand
     {
         public required int EventId { get; set; }

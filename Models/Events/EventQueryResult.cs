@@ -1,43 +1,16 @@
-﻿using Newtonsoft.Json;
-
-namespace SengokuProvider.API.Models.Events
+﻿namespace SengokuProvider.API.Models.Events
 {
-    public class EventQueryResult
+    public class AddressEventResult
     {
-        [JsonProperty("tournaments")]
-        public required TournamentResult Tournaments { get; set; }
-    }
-
-    public class TournamentResult
-    {
-        [JsonProperty("nodes")]
-        public required List<EventNode> Nodes { get; set; }
-    }
-
-    public class EventNode
-    {
-        [JsonProperty("id")]
-        public int Id { get; set; }
-
-        [JsonProperty("name")]
-        public required string Name { get; set; }
-
-        [JsonProperty("addrState")]
-        public required string AddrState { get; set; }
-
-        [JsonProperty("lat")]
-        public double Lat { get; set; }
-
-        [JsonProperty("lng")]
-        public double Lng { get; set; }
-
-        [JsonProperty("venueAddress")]
-        public required string VenueAddress { get; set; }
-
-        [JsonProperty("startAt")]
-        public long StartAt { get; set; }
-
-        [JsonProperty("endAt")]
-        public long EndAt { get; set; }
+        public required string Address { get; set; }
+        public required double Latitude { get; set; }
+        public required double Longitude { get; set; }
+        public required double Distance { get; set; }
+        public required string EventName { get; set; }
+        public string? EventDescription { get; set; }
+        public int Region { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public required int LinkId { get; set; }
     }
 }

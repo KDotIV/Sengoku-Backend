@@ -8,8 +8,6 @@ namespace SengokuProvider.API.Services.Common
         {
             return IsValidIdentifier(new string[] { input });
         }
-
-        // Method to validate an array of string inputs
         internal bool IsValidIdentifier(string[] inputs)
         {
             var regex = new Regex("^[a-zA-Z0-9_@.-]+$", RegexOptions.Compiled);

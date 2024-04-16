@@ -29,11 +29,16 @@ builder.Services.AddScoped<IUserService, UserService>(provider =>
     var intakeValidator = provider.GetRequiredService<IntakeValidator>();
     return new UserService(connectionString, intakeValidator);
 });
-builder.Services.AddScoped<IEventService, EventService>(provider =>
+builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 {
     var intakeValidator = provider.GetService<IntakeValidator>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
-    return new EventService(connectionString, graphQlClient, intakeValidator);
+    return new EventIntakeService(connectionString, graphQlClient, intakeValidator);
+});
+builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
+{
+    var intakeValidator = provider.GetService<IntakeValidator>();
+    return new EventQueryService(connectionString, intakeValidator);
 });
 
 builder.Services.AddControllers();

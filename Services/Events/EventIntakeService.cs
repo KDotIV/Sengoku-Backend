@@ -12,14 +12,14 @@ using System.Text;
 
 namespace SengokuProvider.API.Services.Events
 {
-    internal class EventService : IEventService
+    internal class EventIntakeService : IEventIntakeService
     {
         private readonly IntakeValidator _validator;
         private readonly GraphQLHttpClient _client;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<string, int> _addressCache;
-        public EventService(string connectionString, GraphQLHttpClient client, IntakeValidator validator)
+        public EventIntakeService(string connectionString, GraphQLHttpClient client, IntakeValidator validator)
         {
             _connectionString = connectionString;
             _validator = validator;
@@ -31,7 +31,7 @@ namespace SengokuProvider.API.Services.Events
             try
             {
                 var currentQuery = BuildGraphQLQuery(intakeCommand);
-                var newEventData = await QueryStartggTournaments(currentQuery, intakeCommand.Variables);
+                var newEventData = await QueryStartggTournaments(intakeCommand);
 
                 return await ProcessEventData(newEventData);
             }
@@ -40,7 +40,6 @@ namespace SengokuProvider.API.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-
         private async Task<int> InsertNewAddressData(List<AddressData> data)
         {
             var totalSuccess = 0;
@@ -130,13 +129,12 @@ namespace SengokuProvider.API.Services.Events
             }
             return totalSuccess;
         }
-        private async Task<Tuple<int, int>> ProcessEventData(EventQueryResult queryData)
+        private async Task<Tuple<int, int>> ProcessEventData(EventGraphQLResult queryData)
         {
             var addressMap = new Dictionary<string, int>(); // Map to store address and its ID
             var addresses = new List<AddressData>();
             var events = new List<EventData>();
 
-            // First, collect all unique addresses
             foreach (var node in queryData.Tournaments.Nodes)
             {
                 if (!_addressCache.TryGetValue(node.VenueAddress, out int addressId))
@@ -144,13 +142,13 @@ namespace SengokuProvider.API.Services.Events
                     if (!addressMap.ContainsKey(node.VenueAddress))
                     {
                         addressId = await CheckDuplicateAddress(node.VenueAddress);
-                        if (addressId == 0) // Only add if it's really new
+                        if (addressId == 0)
                         {
                             var addressData = new AddressData
                             {
                                 Address = node.VenueAddress,
-                                Latitude = Convert.ToDecimal(node.Lat),
-                                Longitude = Convert.ToDecimal(node.Lng)
+                                Latitude = node.Lat,
+                                Longitude = node.Lng
                             };
                             addresses.Add(addressData);
                         }
@@ -247,10 +245,8 @@ namespace SengokuProvider.API.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        private async Task<EventQueryResult> QueryStartggTournaments(string query, string[] variables)
+        private async Task<EventGraphQLResult> QueryStartggTournaments(TournamentIntakeCommand command)
         {
-            var currentVariable = ParseVariables(variables);
-
             var tempQuery = @"query TournamentsByState($perPage: Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) {tournaments(query: {perPage: $perPage,filter: {addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd}}) {nodes {id,name,addrState,lat,lng,venueAddress,startAt,endAt}}}";
 
 
@@ -259,10 +255,10 @@ namespace SengokuProvider.API.Services.Events
                 Query = tempQuery,
                 Variables = new
                 {
-                    perPage = 500,
-                    state = "GA",
-                    yearStart = 1704067200,
-                    yearEnd = 1735689599
+                    perPage = command.Page,
+                    state = command.StateCode,
+                    yearStart = command.StartDate,
+                    yearEnd = command.EndDate,
                 }
             };
             try
@@ -272,7 +268,7 @@ namespace SengokuProvider.API.Services.Events
 
                 var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
 
-                var eventData = JsonConvert.DeserializeObject<EventQueryResult>(tempJson);
+                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
                 return eventData;
             }
