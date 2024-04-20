@@ -63,7 +63,7 @@ namespace SengokuProvider.API.Services.Events
                                     Address = reader.GetString(reader.GetOrdinal("address")),
                                     Latitude = reader.GetDouble(reader.GetOrdinal("latitude")),
                                     Longitude = reader.GetDouble(reader.GetOrdinal("longitude")),
-                                    Distance = reader.GetDouble(reader.GetOrdinal("distance")),
+                                    Distance = Math.Round(reader.GetDouble(reader.GetOrdinal("distance")), 4),
                                     EventName = reader.GetString(reader.GetOrdinal("event_name")),
                                     EventDescription = reader.GetString(reader.GetOrdinal("event_description")),
                                     Region = reader.GetInt32(reader.GetOrdinal("region")),

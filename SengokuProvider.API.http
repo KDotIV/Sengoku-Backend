@@ -1,6 +1,6 @@
-@SengokuProvider.API_HostAddress = http://localhost:5150
+@SengokuProvider.API_HostAddress = https://localhost:5150
 
-GET {{SengokuProvider.API_HostAddress}}/weatherforecast/
+GET {{SengokuProvider.API_HostAddress}}/api/core/Pulse
 Accept: application/json
 
 ###

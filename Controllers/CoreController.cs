@@ -18,7 +18,11 @@ namespace SengokuProvider.API.Controllers
             _commonDb = commonDb;
             _commandProcessor = commandProcessor;
         }
-
+        [HttpGet("Pulse")]
+        public IActionResult Pulse()
+        {
+            return new OkObjectResult("I'm Alive...");
+        }
         [HttpPost("CreateTable")]
         public async Task<IActionResult> CreateDatabaseTable([FromBody] CreateTableCommand command)
         {
