@@ -7,8 +7,6 @@ using SengokuProvider.API.Models.Common;
 using SengokuProvider.API.Models.Events;
 using SengokuProvider.API.Services.Common;
 using System.Collections.Concurrent;
-using System.Dynamic;
-using System.Text;
 
 namespace SengokuProvider.API.Services.Events
 {
@@ -26,23 +24,163 @@ namespace SengokuProvider.API.Services.Events
             _client = client;
             _addressCache = new ConcurrentDictionary<string, int>();
         }
-        public async Task<Tuple<int, int>> IntakeTournamentData(TournamentIntakeCommand intakeCommand)
+        public async Task<Tuple<int, int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand)
         {
             try
             {
-                var currentQuery = BuildGraphQLQuery(intakeCommand);
-                var newEventData = await QueryStartggTournaments(intakeCommand);
+                EventGraphQLResult newEventData = await QueryStartggTournamentsByState(intakeCommand);
 
                 return await ProcessEventData(newEventData);
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
+        }
+        public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
+        {
+            try
+            {
+                EventGraphQLResult newEventData = await QueryStartggEventsByGameId(intakeCommand);
+                return await ProcessGameData(newEventData);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        public async Task<bool> IntakeEventsByTournamentId(int tournamentId)
+        {
+            try
+            {
+                EventGraphQLResult newEventData = await QueryStartggEventByTournamentId(tournamentId);
+
+                var eventResult = await ProcessEventData(newEventData);
+
+                if (eventResult == null) { Console.WriteLine("No Result from Processing Event Records. Either an Error Occured or this Record was already inserted"); return false; }
+
+                var gameResult = await ProcessGameData(newEventData);
+
+                if (gameResult == 0) { Console.WriteLine("No Result from Processing Game Records. Either an Error Occured or this Record was already inserted"); return false; }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        private async Task<int> ProcessGameData(EventGraphQLResult newEventData)
+        {
+            var totalSuccess = 0;
+            try
+            {
+                var currentBatch = await BuildTournamentData(newEventData);
+                totalSuccess = await InsertNewTournamentData(totalSuccess, currentBatch);
+
+                return totalSuccess;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return totalSuccess;
+        }
+
+        private async Task<int> InsertNewTournamentData(int totalSuccess, List<TournamentData> currentBatch)
+        {
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                using (var transaction = await conn.BeginTransactionAsync())
+                {
+                    foreach (var tournament in currentBatch)
+                    {
+                        var createInsertCommand = @"
+                            INSERT INTO tournament_links (id, url_slug, games_ids)
+                            VALUES (@Input, @UrlSlug, @Games)
+                            ON CONFLICT (id) DO UPDATE SET
+                                url_slug = EXCLUDED.url_slug,
+                                games_ids = EXCLUDED.games_ids;";
+                        using (var command = new NpgsqlCommand(createInsertCommand, conn))
+                        {
+                            command.Transaction = transaction;
+                            command.Parameters.AddWithValue(@"Input", tournament.Id);
+                            command.Parameters.AddWithValue(@"UrlSlug", tournament.UrlSlug);
+
+                            var gamesParam = CreateDBIntArrayType("Games", tournament.Games);
+                            command.Parameters.Add(gamesParam);
+
+                            var result = await command.ExecuteNonQueryAsync();
+                            if (result > 0) totalSuccess += result;
+                        }
+                    }
+                    await transaction.CommitAsync();
+                }
+            }
+
+            return totalSuccess;
+        }
+
+        private async Task<List<TournamentData>> BuildTournamentData(EventGraphQLResult newEventData)
+        {
+            var tournamentBatch = new List<TournamentData>();
+
+            foreach (var tournament in newEventData.Tournaments.Nodes)
+            {
+                TournamentData newTournament = new TournamentData
+                {
+                    Id = tournament.Id,
+                    UrlSlug = tournament.Slug,
+                    Games = tournament.Events.Select(x => x.Videogame.Id).ToArray()
+                };
+
+                if (!await VerifyTournamentLink(newTournament.Id))
+                {
+                    await IntakeEventsByTournamentId(tournament.Id);
+                    throw new Exception($"ID: {tournament.Id} does not exist in database. Attempting to Find Events/Tournaments");
+                }
+
+                tournamentBatch.Add(newTournament);
+            }
+            return tournamentBatch;
+        }
+
+        private async Task<bool> VerifyTournamentLink(int id)
+        {
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+
+                    var newQuery = @"SELECT link_id FROM events 
+                        WHERE link_id = @Input AND link_id IN (SELECT id FROM tournament_links);";
+                    var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = id });
+
+                    if (result <= 0) return false;
+                }
+                return true;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return false;
         }
         private async Task<int> InsertNewAddressData(List<AddressData> data)
         {
             var totalSuccess = 0;
+
+            if (data == null || data.Count == 0) return 0;
 
             try
             {
@@ -79,17 +217,19 @@ namespace SengokuProvider.API.Services.Events
             }
             catch (NpgsqlException ex)
             {
-                throw new ApplicationException("Database error occurred: ", ex);
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return totalSuccess;
         }
         private async Task<int> InsertNewEventsData(List<EventData> data)
         {
             var totalSuccess = 0;
+
+            if (data == null || data.Count == 0) return 0;
 
             try
             {
@@ -115,17 +255,17 @@ namespace SengokuProvider.API.Services.Events
                                 if (result > 0) totalSuccess++;
                             }
                         }
-                        transaction.Commit();
+                        await transaction.CommitAsync();
                     }
                 }
             }
             catch (NpgsqlException ex)
             {
-                throw new ApplicationException("Database error occurred: ", ex);
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return totalSuccess;
         }
@@ -214,12 +354,13 @@ namespace SengokuProvider.API.Services.Events
             }
             catch (NpgsqlException ex)
             {
-                throw new ApplicationException("Database error occurred: ", ex);
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
+            return 0;
         }
         private async Task<bool> CheckDuplicateEvents(int linkId)
         {
@@ -238,27 +379,49 @@ namespace SengokuProvider.API.Services.Events
             }
             catch (NpgsqlException ex)
             {
-                throw new ApplicationException("Database error occurred: ", ex);
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        private async Task<EventGraphQLResult> QueryStartggTournaments(TournamentIntakeCommand command)
+        private NpgsqlParameter CreateDBIntArrayType(string parameterName, int[] array)
         {
-            var tempQuery = @"query TournamentsByState($perPage: Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) {tournaments(query: {perPage: $perPage,filter: {addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd}}) {nodes {id,name,addrState,lat,lng,venueAddress,startAt,endAt}}}";
+            var newParameters = new NpgsqlParameter();
+            newParameters.ParameterName = parameterName;
+            newParameters.Value = array;
+            newParameters.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer;
 
+            return newParameters;
+        }
+        private NpgsqlParameter CreateDBTextArrayType(string parameterName, string[] array)
+        {
+            var newParameters = new NpgsqlParameter();
+            newParameters.ParameterName = parameterName;
+            newParameters.Value = array;
+            newParameters.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text;
 
+            return newParameters;
+        }
+        private async Task<EventGraphQLResult> QueryStartggEventByTournamentId(int tournamentId)
+        {
+            var tempQuery = @"query TournamentQuery($tournamentId: ID) {
+                              tournaments(query: {
+                                filter: {
+                                  id:$tournamentId
+                                }
+                              }) {
+                                nodes {id, name, addrState, lat, lng, venueAddress, startAt, endAt, slug, events {
+                                    videogame {
+                                      id
+                                    }}}}}";
             var request = new GraphQLHttpRequest
             {
                 Query = tempQuery,
                 Variables = new
                 {
-                    perPage = command.Page,
-                    state = command.StateCode,
-                    yearStart = command.StartDate,
-                    yearEnd = command.EndDate,
+                    tournamentId = tournamentId
                 }
             };
             try
@@ -278,89 +441,89 @@ namespace SengokuProvider.API.Services.Events
                 throw;
             }
         }
-        private string BuildGraphQLQuery(TournamentIntakeCommand command)
+        private async Task<EventGraphQLResult> QueryStartggEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
-            if (!ValidateFilters(command.Filters))
-                throw new ArgumentException("Invalid filters provided");
+            var tempQuery = @"query TournamentQuery($perPage: Int, $videogameIds: [ID], $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) {
+                                  tournaments(query: {
+                                    perPage: $perPage
+                                    filter: {
+                                      videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
+                                    }}) {
+                                    nodes {
+                                      id name slug startAt endAt events {
+                                        videogame {
+                                          id
+                                        }}}}}";
 
-            var queryBuilder = new StringBuilder();
-            queryBuilder.Append("query TournamentsByState(");
-
-            // Append variables with correct formatting
-            for (int i = 0; i < command.Variables.Length; i++)
+            var request = new GraphQLHttpRequest
             {
-                queryBuilder.Append($"{command.Variables[i]}");
-                if (i < command.Variables.Length - 1)
-                    queryBuilder.Append(", ");
-            }
-
-            queryBuilder.Append(") { tournaments(query: {");
-            queryBuilder.Append($"perPage: {command.Page} ");
-            queryBuilder.Append("filter: {");
-
-            // Predefined start and end dates
-            queryBuilder.Append($"afterDate: {command.StartDate}, ");
-            queryBuilder.Append($"beforeDate: {command.EndDate}, ");
-            queryBuilder.Append($"addrState: {command.StateCode}, ");
-            // Dynamically add additional filters if present
-            for (int i = 0; i < command.Filters.Length; i++)
+                Query = tempQuery,
+                Variables = new
+                {
+                    perPage = intakeCommand.Page,
+                    state = intakeCommand.StateCode,
+                    yearStart = intakeCommand.StartDate,
+                    yearEnd = intakeCommand.EndDate,
+                    videogameIds = intakeCommand.GameIDs
+                }
+            };
+            try
             {
-                queryBuilder.Append($"{command.Filters[i]}");
-                if (i < command.Filters.Length - 1)
-                    queryBuilder.Append(", "); // Append comma only if it's not the last filter
-            }
-            queryBuilder.Append("}}) { nodes {");
-            queryBuilder.Append("id name addrState lat lng venueAddress startAt endAt");
-            queryBuilder.Append("}}}");
+                var response = await _client.SendQueryAsync<JObject>(request);
+                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
 
-            return queryBuilder.ToString();
+                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+
+                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                return eventData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                throw;
+            }
         }
-        private bool ValidateFilters(string[] filters)
+        private async Task<EventGraphQLResult> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
         {
-            if (filters.Length == 0) return true;
-            var allowedFields = new HashSet<string>
+            var tempQuery = @"query TournamentQuery($perPage: Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
+                {tournaments(query: {
+                    perPage: $perPage,
+                    filter: {
+                        addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
+                            }}) {
+                            nodes {
+                                id,name,addrState,lat,lng,venueAddress,startAt,endAt}}}";
+
+
+            var request = new GraphQLHttpRequest
             {
-                "id", "ids", "ownerId", "isCurrentUserAdmin", "countryCode", "addrState",
-                "location", "afterDate", "beforeDate", "computedUpdatedAt", "name", "venueName",
-                "isFeatured", "isLeague", "hasBannerImages", "activeShops", "regOpen", "past",
-                "published", "publiclySearchable", "staffPicks", "hasOnlineEvents", "topGames",
-                "upcoming", "videogameIds", "sortByScore"
+                Query = tempQuery,
+                Variables = new
+                {
+                    perPage = command.Page,
+                    state = command.StateCode,
+                    yearStart = command.StartDate,
+                    yearEnd = command.EndDate,
+                }
             };
 
-            foreach (var filter in filters)
+            try
             {
-                var parts = filter.Split(new[] { ':' }, 2);
-                if (parts.Length != 2 || !allowedFields.Contains(parts[0].Trim()))
-                {
-                    return false;
-                }
+                var response = await _client.SendQueryAsync<JObject>(request);
+                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+
+                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+
+                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                return eventData;
             }
-
-            return true;
-        }
-        private object ParseVariables(string[] variableDeclarations)
-        {
-            var variableDictionary = new ExpandoObject() as IDictionary<string, Object>;
-
-            foreach (var declaration in variableDeclarations)
+            catch (Exception ex)
             {
-                var parts = declaration.Split(':');
-                if (parts.Length == 2)
-                {
-                    var key = parts[0].Trim();
-                    var value = parts[1].Trim().Trim('\''); // Remove any single quotes around string values
-
-                    if (int.TryParse(value, out int intValue)) //Assumes that all values are strings/int
-                    {
-                        variableDictionary[key] = intValue;
-                    }
-                    else
-                    {
-                        variableDictionary[key] = value;
-                    }
-                }
+                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                throw;
             }
-            return variableDictionary;
         }
     }
 }

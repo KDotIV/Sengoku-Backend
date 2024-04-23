@@ -3,14 +3,12 @@ using SengokuProvider.API.Models.Common;
 
 namespace SengokuProvider.API.Models.Events
 {
-    public class TournamentIntakeCommand : ICommand
+    public class IntakeEventsByLocationCommand : ICommand
     {
         public required int Page { get; set; }
         public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
-        public string[]? Filters { get; set; }
-        public string[]? Variables { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -18,8 +16,7 @@ namespace SengokuProvider.API.Models.Events
             if (Page > 0 &&
                 !string.IsNullOrEmpty(StateCode) &&
                 StartDate > 0 &&
-                EndDate > 0 &&
-                Filters.Length >= 0 && Filters != null)
+                EndDate > 0)
                 return true;
             else return false;
         }
@@ -35,6 +32,36 @@ namespace SengokuProvider.API.Models.Events
         {
             if (RegionId > 0 &&
                 PerPage > 0) return true;
+            else return false;
+        }
+    }
+    public class IntakeEventsByGameIdCommand : ICommand
+    {
+        public required int Page { get; set; }
+        public string? StateCode { get; set; }
+        public required int StartDate { get; set; }
+        public required int EndDate { get; set; }
+        public required int[] GameIDs { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (Page > 0 &&
+                !string.IsNullOrEmpty(StateCode) &&
+                StartDate > 0 &&
+                EndDate > 0)
+                return true;
+            else return false;
+        }
+    }
+    public class IntakeEventsByTournamentIdCommand : ICommand
+    {
+        public required int TournamentId { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (TournamentId > 0) return true;
             else return false;
         }
     }

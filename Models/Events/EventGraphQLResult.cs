@@ -39,5 +39,21 @@ namespace SengokuProvider.API.Models.Events
 
         [JsonProperty("endAt")]
         public long EndAt { get; set; }
+        [JsonProperty("slug")]
+        public required string Slug { get; set; }
+
+        [JsonProperty("events")]
+        public List<EventDetail>? Events { get; set; }
+    }
+    public class EventDetail
+    {
+        [JsonProperty("videogame")]
+        public Videogame? Videogame { get; set; }
+    }
+
+    public class Videogame
+    {
+        [JsonProperty("id")]
+        public int Id { get; set; }
     }
 }

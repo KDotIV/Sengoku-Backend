@@ -23,8 +23,8 @@ namespace SengokuProvider.API.Controllers
             _commandProcessor = command;
         }
 
-        [HttpGet("IntakeTournaments")]
-        public async Task<IActionResult> IntakeTournaments([FromBody] TournamentIntakeCommand command)
+        [HttpPost("IntakeEventsByLocation")]
+        public async Task<IActionResult> IntakeTournamentsByLocation([FromBody] IntakeEventsByLocationCommand command)
         {
             if (command == null)
             {
@@ -43,6 +43,62 @@ namespace SengokuProvider.API.Controllers
             {
                 var result = await _eventIntakeService.IntakeTournamentData(command);
                 return new OkObjectResult($"Addresses Inserted: {result.Item1} - Events Inserted: {result.Item2}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Intaking Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+
+            }
+        }
+        [HttpPost("IntakeTournamentsByGameIds")]
+        public async Task<IActionResult> IntakeTournamentsByGameIds([FromBody] IntakeEventsByGameIdCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                var result = await _eventIntakeService.IntakeEventsByGameId(command);
+                return new OkObjectResult($"Tournaments Inserted: {result}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Intaking Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+
+            }
+        }
+        [HttpPost("IntakeEventsByTournamentId")]
+        public async Task<IActionResult> IntakeEventsByTournamentId([FromBody] IntakeEventsByTournamentIdCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                var result = await _eventIntakeService.IntakeEventsByTournamentId(command.TournamentId);
+                return new OkObjectResult($"Tournaments Inserted: {result}");
             }
             catch (Exception ex)
             {
