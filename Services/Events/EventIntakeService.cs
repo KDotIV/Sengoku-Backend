@@ -240,8 +240,17 @@ namespace SengokuProvider.API.Services.Events
                     {
                         foreach (var newEvent in data)
                         {
+                            await EnsureLinkIdExists(newEvent.LinkID, conn);
+
                             var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id) 
-                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id)";
+                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id)
+                            ON CONFLICT (link_id) DO UPDATE SET
+                                event_name = EXCLUDED.event_name,
+                                event_description = EXCLUDED.event_description,
+                                region = EXCLUDED.region,
+                                address_id = EXCLUDED.address_id,
+                                start_time = EXCLUDED.start_time,
+                                end_time = EXCLUDED.end_time;";
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
                             {
                                 command.Parameters.AddWithValue("@Event_Name", newEvent.EventName);
@@ -361,6 +370,41 @@ namespace SengokuProvider.API.Services.Events
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;
+        }
+        private async Task EnsureLinkIdExists(int linkId, NpgsqlConnection conn)
+        {
+            var cmdText = @"
+                SELECT EXISTS (
+                    SELECT 1 FROM tournament_links WHERE id = @linkId
+                );";
+            try
+            {
+                using (var cmd = new NpgsqlCommand(cmdText, conn))
+                {
+                    cmd.Parameters.AddWithValue("@linkId", linkId);
+                    var result = await cmd.ExecuteScalarAsync();
+                    bool exists = result != null && (bool)result;
+
+                    if (!exists)
+                    {
+                        // Insert into tournament_links if not exists
+                        var insertCmdText = "INSERT INTO tournament_links (id) VALUES (@linkId) ON CONFLICT (id) DO NOTHING;";
+                        using (var insertCmd = new NpgsqlCommand(insertCmdText, conn))
+                        {
+                            insertCmd.Parameters.AddWithValue("@linkId", linkId);
+                            await insertCmd.ExecuteNonQueryAsync();
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
         }
         private async Task<bool> CheckDuplicateEvents(int linkId)
         {
