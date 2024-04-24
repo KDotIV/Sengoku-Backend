@@ -530,9 +530,9 @@ namespace SengokuProvider.API.Services.Events
         }
         private async Task<EventGraphQLResult> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
         {
-            var tempQuery = @"query TournamentQuery($perPage: Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
+            var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
                 {tournaments(query: {
-                    perPage: $perPage,
+                    perPage: $perPage, page: $pagenum
                     filter: {
                         addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                             }}) {
@@ -545,7 +545,8 @@ namespace SengokuProvider.API.Services.Events
                 Query = tempQuery,
                 Variables = new
                 {
-                    perPage = command.Page,
+                    perPage = command.PerPage,
+                    page = command.PageNum,
                     state = command.StateCode,
                     yearStart = command.StartDate,
                     yearEnd = command.EndDate,

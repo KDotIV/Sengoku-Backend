@@ -10,4 +10,4 @@ dotnet_diagnostic.CS8602.severity = silent
 dotnet_diagnostic.CS8600.severity = silent
 
 # IDE0058: Expression value is never used
-dotnet_diagnostic.IDE0058.severity = silent
+dotnet_diagnostic.IDE0058.severity = none
