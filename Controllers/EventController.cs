@@ -134,5 +134,10 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpGet("QueryCurrentStandingsByEventId")]
+        public async Task<IActionResult> QueryCurrentStandingsByEventId([FromBody] GetCurrentStandingsByEventIdCommand)
+        {
+
+        }
     }
 }

@@ -36,6 +36,15 @@ namespace SengokuProvider.API.Models.Events
             else return false;
         }
     }
+    public class GetCurrentStandingsByEventIdCommand : ICommand
+    {
+        public string? Response { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        public bool Validate()
+        {
+
+        }
+    }
     public class IntakeEventsByGameIdCommand : ICommand
     {
         public required int Page { get; set; }
