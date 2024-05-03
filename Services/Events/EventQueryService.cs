@@ -188,5 +188,9 @@ namespace SengokuProvider.API.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
+        public async Task<PlayerStandingResult> QueryPlayerStandingsByEventId(GetPlayerStandingsByEventIdCommand command)
+        {
+
+        }
     }
 }

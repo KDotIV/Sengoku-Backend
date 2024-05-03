@@ -1,0 +1,61 @@
+query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
+  event(id: $eventId) {
+    id
+    name
+    entrants(query: {
+      perPage: $perPage
+      filter: { name: $gamerTag }
+    }) {
+      nodes {
+        id
+        participants {
+          id
+          gamerTag
+        }
+        standing {
+          id
+          placement
+          container {
+            __typename
+            ... on Tournament {
+              id
+              name
+              countryCode
+              startAt
+              endAt
+              events {
+                id
+                name
+              }
+            }
+            ... on Event {
+              id
+              name
+              startAt
+              numEntrants
+              tournament {
+                id
+                name
+              }
+            }
+            ... on Set {
+              id
+              event {
+                id
+                name
+              }
+              startAt
+              completedAt
+              games {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+1130134
+636751

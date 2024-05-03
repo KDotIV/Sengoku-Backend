@@ -36,13 +36,19 @@ namespace SengokuProvider.API.Models.Events
             else return false;
         }
     }
-    public class GetCurrentStandingsByEventIdCommand : ICommand
+    public class GetPlayerStandingsByEventIdCommand : ICommand
     {
-        public string? Response { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+        public required int EventId { get; set; }
+        public required int PerPage { get; set; }
+        public required string GamerTag { get; set; }
+        public string? Response { get; set; }
 
         public bool Validate()
         {
-
+            if (EventId > 0 &&
+                PerPage > 0 &&
+                string.IsNullOrEmpty(GamerTag)) return true;
+            else return false;
         }
     }
     public class IntakeEventsByGameIdCommand : ICommand

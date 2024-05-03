@@ -134,10 +134,26 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("QueryCurrentStandingsByEventId")]
-        public async Task<IActionResult> QueryCurrentStandingsByEventId([FromBody] GetCurrentStandingsByEventIdCommand)
+        [HttpGet("QueryPlayerStandingsByEventId")]
+        public async Task<IActionResult> QueryPlayerStandingsByEventId([FromBody] GetPlayerStandingsByEventIdCommand command)
         {
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
 
+                try
+                {
+                    var result = await _eventQueryService.QueryPlayerStandingsByEventId(parsedRequest);
+                    var resultJson = JsonConvert.SerializeObject(result);
+                    return new OkObjectResult($"{resultJson}");
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, "Error Querying Tournament Data.");
+                    return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+                }
+            }
         }
     }
-}
