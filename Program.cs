@@ -15,7 +15,7 @@ var bearerToken = builder.Configuration["GraphQLSettings:Bearer"];
 // Add services to the container.
 builder.Services.AddTransient<CommandProcessor>();
 builder.Services.AddSingleton<IntakeValidator>();
-builder.Services.AddScoped<GraphQLHttpClient>(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
+builder.Services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
 {
     HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
 });
@@ -38,7 +38,8 @@ builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {
     var intakeValidator = provider.GetService<IntakeValidator>();
-    return new EventQueryService(connectionString, intakeValidator);
+    var graphQlClient = provider.GetService<GraphQLHttpClient>();
+    return new EventQueryService(connectionString, graphQlClient, intakeValidator);
 });
 
 builder.Services.AddControllers();

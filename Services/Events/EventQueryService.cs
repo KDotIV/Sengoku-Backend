@@ -1,4 +1,7 @@
-﻿using Npgsql;
+﻿using GraphQL.Client.Http;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using Npgsql;
 using SengokuProvider.API.Models.Events;
 using SengokuProvider.API.Models.Regions;
 using SengokuProvider.API.Services.Common;
@@ -9,10 +12,12 @@ namespace SengokuProvider.API.Services.Events
     {
         private readonly string _connectionString;
         private readonly IntakeValidator _validator;
-        internal EventQueryService(string connectionString, IntakeValidator validator)
+        private readonly GraphQLHttpClient _client;
+        internal EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator)
         {
             _connectionString = connectionString;
             _validator = validator;
+            _client = client;
         }
         public async Task<List<int>> QueryRelatedRegionsById(int regionId)
         {
@@ -188,9 +193,90 @@ namespace SengokuProvider.API.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<PlayerStandingResult> QueryPlayerStandingsByEventId(GetPlayerStandingsByEventIdCommand command)
+        public async Task<PlayerStandingResult> QueryPlayerStandings(GetPlayerStandingsCommand command)
         {
+            try
+            {
+                var data = await QueryStartggStandings(command);
+                if(data == null) { throw new NullReferenceException(); }
 
+                var newStandingResult = MapStandingsData(data);
+
+                return newStandingResult;
+            }
+            catch (Exception ex)
+            {
+                return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}" };
+                throw;
+            }
+        }
+
+        private PlayerStandingResult MapStandingsData(StandingGraphQLResult data)
+        {
+            var tempNode = data.Event.Entrants.Nodes.FirstOrDefault();
+            var mappedResult = new PlayerStandingResult
+            {
+                Response = "Open",
+                Standing = tempNode.Standing.Placement,
+                GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
+                EntrantsNum = tempNode.Standing.Container.NumEntrants,
+                EventDetails = new EventDetails
+                {
+                    EventId = tempNode.Standing.Container.Id,
+                    EventName = tempNode.Standing.Container.Name,
+                    TournamentId = tempNode.Standing.Container.Tournament.Id,
+                    TournamentName = tempNode.Standing.Container.Tournament.Name
+                },
+                TournamentLinks = new Links
+                {
+                    EntrantId = tempNode.Id,
+                    StandingId = tempNode.Standing.Id
+                }
+            };
+
+            return mappedResult;
+        }
+
+        private async Task<StandingGraphQLResult> QueryStartggStandings(GetPlayerStandingsCommand queryCommand)
+        {
+            var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
+                              event(id: $eventId) {
+                                id
+                                name
+                                entrants(query: {
+                                  perPage: $perPage
+                                  filter: { name: $gamerTag }}) {
+                                  nodes {id participants { id gamerTag } standing { id container {
+                                        __typename
+                                        ... on Tournament { id name countryCode startAt endAt events { id name }}
+                                        ... on Event { id name startAt numEntrants tournament { id name }}
+                                        ... on Set { id event { id name } startAt completedAt games { id }}
+                                      }}}}}}";
+            var request = new GraphQLHttpRequest
+            {
+                Query = tempQuery,
+                Variables = new
+                {
+                    PerPage = queryCommand.PerPage,
+                    EventId = queryCommand.EventId,
+                    GamerTag = queryCommand.GamerTag
+                }
+            };
+            try
+            {
+                var response = await _client.SendQueryAsync<JObject>(request);
+                if (response.Data == null) throw new ApplicationException($"Failed to retrieve standing data");
+
+                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+
+                var standingsData = JsonConvert.DeserializeObject<StandingGraphQLResult>(tempJson);
+                return standingsData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                throw;
+            }
         }
     }
 }

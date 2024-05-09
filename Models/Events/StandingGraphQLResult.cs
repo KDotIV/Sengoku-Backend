@@ -32,10 +32,10 @@ namespace SengokuProvider.API.Models.Events
         public int Id { get; set; }
 
         [JsonProperty("participants")]
-        public List<Participant> Participants { get; set; }
+        public List<Participant>? Participants { get; set; }
 
         [JsonProperty("standing")]
-        public Standing Standing { get; set; }
+        public Standing? Standing { get; set; }
     }
 
     public class Participant
@@ -44,7 +44,7 @@ namespace SengokuProvider.API.Models.Events
         public int Id { get; set; }
 
         [JsonProperty("gamerTag")]
-        public string GamerTag { get; set; }
+        public string? GamerTag { get; set; }
     }
 
     public class Standing
@@ -56,19 +56,19 @@ namespace SengokuProvider.API.Models.Events
         public int Placement { get; set; }
 
         [JsonProperty("container")]
-        public Container Container { get; set; }
+        public Container? Container { get; set; }
     }
 
     public class Container
     {
         [JsonProperty("__typename")]
-        public string Typename { get; set; }
+        public string? Typename { get; set; }
 
         [JsonProperty("id")]
         public int Id { get; set; }
 
         [JsonProperty("name")]
-        public string Name { get; set; }
+        public string? Name { get; set; }
 
         [JsonProperty("startAt")]
         public long StartAt { get; set; }
@@ -77,7 +77,7 @@ namespace SengokuProvider.API.Models.Events
         public int NumEntrants { get; set; }
 
         [JsonProperty("tournament")]
-        public Tournament Tournament { get; set; }
+        public Tournament? Tournament { get; set; }
     }
 
     public class Tournament
@@ -86,6 +86,6 @@ namespace SengokuProvider.API.Models.Events
         public int Id { get; set; }
 
         [JsonProperty("name")]
-        public string Name { get; set; }
+        public string? Name { get; set; }
     }
 }

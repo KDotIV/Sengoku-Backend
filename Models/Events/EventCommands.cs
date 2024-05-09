@@ -36,7 +36,7 @@ namespace SengokuProvider.API.Models.Events
             else return false;
         }
     }
-    public class GetPlayerStandingsByEventIdCommand : ICommand
+    public class GetPlayerStandingsCommand : ICommand
     {
         public required int EventId { get; set; }
         public required int PerPage { get; set; }

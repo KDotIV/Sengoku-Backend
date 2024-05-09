@@ -134,26 +134,30 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("QueryPlayerStandingsByEventId")]
-        public async Task<IActionResult> QueryPlayerStandingsByEventId([FromBody] GetPlayerStandingsByEventIdCommand command)
+        [HttpGet("QueryPlayerStandings")]
+        public async Task<IActionResult> QueryPlayerStandingsByEventId([FromBody] GetPlayerStandingsCommand command)
         {
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
             {
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);
-
-                try
+            }
+            try
+            {
+                var result = await _eventQueryService.QueryPlayerStandings(parsedRequest);
+                if (result.Response != "Open" || string.IsNullOrEmpty(result.GamerTag) || result.Standing <= 0)
                 {
-                    var result = await _eventQueryService.QueryPlayerStandingsByEventId(parsedRequest);
-                    var resultJson = JsonConvert.SerializeObject(result);
-                    return new OkObjectResult($"{resultJson}");
+                    return new BadRequestObjectResult($"Error Occurred for Result: {result.Response} - {result.GamerTag} - {result.Standing}");
                 }
-                catch (Exception ex)
-                {
-                    _log.LogError(ex, "Error Querying Tournament Data.");
-                    return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-                }
+                var resultJson = JsonConvert.SerializeObject(result);
+                return new OkObjectResult($"{resultJson}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
     }
+}
