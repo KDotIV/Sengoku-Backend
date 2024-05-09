@@ -222,10 +222,10 @@ namespace SengokuProvider.API.Services.Events
                 EntrantsNum = tempNode.Standing.Container.NumEntrants,
                 EventDetails = new EventDetails
                 {
-                    EventId = tempNode.Standing.Container.Id,
-                    EventName = tempNode.Standing.Container.Name,
-                    TournamentId = tempNode.Standing.Container.Tournament.Id,
-                    TournamentName = tempNode.Standing.Container.Tournament.Name
+                    EventId = tempNode.Standing.Container.Tournament.Id,
+                    EventName = tempNode.Standing.Container.Tournament.Name,
+                    TournamentId = tempNode.Standing.Container.Id,
+                    TournamentName = tempNode.Standing.Container.Name
                 },
                 TournamentLinks = new Links
                 {
@@ -246,7 +246,7 @@ namespace SengokuProvider.API.Services.Events
                                 entrants(query: {
                                   perPage: $perPage
                                   filter: { name: $gamerTag }}) {
-                                  nodes {id participants { id gamerTag } standing { id container {
+                                  nodes {id participants { id gamerTag } standing { id placement container {
                                         __typename
                                         ... on Tournament { id name countryCode startAt endAt events { id name }}
                                         ... on Event { id name startAt numEntrants tournament { id name }}
