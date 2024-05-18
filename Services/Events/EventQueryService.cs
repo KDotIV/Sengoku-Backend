@@ -134,7 +134,7 @@ namespace SengokuProvider.API.Services.Events
                         cmd.CommandText = @"
                             SELECT 
                                 a.address, a.latitude, a.longitude, 
-                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id,
+                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open,
                                 SQRT(
                                     POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
                                 ) AS distance
@@ -144,9 +144,9 @@ namespace SengokuProvider.API.Services.Events
                                 addresses a ON e.address_id = a.id
                             WHERE
                                 e.region = ANY(@RegionIds)
-                                AND e.start_time >= CURRENT_DATE
+                                AND e.closing_registration_date >= CURRENT_DATE
                             ORDER BY
-                                e.start_time ASC,
+                                e.closing_registration_date ASC,
                                 distance ASC
                             LIMIT @PerPage;";
 
@@ -175,13 +175,13 @@ namespace SengokuProvider.API.Services.Events
                                     Region = reader.GetInt32(reader.GetOrdinal("region")),
                                     StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),
                                     EndTime = reader.GetDateTime(reader.GetOrdinal("end_time")),
-                                    LinkId = reader.GetInt32(reader.GetOrdinal("link_id"))
+                                    LinkId = reader.GetInt32(reader.GetOrdinal("link_id")),
+                                    ClosingRegistration = reader.GetDateTime(reader.GetOrdinal("closing_registration_date"))
                                 });
                             }
                         }
                     }
                 }
-
                 return sortedAddresses;
             }
             catch (NpgsqlException ex)
