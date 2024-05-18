@@ -7,7 +7,8 @@ namespace SengokuProvider.API.Models.Players
     {
         public required int Id { get; set; }
         public required string PlayerName { get; set; }
-        public string? Summary { get; set; }
+        public string? Style { get; set; }
+        public required int LinkId { get; set; }
         public List<EventData>? EventData { get; set; }
         public List<LegendData>? LegendData { get; set; }
     }

@@ -1,61 +1,28 @@
-query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
-  event(id: $eventId) {
+1130134
+636751
+
+PlayerId: 1400524
+
+{
+  "Authorization":"Bearer 9299394ed453ea84206d3d0b16a95018"
+}
+
+query Sets {
+  player(id: 1400524) {
     id
-    name
-    entrants(query: {
-      perPage: $perPage
-      filter: { name: $gamerTag }
-    }) {
+    sets(perPage: 100, page: 1) {
       nodes {
         id
-        participants {
+        displayScore
+        event {
           id
-          gamerTag
-        }
-        standing {
-          id
-          placement
-          container {
-            __typename
-            ... on Tournament {
-              id
-              name
-              countryCode
-              startAt
-              endAt
-              events {
-                id
-                name
-              }
-            }
-            ... on Event {
-              id
-              name
-              startAt
-              numEntrants
-              tournament {
-                id
-                name
-              }
-            }
-            ... on Set {
-              id
-              event {
-                id
-                name
-              }
-              startAt
-              completedAt
-              games {
-                id
-              }
-            }
+          name
+          tournament {
+            id
+            name
           }
         }
       }
     }
   }
 }
-
-1130134
-636751
