@@ -13,6 +13,5 @@
         public DateTime EndTime { get; set; }
         public required int LinkId { get; set; }
         public required DateTime ClosingRegistration { get; set; }
-
     }
 }

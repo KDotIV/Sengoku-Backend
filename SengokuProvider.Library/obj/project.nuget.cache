@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "dgSpecHash": "q+rKRwRTc49STOgkX6D880m+BruP0HAY3T9eeFLeOVaYkWk3AS6nmbRlHOb7XcwIOR8O8pElcueglm6h3aR8UA==",
+  "success": true,
+  "projectFilePath": "C:\\Users\\Brwnber\\source\\repos\\SengokuProvider.Library\\SengokuProvider.Library.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\Brwnber\\.nuget\\packages\\dapper\\2.1.35\\dapper.2.1.35.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\graphql.client\\6.0.5\\graphql.client.6.0.5.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\graphql.client.abstractions\\6.0.5\\graphql.client.abstractions.6.0.5.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\graphql.client.abstractions.websocket\\6.0.5\\graphql.client.abstractions.websocket.6.0.5.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\graphql.primitives\\6.0.5\\graphql.primitives.6.0.5.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\microsoft.extensions.dependencyinjection.abstractions\\8.0.0\\microsoft.extensions.dependencyinjection.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\8.0.0\\microsoft.extensions.logging.abstractions.8.0.0.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\npgsql\\8.0.3\\npgsql.8.0.3.nupkg.sha512",
+    "C:\\Users\\Brwnber\\.nuget\\packages\\system.reactive\\6.0.0\\system.reactive.6.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}

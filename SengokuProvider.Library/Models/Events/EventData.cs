@@ -1,4 +1,4 @@
-﻿namespace SengokuProvider.API.Models.Events
+﻿namespace SengokuProvider.Library.Models.Events
 {
     public class EventData
     {
@@ -6,13 +6,11 @@
         public required string EventName { get; set; }
         public string? EventDescription { get; set; }
         public required int Region { get; set; }
-        public int AddressID { get; set; }
+        public required int AddressID { get; set; }
         public required int LinkID { get; set; }
         public DateTime StartTime { get; set; }
         public DateTime EndTime { get; set; }
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
-        public DateTime ClosingRegistration { get; set; }
-        public bool IsRegistrationOpen { get; set; }
+        public required DateTime ClosingRegistration { get; set; }
+        public required bool IsRegistrationOpen { get; set; }
     }
 }

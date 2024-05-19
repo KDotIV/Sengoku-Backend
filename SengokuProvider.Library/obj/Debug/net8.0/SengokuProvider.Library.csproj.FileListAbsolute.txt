@@ -1,0 +1,12 @@
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\bin\Debug\net8.0\SengokuProvider.Library.deps.json
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\bin\Debug\net8.0\SengokuProvider.Library.dll
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\bin\Debug\net8.0\SengokuProvider.Library.pdb
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.csproj.AssemblyReference.cache
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.AssemblyInfoInputs.cache
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.AssemblyInfo.cs
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.csproj.CoreCompileInputs.cache
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.dll
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\refint\SengokuProvider.Library.dll
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\SengokuProvider.Library.pdb
+C:\Users\Brwnber\source\repos\SengokuProvider.Library\obj\Debug\net8.0\ref\SengokuProvider.Library.dll
