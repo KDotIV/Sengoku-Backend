@@ -1,3 +1,4 @@
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Worker.Factories;
 
@@ -53,7 +54,29 @@ namespace SengokuProvider.Worker.Handlers
                     }
                     catch (Exception ex)
                     {
-                        throw new ApplicationException("Error During Processing: ", ex);
+                        Console.WriteLine($"Error while Processing TournamentLink {ex.Message} - {ex.StackTrace}");
+                    }
+                }
+
+                var eventsToUpdate = await _eventHandler.BeginEventIntegrity();
+                Console.WriteLine($"Events to Update: {eventsToUpdate.Count}");
+                foreach (var currentEventLink in eventsToUpdate)
+                {
+                    try
+                    {
+                        Console.WriteLine($"Attempting to Update EventId: {currentEventLink}");
+
+                        UpdateEventCommand? updatedEventCommand = await _eventHandler.CreateUpdateCommand(currentEventLink);
+                        await Task.Delay(1000);
+                        if (updatedEventCommand == null) { continue; }
+
+                        var updatedEvent = await _eventIntakeService.UpdateEventData(updatedEventCommand);
+                        if (updatedEvent) { Console.WriteLine($"Successfully Updated: {updatedEventCommand.EventId}"); }
+                        else { Console.WriteLine("Failed to update Event"); }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Error while Processing EventData Integrity {ex.Message} - {ex.StackTrace}");
                     }
                 }
             }

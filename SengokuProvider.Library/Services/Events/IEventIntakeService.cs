@@ -7,5 +7,6 @@ namespace SengokuProvider.Library.Services.Events
         public Task<Tuple<int, int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand);
         public Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand);
         public Task<bool> IntakeEventsByTournamentId(int tournamentId);
+        public Task<bool> UpdateEventData(UpdateEventCommand command);
     }
 }

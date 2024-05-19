@@ -82,9 +82,14 @@ namespace SengokuProvider.Library.Models.Events
     }
     public class UpdateEventCommand : ICommand
     {
-        public required int EventId { get; set; }
-        public required List<Tuple<string, string>> UpdateParameters { get; set; }
+        public int EventId { get; set; }
+        public List<Tuple<string, string>> UpdateParameters { get; set; }
         public string? Response { get; set; }
+
+        public UpdateEventCommand()
+        {
+            UpdateParameters = new List<Tuple<string, string>>();
+        }
 
         public bool Validate()
         {

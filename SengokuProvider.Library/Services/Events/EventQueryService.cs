@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
+using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
@@ -61,6 +62,45 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
+        public async Task<RegionData?> QueryRegion(GetRegionCommand command)
+        {
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand("Select * FROM regions WHERE @Field = @Value;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Field", command.QueryParameter.Item1);
+                        cmd.Parameters.AddWithValue("@Value", command.QueryParameter.Item2);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                return new RegionData
+                                {
+                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                    Name = reader.GetString(reader.GetOrdinal("name")),
+                                    Latitude = reader.GetDouble(reader.GetOrdinal("latitude")),
+                                    Longitude = reader.GetDouble(reader.GetOrdinal("longtitude")),
+                                    Province = reader.GetString(reader.GetOrdinal("province"))
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return null;
+        }
         public async Task<List<RegionData>> GetRegionData(List<int> regionIds)
         {
             var regions = new List<RegionData>();
@@ -96,6 +136,39 @@ namespace SengokuProvider.Library.Services.Events
 
                     return regions;
                 }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<AddressData> GetAddressById(int addressId)
+        {
+            try
+            {
+                var addressData = new AddressData();
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand("Select * From addresses WHERE id = @Input", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", addressId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                addressData.Address = reader.GetString(reader.GetOrdinal("address"));
+                                addressData.Longitude = reader.GetDouble(reader.GetOrdinal("longitude"));
+                                addressData.Latitude = reader.GetDouble(reader.GetOrdinal("latitude"));
+                            }
+                        }
+                    }
+                }
+                return addressData;
             }
             catch (NpgsqlException ex)
             {
@@ -210,7 +283,6 @@ namespace SengokuProvider.Library.Services.Events
                 throw;
             }
         }
-
         private PlayerStandingResult MapStandingsData(StandingGraphQLResult data)
         {
             var tempNode = data.Event.Entrants.Nodes.FirstOrDefault();
@@ -236,7 +308,41 @@ namespace SengokuProvider.Library.Services.Events
 
             return mappedResult;
         }
+        public async Task<EventGraphQLResult?> QueryStartggEventByEventId(int eventId)
+        {
+            var tempQuery = @"query TournamentQuery($tournamentId: ID!) 
+                {tournaments(query: {
+                    filter: {
+                        id: $tournamentId
+                            }}) {
+                            nodes {
+                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt}}}";
 
+            var request = new GraphQLHttpRequest
+            {
+                Query = tempQuery,
+                Variables = new
+                {
+                    tournamentId = eventId,
+                }
+            };
+            try
+            {
+                var response = await _client.SendQueryAsync<JObject>(request);
+                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+
+                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+
+                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                return eventData;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                throw;
+            }
+        }
         private async Task<StandingGraphQLResult> QueryStartggStandings(GetPlayerStandingsCommand queryCommand)
         {
             var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
@@ -257,9 +363,9 @@ namespace SengokuProvider.Library.Services.Events
                 Query = tempQuery,
                 Variables = new
                 {
-                    PerPage = queryCommand.PerPage,
-                    EventId = queryCommand.EventId,
-                    GamerTag = queryCommand.GamerTag
+                    queryCommand.PerPage,
+                    queryCommand.EventId,
+                    queryCommand.GamerTag
                 }
             };
             try
