@@ -242,15 +242,17 @@ namespace SengokuProvider.Library.Services.Events
                         {
                             await EnsureLinkIdExists(newEvent.LinkID, conn);
 
-                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id) 
-                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id)
+                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open) 
+                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen)
                             ON CONFLICT (link_id) DO UPDATE SET
                                 event_name = EXCLUDED.event_name,
                                 event_description = EXCLUDED.event_description,
                                 region = EXCLUDED.region,
                                 address_id = EXCLUDED.address_id,
                                 start_time = EXCLUDED.start_time,
-                                end_time = EXCLUDED.end_time;";
+                                end_time = EXCLUDED.end_time,
+                                closing_registration_date = EXCLUDED.closing_registration_date,
+                                registration_open = EXCLUDED.registration_open;";
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
                             {
                                 command.Parameters.AddWithValue("@Event_Name", newEvent.EventName);
@@ -260,6 +262,8 @@ namespace SengokuProvider.Library.Services.Events
                                 command.Parameters.AddWithValue(@"Start_Time", newEvent.StartTime);
                                 command.Parameters.AddWithValue(@"End_Time", newEvent.EndTime);
                                 command.Parameters.AddWithValue(@"Link_Id", newEvent.LinkID);
+                                command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration);
+                                command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen);
                                 var result = await command.ExecuteNonQueryAsync();
                                 if (result > 0) totalSuccess++;
                             }
@@ -333,7 +337,9 @@ namespace SengokuProvider.Library.Services.Events
                         Region = 1,
                         AddressID = addressMap[node.VenueAddress],  // Use the confirmed address ID from the map
                         StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
-                        EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime
+                        EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
+                        ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
+                        IsRegistrationOpen = node.IsRegistrationOpen
                     };
                     events.Add(eventData);
                 }
@@ -530,14 +536,14 @@ namespace SengokuProvider.Library.Services.Events
         }
         private async Task<EventGraphQLResult> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
         {
-            var tempQuery = @"query TournamentQuery($perPage: Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
+            var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
                 {tournaments(query: {
-                    perPage: $perPage,
+                    perPage: $perPage, page: $pagenum
                     filter: {
                         addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                             }}) {
                             nodes {
-                                id,name,addrState,lat,lng,venueAddress,startAt,endAt}}}";
+                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt}}}";
 
 
             var request = new GraphQLHttpRequest
@@ -545,7 +551,8 @@ namespace SengokuProvider.Library.Services.Events
                 Query = tempQuery,
                 Variables = new
                 {
-                    perPage = command.Page,
+                    perPage = command.PerPage,
+                    page = command.PageNum,
                     state = command.StateCode,
                     yearStart = command.StartDate,
                     yearEnd = command.EndDate,

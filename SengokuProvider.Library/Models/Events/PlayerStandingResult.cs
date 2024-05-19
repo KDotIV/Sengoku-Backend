@@ -1,9 +1,9 @@
-﻿namespace SengokuProvider.API.Models.Events
+﻿namespace SengokuProvider.Library.Models.Events
 {
     public class PlayerStandingResult
     {
         public int Standing { get; set; }
-        public string? GamerTag {  get; set; }
+        public string? GamerTag { get; set; }
         public EventDetails? EventDetails { get; set; }
         public Links? TournamentLinks { get; set; }
         public int EntrantsNum { get; set; }

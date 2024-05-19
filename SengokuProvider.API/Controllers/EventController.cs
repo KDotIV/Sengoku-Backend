@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using SengokuProvider.API.Models.Events;
-using SengokuProvider.API.Services.Common;
-using SengokuProvider.API.Services.Events;
+using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Events;
 
 namespace SengokuProvider.API.Controllers
 {

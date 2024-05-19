@@ -3,3 +3,7 @@ SengokuProvider.Worker/appsettings.json
 SengokuProvider.Worker/bin/Debug/net8.0/appsettings.Development.json
 SengokuProvider.Worker/bin/Debug/net8.0/appsettings.json
 SengokuProvider.Worker/appsettings.Development.json
+/SengokuProvider.Library/obj
+/SengokuProvider.Library/bin/Debug/net8.0
+/SengokuProvider.Worker/bin/Debug/net8.0
+/SengokuProvider.Worker/obj

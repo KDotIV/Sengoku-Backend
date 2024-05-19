@@ -1,8 +1,8 @@
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
-using SengokuProvider.API.Services.Common;
-using SengokuProvider.API.Services.Events;
-using SengokuProvider.API.Services.Users;
+using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Users;
 using System.Net.Http.Headers;
 
 var builder = WebApplication.CreateBuilder(args);

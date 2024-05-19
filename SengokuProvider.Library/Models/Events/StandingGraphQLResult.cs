@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace SengokuProvider.API.Models.Events
+namespace SengokuProvider.Library.Models.Events
 {
     public class StandingGraphQLResult
     {

@@ -4,7 +4,8 @@ namespace SengokuProvider.Library.Models.Events
 {
     public class IntakeEventsByLocationCommand : ICommand
     {
-        public required int Page { get; set; }
+        public required int PerPage { get; set; }
+        public required int PageNum { get; set; }
         public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
@@ -12,7 +13,7 @@ namespace SengokuProvider.Library.Models.Events
 
         public bool Validate()
         {
-            if (Page > 0 &&
+            if (PerPage > 0 && PageNum > 0 &&
                 !string.IsNullOrEmpty(StateCode) &&
                 StartDate > 0 &&
                 EndDate > 0)
@@ -31,6 +32,21 @@ namespace SengokuProvider.Library.Models.Events
         {
             if (RegionId > 0 &&
                 PerPage > 0) return true;
+            else return false;
+        }
+    }
+    public class GetPlayerStandingsCommand : ICommand
+    {
+        public required int EventId { get; set; }
+        public required int PerPage { get; set; }
+        public required string GamerTag { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (EventId > 0 &&
+                PerPage > 0 &&
+                string.IsNullOrEmpty(GamerTag)) return true;
             else return false;
         }
     }
