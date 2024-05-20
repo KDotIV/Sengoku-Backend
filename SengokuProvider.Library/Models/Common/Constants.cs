@@ -2,6 +2,48 @@
 
 namespace SengokuProvider.Library.Models.Common
 {
+    public struct QueryConstants
+    {
+        public const string DatePriority = @"
+                            SELECT 
+                                a.address, a.latitude, a.longitude, 
+                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open,
+                                SQRT(
+                                    POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
+                                ) AS distance
+                            FROM 
+                                events e
+                            JOIN 
+                                addresses a ON e.address_id = a.id
+                            WHERE
+                                e.region = ANY(@RegionIds)
+                                AND e.closing_registration_date >= CURRENT_DATE
+                                AND e.start_time >= CURRENT_DATE
+                            ORDER BY
+                                e.closing_registration_date ASC,
+                                distance ASC
+                            LIMIT @PerPage;";
+
+        public const string DistancePriority = @"
+                            SELECT 
+                                a.address, a.latitude, a.longitude, 
+                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open,
+                                SQRT(
+                                    POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
+                                ) AS distance
+                            FROM 
+                                events e
+                            JOIN 
+                                addresses a ON e.address_id = a.id
+                            WHERE
+                                e.region = ANY(@RegionIds)
+                                AND e.closing_registration_date >= CURRENT_DATE
+                                AND e.start_time >= CURRENT_DATE
+                            ORDER BY
+                                distance ASC,
+                                e.closing_registration_date ASC
+                            LIMIT @PerPage;";
+    }
     public struct GeoConstants
     {
         private static Polygon CreatePolygon(Coordinate[] coordinates)

@@ -238,28 +238,24 @@ namespace SengokuProvider.Library.Services.Events
                     {
                         regionIds.Add(region.Id);
                     }
+                    var priorityQueryString = "";
 
+                    switch (command.Priority)
+                    {
+                        case "distance":
+                            priorityQueryString = QueryConstants.DistancePriority;
+                            break;
+                        case "date":
+                            priorityQueryString = QueryConstants.DatePriority;
+                            break;
+                        default:
+                            priorityQueryString = QueryConstants.DatePriority;
+                            break;
+                    }
                     using (var cmd = new NpgsqlCommand())
                     {
                         cmd.Connection = conn;
-                        cmd.CommandText = @"
-                            SELECT 
-                                a.address, a.latitude, a.longitude, 
-                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open,
-                                SQRT(
-                                    POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
-                                ) AS distance
-                            FROM 
-                                events e
-                            JOIN 
-                                addresses a ON e.address_id = a.id
-                            WHERE
-                                e.region = ANY(@RegionIds)
-                                AND e.closing_registration_date >= CURRENT_DATE
-                            ORDER BY
-                                e.closing_registration_date ASC,
-                                distance ASC
-                            LIMIT @PerPage;";
+                        cmd.CommandText = priorityQueryString;
 
                         var regionIdsParam = cmd.CreateParameter();
                         regionIdsParam.ParameterName = "RegionIds";

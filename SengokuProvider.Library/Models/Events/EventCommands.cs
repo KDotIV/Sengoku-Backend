@@ -25,12 +25,13 @@ namespace SengokuProvider.Library.Models.Events
     {
         public required int RegionId { get; set; }
         public required int PerPage { get; set; }
-        public bool Sorted { get; set; }
+        public required string Priority { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
         {
             if (RegionId > 0 &&
+                !string.IsNullOrEmpty(Priority) &&
                 PerPage > 0) return true;
             else return false;
         }
