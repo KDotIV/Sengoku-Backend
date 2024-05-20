@@ -9,6 +9,17 @@ namespace SengokuProvider.Library.Models.Regions
 
         public bool Validate()
         {
+            return QueryParameter != null &&
+                   !string.IsNullOrEmpty(QueryParameter.Item1) &&
+                   !string.IsNullOrEmpty(QueryParameter.Item2);
+        }
+    }
+    public class InsertRegionCommand : ICommand
+    {
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
             throw new NotImplementedException();
         }
     }

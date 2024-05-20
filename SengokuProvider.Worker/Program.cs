@@ -37,7 +37,8 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             var intakeValidator = provider.GetService<IntakeValidator>();
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
-            return new EventIntakeService(connectionString, graphQlClient, intakeValidator);
+            var queryService = provider.GetService<IEventQueryService>();
+            return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator);
         });
         services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
         {
@@ -48,7 +49,8 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IEventIntegrityService, EventIntegrityService>(provider =>
         {
             var queryService = provider.GetService<IEventQueryService>();
-            return new EventIntegrityService(queryService, connectionString);
+            var intakeService = provider.GetService<IEventIntakeService>();
+            return new EventIntegrityService(queryService, intakeService, connectionString);
         });
     })
     .Build();

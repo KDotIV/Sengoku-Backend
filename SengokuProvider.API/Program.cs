@@ -33,7 +33,8 @@ builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 {
     var intakeValidator = provider.GetService<IntakeValidator>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
-    return new EventIntakeService(connectionString, graphQlClient, intakeValidator);
+    var queryService = provider.GetService<IEventQueryService>();
+    return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator);
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {

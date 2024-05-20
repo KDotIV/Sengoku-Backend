@@ -1,4 +1,5 @@
-﻿using SengokuProvider.Library.Models.Events;
+﻿using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Events;
 
 namespace SengokuProvider.Library.Services.Events
 {
@@ -8,5 +9,6 @@ namespace SengokuProvider.Library.Services.Events
         public Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand);
         public Task<bool> IntakeEventsByTournamentId(int tournamentId);
         public Task<bool> UpdateEventData(UpdateEventCommand command);
+        public Task<int> IntakeNewRegion(AddressData addressData);
     }
 }

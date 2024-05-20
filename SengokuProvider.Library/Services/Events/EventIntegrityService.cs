@@ -9,10 +9,12 @@ namespace SengokuProvider.Library.Services.Events
     public class EventIntegrityService : IEventIntegrityService
     {
         private readonly IEventQueryService _queryService;
+        private readonly IEventIntakeService _intakeService;
         private readonly string _connectionString;
-        public EventIntegrityService(IEventQueryService eventQueryService, string connectionString)
+        public EventIntegrityService(IEventQueryService eventQueryService, IEventIntakeService eventIntakeService, string connectionString)
         {
             _queryService = eventQueryService;
+            _intakeService = eventIntakeService;
             _connectionString = connectionString;
         }
 
@@ -71,7 +73,7 @@ namespace SengokuProvider.Library.Services.Events
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
-                            if (await reader.ReadAsync())
+                            while (await reader.ReadAsync())
                             {
                                 eventToUpdate.Id = reader.GetInt32(reader.GetOrdinal("id"));
                                 eventToUpdate.EventName = reader.GetString(reader.GetOrdinal("event_name"));
@@ -130,9 +132,13 @@ namespace SengokuProvider.Library.Services.Events
                 var regionData = await VerifyRegionAddressLink(addressData);
                 if (regionData == null)
                 {
-                    throw new ApplicationException($"Unable to find RegionData by Address: {eventToUpdate.AddressID} - Need to add Region to Table");
+                    Console.WriteLine("Creating New Region");
+                    var regionResult = await _intakeService.IntakeNewRegion(addressData);
+                    if (regionResult <= 0) { throw new ApplicationException($"Unable to Insert New Region by Address: {eventToUpdate.AddressID}"); }
+
+                    newCommand.UpdateParameters.Add(new Tuple<string, string>("region", regionResult.ToString()));
                 }
-                newCommand.UpdateParameters.Add(new Tuple<string, string>("region", regionData.Id.ToString()));
+                else { newCommand.UpdateParameters.Add(new Tuple<string, string>("region", regionData.Id.ToString())); }
             }
             return newCommand;
         }
@@ -144,10 +150,18 @@ namespace SengokuProvider.Library.Services.Events
             if (addressSplit.Length < 3) return null;
 
             var tempCity = addressSplit[1].Trim();
-            var tempZipCode = addressSplit[2].Trim().Split(" ")[1];
+            string tempZipCode = "";
+            if (addressSplit.Length > 2) { tempZipCode = addressSplit[2].Trim().Split(" ")[1]; }
 
             var cityQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", tempCity) };
-            return await _queryService.QueryRegion(cityQuery);
+            var cityResult = await _queryService.QueryRegion(cityQuery);
+            if (cityResult == null && !string.IsNullOrEmpty(tempZipCode))
+            {
+                var zipCodeQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("id", tempZipCode) };
+                var zipCodeResult = await _queryService.QueryRegion(zipCodeQuery);
+                return zipCodeResult;
+            }
+            return cityResult;
         }
         public async Task<List<int>> BeginIntegrityTournamentLinks()
         {
@@ -213,7 +227,6 @@ namespace SengokuProvider.Library.Services.Events
             }
             return linksToProcess;
         }
-
         public Task<bool> VerifyEventUpdate()
         {
             throw new NotImplementedException();

@@ -1,10 +1,12 @@
 ﻿using Dapper;
 using GraphQL.Client.Http;
+using NetTopologySuite.Geometries;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
 using System.Collections.Concurrent;
 using System.Text;
@@ -15,14 +17,16 @@ namespace SengokuProvider.Library.Services.Events
     {
         private readonly IntakeValidator _validator;
         private readonly GraphQLHttpClient _client;
+        private readonly IEventQueryService _queryService;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<string, int> _addressCache;
-        public EventIntakeService(string connectionString, GraphQLHttpClient client, IntakeValidator validator)
+        public EventIntakeService(string connectionString, GraphQLHttpClient client, IEventQueryService eventQueryService, IntakeValidator validator)
         {
             _connectionString = connectionString;
             _validator = validator;
             _client = client;
+            _queryService = eventQueryService;
             _addressCache = new ConcurrentDictionary<string, int>();
         }
         #region Create Tournament Data
@@ -338,6 +342,92 @@ namespace SengokuProvider.Library.Services.Events
 
             return Tuple.Create(addressSuccesses, eventSuccesses);
         }
+        public async Task<int> IntakeNewRegion(AddressData addressData)
+        {
+            if (string.IsNullOrEmpty(addressData.Address)) return 0;
+
+            var addressSplit = addressData.Address.Split(",");
+            if (addressSplit.Length < 3) return 0;
+
+            var tempCity = addressSplit[1].Trim();
+            int tempZipCode = 0;
+            if (addressSplit.Length > 2) { tempZipCode = int.Parse(addressSplit[2].Trim().Split(" ")[1]); }
+
+            var cityQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", tempCity) };
+            var result = await VerifyRegion(cityQuery);
+
+            if (result == null)
+            {
+                Console.WriteLine($"Determining Province for City: {tempCity}");
+                var regionResult = DetermineProvince(addressData);
+                try
+                {
+                    var insertResult = await InsertNewRegionData(new RegionData
+                    {
+                        Id = tempZipCode,
+                        Name = tempCity,
+                        Latitude = addressData.Latitude ?? 0.0,
+                        Longitude = addressData.Longitude ?? 0.0,
+                        Province = regionResult
+                    });
+
+                    if (insertResult > 0) { return tempZipCode; }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error While Inserting Region Data: {ex.Message} - {ex.StackTrace}");
+                }
+            }
+            return 0;
+        }
+        private string DetermineProvince(AddressData addressData)
+        {
+            if (!addressData.Latitude.HasValue || !addressData.Longitude.HasValue)
+                return "DF";
+
+            var point = new Point(addressData.Longitude.Value, addressData.Latitude.Value) { SRID = 4326 };
+
+            foreach (var region in GeoConstants.Regions)
+            {
+                if (region.Value.Contains(point))
+                {
+                    return region.Key;
+                }
+            }
+            return "DF";
+        }
+        private async Task<int> InsertNewRegionData(RegionData newData)
+        {
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO regions (id, name, latitude, longitude, Province)
+                                                    VALUES (@ZipCode, @NameInput, @LatInput, @LongInput, @ProvInput)
+                                                    ON CONFLICT (id) DO NOTHING", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@ZipCode", newData.Id);
+                        cmd.Parameters.AddWithValue("@NameInput", newData.Name);
+                        cmd.Parameters.AddWithValue("@LatInput", newData.Latitude);
+                        cmd.Parameters.AddWithValue("@LongInput", newData.Longitude);
+                        cmd.Parameters.AddWithValue("@ProvInput", newData.Province);
+
+                        var result = cmd.ExecuteNonQueryAsync();
+                        return result.Result;
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return 0;
+        }
         private NpgsqlParameter CreateDBIntArrayType(string parameterName, int[] array)
         {
             var newParameters = new NpgsqlParameter();
@@ -357,6 +447,7 @@ namespace SengokuProvider.Library.Services.Events
             return newParameters;
         }
         #endregion
+
         #region Query Commands
         private async Task<EventGraphQLResult?> QueryStartggEventByTournamentId(int tournamentId)
         {
@@ -481,6 +572,7 @@ namespace SengokuProvider.Library.Services.Events
             }
         }
         #endregion
+
         #region Update Commands
         public async Task<bool> UpdateEventData(UpdateEventCommand command)
         {
@@ -561,7 +653,12 @@ namespace SengokuProvider.Library.Services.Events
             return false;
         }
         #endregion
+
         #region Verify Data
+        private async Task<RegionData?> VerifyRegion(GetRegionCommand regionQuery)
+        {
+            return await _queryService.QueryRegion(regionQuery);
+        }
         private async Task<bool> VerifyTournamentLink(int id)
         {
             try

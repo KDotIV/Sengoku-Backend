@@ -64,15 +64,53 @@ namespace SengokuProvider.Library.Services.Events
         }
         public async Task<RegionData?> QueryRegion(GetRegionCommand command)
         {
+            if (!command.Validate())
+            {
+                Console.WriteLine("Invalid command parameters:");
+                Console.WriteLine($"Param Name: {command.QueryParameter.Item1}");
+                Console.WriteLine($"Param value: {command.QueryParameter.Item2}");
+                throw new ArgumentException("Invalid command parameters");
+            }
+
             try
             {
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand("Select * FROM regions WHERE @Field = @Value;", conn))
+
+                    // Ensure the column name is safe to use
+                    var columnName = command.QueryParameter.Item1;
+
+                    // Construct the SQL query dynamically
+                    var sql = $"SELECT * FROM regions WHERE \"{columnName}\" = @Value;";
+
+                    using (var cmd = new NpgsqlCommand(sql, conn))
                     {
-                        cmd.Parameters.AddWithValue("@Field", command.QueryParameter.Item1);
-                        cmd.Parameters.AddWithValue("@Value", command.QueryParameter.Item2);
+                        // Add parameter for the value
+                        var parameter = new NpgsqlParameter("@Value", command.QueryParameter.Item2);
+
+                        if (int.TryParse(command.QueryParameter.Item2, out int intValue))
+                        {
+                            parameter.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Integer;
+                            parameter.Value = intValue;
+                        }
+                        else if (DateTime.TryParse(command.QueryParameter.Item2, out DateTime dateValue))
+                        {
+                            parameter.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Timestamp;
+                            parameter.Value = dateValue;
+                        }
+                        else if (bool.TryParse(command.QueryParameter.Item2, out bool boolValue))
+                        {
+                            parameter.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Boolean;
+                            parameter.Value = boolValue;
+                        }
+                        else
+                        {
+                            parameter.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Varchar;
+                            parameter.Value = command.QueryParameter.Item2;
+                        }
+
+                        cmd.Parameters.Add(parameter);
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
@@ -83,7 +121,7 @@ namespace SengokuProvider.Library.Services.Events
                                     Id = reader.GetInt32(reader.GetOrdinal("id")),
                                     Name = reader.GetString(reader.GetOrdinal("name")),
                                     Latitude = reader.GetDouble(reader.GetOrdinal("latitude")),
-                                    Longitude = reader.GetDouble(reader.GetOrdinal("longtitude")),
+                                    Longitude = reader.GetDouble(reader.GetOrdinal("longitude")),
                                     Province = reader.GetString(reader.GetOrdinal("province"))
                                 };
                             }
@@ -93,7 +131,7 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+                throw new ApplicationException($"Database error occurred: {ex.Message}", ex);
             }
             catch (Exception ex)
             {
@@ -109,7 +147,7 @@ namespace SengokuProvider.Library.Services.Events
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand("SELECT id, name, latitude, longitude, province FROM regions WHERE id = ANY(@Input)", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT id, name, latitude, longitude, province FROM regions WHERE id = ANY(@Input)", conn))
                     {
                         // Passing the list as an array parameter
                         var param = new NpgsqlParameter("@Input", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer)
@@ -154,7 +192,7 @@ namespace SengokuProvider.Library.Services.Events
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand("Select * From addresses WHERE id = @Input", conn))
+                    using (var cmd = new NpgsqlCommand(@"Select * From addresses WHERE id = @Input", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", addressId);
                         using (var reader = await cmd.ExecuteReaderAsync())
