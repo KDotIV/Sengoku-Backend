@@ -59,5 +59,4 @@ jobs:
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'sengoku-alexandria-qa'
-          resource-group-name: 'Alexandria'
           package: ${{github.workspace}}\published\sengoku-alexandria-release
