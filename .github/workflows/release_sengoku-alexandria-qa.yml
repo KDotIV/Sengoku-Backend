@@ -22,11 +22,9 @@ jobs:
 
       - name: Build with dotnet
         run: dotnet build --configuration Release SengokuProvider.API/SengokuProvider.API.sln
-        working-directory: ./Sengoku-Backend
 
       - name: dotnet publish
         run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{github.workspace}}/published
-        working-directory: ./Sengoku-Backend
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
