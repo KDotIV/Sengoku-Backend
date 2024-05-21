@@ -36,7 +36,7 @@ jobs:
     runs-on: windows-latest
     needs: build
     environment:
-      name: 'Production'
+      name: 'Release'
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
       id-token: write # This is required for requesting the JWT
@@ -60,6 +60,5 @@ jobs:
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'sengoku-alexandria-qa'
-          slot-name: 'Production'
-          package: sengoku-alexandria-release
-          path: ${{github.workspace}}\published\
+          resource-group-name: 'Alexandria'
+          package: ${{github.workspace}}\published\sengoku-alexandria-release
