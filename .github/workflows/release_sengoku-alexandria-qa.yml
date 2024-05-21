@@ -29,7 +29,7 @@ jobs:
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
         with:
-          name: .net-app
+          name: sengoku-alexandria-release
           path: ${{github.workspace}}/published
 
   deploy:
@@ -45,7 +45,8 @@ jobs:
       - name: Download artifact from build job
         uses: actions/download-artifact@v3
         with:
-          name: .net-app
+          name: sengoku-alexandria-release
+          path: ${{github.workspace}}/published
       
       - name: Login to Azure
         uses: azure/login@v1
@@ -60,4 +61,4 @@ jobs:
         with:
           app-name: 'sengoku-alexandria-qa'
           slot-name: 'Production'
-          package: ./.net-app
+          package: ./sengoku-alexandria-release
