@@ -25,14 +25,14 @@ jobs:
         working-directory: ./Sengoku-Backend
 
       - name: dotnet publish
-        run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{env.DOTNET_ROOT}}/SengokuProvider.API
+        run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{github.workspace}}/published
         working-directory: ./Sengoku-Backend
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
         with:
           name: .net-app
-          path: ${{env.DOTNET_ROOT}}/SengokuProvider.API
+          path: ${{github.workspace}}/published
 
   deploy:
     runs-on: windows-latest
