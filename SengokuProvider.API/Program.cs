@@ -8,7 +8,7 @@ using System.Net.Http.Headers;
 var builder = WebApplication.CreateBuilder(args);
 
 //constant config variables
-var connectionString = builder.Configuration.GetConnectionString("AlexandriaConnectionString");
+var connectionString = builder.Configuration["ConnectionStrings:AlexandriaConnectionString"];
 var graphQLUrl = builder.Configuration["GraphQLSettings:Endpoint"];
 var bearerToken = builder.Configuration["GraphQLSettings:Bearer"];
 
