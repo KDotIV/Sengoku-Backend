@@ -1,62 +1,48 @@
-name: Build and deploy ASP.Net Core app to Azure Web App - sengoku-alexandria-qa
-
+name: Build and deploy .NET Core application to Web App sengoku-alexandria-qa
 on:
   push:
     branches:
-      - Release
-  workflow_dispatch:
-  
-permissions:
-  id-token: write
-  contents: read
-  
+    - master
+env:
+  AZURE_WEBAPP_NAME: sengoku-alexandria-qa
+  AZURE_WEBAPP_PACKAGE_PATH: .\publish
+  CONFIGURATION: Release
+  DOTNET_CORE_VERSION: 8.0.x
+  WORKING_DIRECTORY: SengokuProvider.API/SengokuProvider.API.sln
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up .NET Core
-        uses: actions/setup-dotnet@v1
-        with:
-          dotnet-version: '8.x'
-          include-prerelease: true
-
-      - name: Build with dotnet
-        run: dotnet build --configuration Release SengokuProvider.API/SengokuProvider.API.sln
-
-      - name: dotnet publish
-        run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{github.workspace}}\published
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v3
-        with:
-          name: sengoku-alexandria-release
-          path: ${{github.workspace}}\published
-
+    - uses: actions/checkout@v4
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
+    - name: Restore
+      run: dotnet restore "${{ env.WORKING_DIRECTORY }}"
+    - name: Build
+      run: dotnet build "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-restore
+    - name: Test
+      run: dotnet test "${{ env.WORKING_DIRECTORY }}" --no-build
+    - name: Publish
+      run: dotnet publish "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-build --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+    - name: Publish Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: webapp
+        path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
   deploy:
     runs-on: windows-latest
     needs: build
-
     steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v3
-        with:
-          name: sengoku-alexandria-release
-          path: ${{github.workspace}}\published
-      
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_BE7EB6CA17C14D68AAB7C80386F8FD64 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_10A00E2ABFDE4A8885E4404867501369 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_84240AA652B44892A3EA4DD301F6B2C6 }}
-
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v2
-        with:
-          app-name: 'sengoku-alexandria-qa'
-          package: ${{github.workspace}}\published\sengoku-alexandria-release
+    - name: Download artifact from build job
+      uses: actions/download-artifact@v3
+      with:
+        name: webapp
+        path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+    - name: Deploy to Azure WebApp
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.sengoku_alexandria_qa_D06F }}
+        package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
