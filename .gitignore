@@ -7,3 +7,8 @@ SengokuProvider.Worker/appsettings.Development.json
 /SengokuProvider.Library/bin/Debug/net8.0
 /SengokuProvider.Worker/bin/Debug/net8.0
 /SengokuProvider.Worker/obj
+/SengokuProvider.API/DevNotes.txt
+/SengokuProvider.API/Properties/ServiceDependencies/sengoku-alexandria-qa - Zip Deploy/profile.arm.json
+/SengokuProvider.Library/bin/Release/net8.0/SengokuProvider.Library.deps.json
+/SengokuProvider.Library/bin/Release/net8.0/SengokuProvider.Library.dll
+/SengokuProvider.Library/bin/Release/net8.0/SengokuProvider.Library.pdb
