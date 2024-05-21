@@ -7,3 +7,4 @@ SengokuProvider.Worker/appsettings.Development.json
 /SengokuProvider.Library/bin/Debug/net8.0
 /SengokuProvider.Worker/bin/Debug/net8.0
 /SengokuProvider.Worker/obj
+/SengokuProvider.API/DevNotes.txt
