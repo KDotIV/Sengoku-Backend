@@ -61,4 +61,5 @@ jobs:
         with:
           app-name: 'sengoku-alexandria-qa'
           slot-name: 'Production'
-          package: ./sengoku-alexandria-release
+          package: sengoku-alexandria-release
+          path: ${{github.workspace}}/published
