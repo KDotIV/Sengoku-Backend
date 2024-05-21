@@ -1,6 +1,3 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy ASP.Net Core app to Azure Web App - sengoku-alexandria-qa
 
 on:
@@ -14,7 +11,8 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up .NET Core
         uses: actions/setup-dotnet@v1
@@ -23,16 +21,18 @@ jobs:
           include-prerelease: true
 
       - name: Build with dotnet
-        run: dotnet build --configuration Release
+        run: dotnet build --configuration Release SengokuProvider.API/SengokuProvider.API.sln
+        working-directory: ./Sengoku-Backend
 
       - name: dotnet publish
-        run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/SengokuProvider.API
+        run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{env.DOTNET_ROOT}}/SengokuProvider.API
+        working-directory: ./Sengoku-Backend
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
         with:
           name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
+          path: ${{env.DOTNET_ROOT}}/SengokuProvider.API
 
   deploy:
     runs-on: windows-latest
@@ -41,7 +41,7 @@ jobs:
       name: 'Production'
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
-      id-token: write #This is required for requesting the JWT
+      id-token: write # This is required for requesting the JWT
 
     steps:
       - name: Download artifact from build job
@@ -62,5 +62,4 @@ jobs:
         with:
           app-name: 'sengoku-alexandria-qa'
           slot-name: 'Production'
-          package: .
-          
+          package: ./.net-app
