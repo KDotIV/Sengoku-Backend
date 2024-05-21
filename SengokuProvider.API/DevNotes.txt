@@ -7,9 +7,14 @@ PlayerId: 1400524
   "Authorization":"Bearer 9299394ed453ea84206d3d0b16a95018"
 }
 
-query Sets {
-  player(id: 1400524) {
+query PlayerData($playerId: ID!) {
+  player(id: $playerId ) {
     id
+    gamerTag
+    user {
+      id
+      slug
+    }
     sets(perPage: 100, page: 1) {
       nodes {
         id
@@ -20,6 +25,66 @@ query Sets {
           tournament {
             id
             name
+            city
+          }
+        }
+      }
+    }
+  }
+}
+
+Event Slug Example
+tournament/4o4-all-hands-monthly-3/event/tekken-8-singles-3pm
+
+query EventEntrants($perPage: Int!, $eventSlug: String!) {
+  event(slug: $eventSlug) {
+    id
+    name
+    entrants(query: {perPage: $perPage, filter: {}}) {
+      nodes {
+        id
+        participants {
+          id
+          gamerTag
+        }
+        standing {
+          id
+          placement
+          container {
+            __typename
+            ... on Tournament {
+              id
+              name
+              countryCode
+              startAt
+              endAt
+              events {
+                id
+                name
+              }
+            }
+            ... on Event {
+              id
+              name
+              startAt
+              numEntrants
+              tournament {
+                id
+                name
+              }
+            }
+            ... on Set {
+              id
+              event {
+                id
+                name
+              }
+              startAt
+              completedAt
+              games {
+                id
+              }
+            }
           }
         }
       }

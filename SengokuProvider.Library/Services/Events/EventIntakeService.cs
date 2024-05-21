@@ -234,8 +234,8 @@ namespace SengokuProvider.Library.Services.Events
                             if (newEvent == null) continue;
                             await EnsureLinkIdExists(newEvent.LinkID, conn);
 
-                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open) 
-                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen)
+                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open,online_tournament) 
+                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen, @IsOnline)
                             ON CONFLICT (link_id) DO UPDATE SET
                                 event_name = EXCLUDED.event_name,
                                 event_description = EXCLUDED.event_description,
@@ -244,7 +244,8 @@ namespace SengokuProvider.Library.Services.Events
                                 start_time = EXCLUDED.start_time,
                                 end_time = EXCLUDED.end_time,
                                 closing_registration_date = EXCLUDED.closing_registration_date,
-                                registration_open = EXCLUDED.registration_open;";
+                                registration_open = EXCLUDED.registration_open,
+                                online_tournament = EXCLUDED.online_tournament;";
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
                             {
                                 command.Parameters.AddWithValue("@Event_Name", newEvent.EventName);
@@ -256,6 +257,7 @@ namespace SengokuProvider.Library.Services.Events
                                 command.Parameters.AddWithValue(@"Link_Id", newEvent.LinkID);
                                 command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration);
                                 command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen);
+                                command.Parameters.AddWithValue(@"IsOnline", newEvent.IsOnline);
                                 var result = await command.ExecuteNonQueryAsync();
                                 if (result > 0) totalSuccess++;
                             }
@@ -321,17 +323,19 @@ namespace SengokuProvider.Library.Services.Events
             {
                 if (!await CheckDuplicateEvents(node.Id))
                 {
+                    int regionId = await GetRegionId(node.City);
                     var eventData = new EventData
                     {
                         LinkID = node.Id,
                         EventName = node.Name,
                         EventDescription = "Sample description",
-                        Region = 1,
+                        Region = regionId,
                         AddressID = addressMap[node.VenueAddress],  // Use the confirmed address ID from the map
                         StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
                         EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
                         ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
-                        IsRegistrationOpen = node.IsRegistrationOpen
+                        IsRegistrationOpen = node.IsRegistrationOpen,
+                        IsOnline = node.IsOnline
                     };
                     events.Add(eventData);
                 }
@@ -341,6 +345,11 @@ namespace SengokuProvider.Library.Services.Events
             int eventSuccesses = await InsertNewEventsData(events);
 
             return Tuple.Create(addressSuccesses, eventSuccesses);
+        }
+        private async Task<int> GetRegionId(string? city)
+        {
+            var queryResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city) });
+            return queryResult?.Id ?? 1;
         }
         public async Task<int> IntakeNewRegion(AddressData addressData)
         {
@@ -538,7 +547,7 @@ namespace SengokuProvider.Library.Services.Events
                         addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                             }}) {
                             nodes {
-                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt}}}";
+                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt}}}";
 
 
             var request = new GraphQLHttpRequest

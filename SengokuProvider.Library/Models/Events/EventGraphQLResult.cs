@@ -47,6 +47,10 @@ namespace SengokuProvider.Library.Models.Events
         public long RegistrationClosesAt { get; set; }
         [JsonProperty("isRegistrationOpen")]
         public bool IsRegistrationOpen { get; set; }
+        [JsonProperty("isOnline")]
+        public bool IsOnline { get; set; }
+        [JsonProperty("city")]
+        public string? City { get; set; }
     }
     public class EventDetail
     {

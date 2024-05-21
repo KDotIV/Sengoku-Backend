@@ -252,6 +252,7 @@ namespace SengokuProvider.Library.Services.Events
                             priorityQueryString = QueryConstants.DatePriority;
                             break;
                     }
+
                     using (var cmd = new NpgsqlCommand())
                     {
                         cmd.Connection = conn;
