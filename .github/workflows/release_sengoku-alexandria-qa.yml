@@ -24,13 +24,13 @@ jobs:
         run: dotnet build --configuration Release SengokuProvider.API/SengokuProvider.API.sln
 
       - name: dotnet publish
-        run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{github.workspace}}/published
+        run: dotnet publish SengokuProvider.API/SengokuProvider.API.sln -c Release -o ${{github.workspace}}\published
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v3
         with:
           name: sengoku-alexandria-release
-          path: ${{github.workspace}}/published
+          path: ${{github.workspace}}\published
 
   deploy:
     runs-on: windows-latest
@@ -46,7 +46,7 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: sengoku-alexandria-release
-          path: ${{github.workspace}}/published
+          path: ${{github.workspace}}\published
       
       - name: Login to Azure
         uses: azure/login@v1
@@ -62,4 +62,4 @@ jobs:
           app-name: 'sengoku-alexandria-qa'
           slot-name: 'Production'
           package: sengoku-alexandria-release
-          path: ${{github.workspace}}/published
+          path: ${{github.workspace}}\published\
