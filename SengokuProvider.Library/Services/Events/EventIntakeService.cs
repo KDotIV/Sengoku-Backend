@@ -701,7 +701,7 @@ namespace SengokuProvider.Library.Services.Events
                 if (_addressCache.TryGetValue(address, out int addressId) && addressId != 0) return addressId;
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
-                    conn.Open();
+                    await conn.OpenAsync();
 
                     var newQuery = @"SELECT id FROM addresses WHERE address = @Input";
                     addressId = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = address });
