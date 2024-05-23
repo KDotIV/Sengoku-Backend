@@ -72,11 +72,11 @@ namespace SengokuProvider.Library.Services.Players
                     foreach (var player in players)
                     {
                         var createInsertCommand = @"
-                            INSERT INTO players (id, player_name, player_link_id)
+                            INSERT INTO players (id, player_name, startgg_link)
                             VALUES (@IdInput, @PlayerName, @PlayerLinkId)
                             ON CONFLICT (id) DO UPDATE SET
                                 player_name = EXCLUDED.player_name,
-                                player_link_id = EXCLUDED.player_link_id;";
+                                startgg_link = EXCLUDED.startgg_link;";
                         using(var cmd = new NpgsqlCommand(createInsertCommand, conn))
                         {
                             cmd.Transaction = transaction;
