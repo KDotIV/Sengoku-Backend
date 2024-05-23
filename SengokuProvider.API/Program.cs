@@ -2,6 +2,8 @@ using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
 using System.Net.Http.Headers;
 
@@ -35,6 +37,22 @@ builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var queryService = provider.GetService<IEventQueryService>();
     return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator);
+});
+builder.Services.AddScoped<ILegendQueryService, LegendQueryService>(provider =>
+{
+    var graphQlClient = provider.GetService<GraphQLHttpClient>();
+    return new LegendQueryService(connectionString, graphQlClient);
+});
+builder.Services.AddScoped<IPlayerQueryService, PlayerQueryService>(provider =>
+{
+    var graphQlClient = provider.GetService<GraphQLHttpClient>();
+    return new PlayerQueryService(connectionString, graphQlClient);
+});
+builder.Services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
+{
+    var playerQueryService = provider.GetService<IPlayerQueryService>();
+    var legendQueryService = provider.GetService<ILegendQueryService>();
+    return new PlayerIntakeService(connectionString, playerQueryService, legendQueryService);
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {
