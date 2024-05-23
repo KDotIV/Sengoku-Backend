@@ -51,19 +51,68 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         var newPlayerData = new PlayerData
                         {
-                            Id = GenerateNewPlayerId(),
+                            Id = await GenerateNewPlayerId(),
                             PlayerName = firstRecord.Player.GamerTag,
                             PlayerLinkID = firstRecord.Player.Id,
                         };
+                        players.Add(newPlayerData);
                     }
                 }
             }
+            return await InsertNewPlayerData(players);
         }
-        private int GenerateNewPlayerId() => _rand.Next(100000, 1000000);
+        private async Task<int> InsertNewPlayerData(List<PlayerData> players)
+        {
+            int totalSuccess = 0;
+            using(var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                using(var transaction = await conn.BeginTransactionAsync())
+                {
+                    foreach (var player in players)
+                    {
+                        var createInsertCommand = @"
+                            INSERT INTO players (id, player_name, player_link_id)
+                            VALUES (@IdInput, @PlayerName, @PlayerLinkId)
+                            ON CONFLICT (id) DO UPDATE SET
+                                player_name = EXCLUDED.player_name,
+                                player_link_id = EXCLUDED.player_link_id;";
+                        using(var cmd = new NpgsqlCommand(createInsertCommand, conn))
+                        {
+                            cmd.Transaction = transaction;
+                            cmd.Parameters.AddWithValue("@IdInput",player.Id);
+                            cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
+                            cmd.Parameters.AddWithValue("@PlayerLinkId", player.PlayerLinkID);
+
+                            var result = await cmd.ExecuteNonQueryAsync();
+                            if (result > 0) totalSuccess += result;
+                        }
+                    }
+                    await transaction.CommitAsync();
+                }
+            }
+            return totalSuccess;
+        }
+        private async Task<int> GenerateNewPlayerId()
+        {
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                while (true)
+                {
+                    var newId = _rand.Next(100000, 1000000);
+
+                    var newQuery = @"SELECT id FROM players where id = @Input";
+                    var queryResult = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = newId });
+                    if (newId != queryResult || queryResult == 0) return newId;
+                }
+            }
+        }
         private async Task<int> CheckDuplicatePlayer(Participant participantRecord)
         {
             try
             {
+
                 if (_playersCache.TryGetValue(participantRecord.Player.Id, out int databaseId) && databaseId != 0) return databaseId;
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
