@@ -39,7 +39,7 @@ namespace SengokuProvider.Library.Services.Players
         private async Task<int> ProcessPlayerData(PlayerGraphQLResult queryData)
         {
             var players = new List<PlayerData>();
-
+            if (queryData == null) throw new ApplicationException("Player Query Data was null from Start.gg");
             foreach (var node in queryData.Data.Entrants.Nodes)
             {
                 var firstRecord = node.Participants.FirstOrDefault();

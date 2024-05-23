@@ -28,11 +28,11 @@ namespace SengokuProvider.Library.Services.Players
         }
         private async Task<PlayerGraphQLResult> QueryStartggPlayerData(IntakePlayersByTournamentCommand command)
         {
-            var tempQuery = @"query EventEntrants($perPage: Int!, $eventSlug: String!) {
+            var tempQuery = @"query EventEntrants($perPage: Int!, $eventSlug: String!, $pageNum: Int) {
                                   event(slug: $eventSlug) {
                                     id
                                     name
-                                    entrants(query: {perPage: $perPage, filter: {}}) {
+                                    entrants(query: {perPage: $perPage, page: $pageNum filter: {}}) {
                                       nodes {
                                         id
                                         participants {id player{id gamerTag}}
@@ -43,13 +43,14 @@ namespace SengokuProvider.Library.Services.Players
                 Variables= new
                 {
                     command.EventSlug,
-                    command.PerPage
+                    command.PerPage,
+                    command.PageNum
                 }
             };
             try
             {
                 var response = await _client.SendQueryAsync<JObject>(request);
-                if (response.Data == null) throw new ApplicationException($"Failed to retrieve standing data");
+                if (response.Data == null) throw new ApplicationException($"Failed to retrieve player data");
 
                 var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
 
