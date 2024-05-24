@@ -46,6 +46,7 @@ namespace SengokuProvider.Library.Services.Players
                 EntrantsNum = tempNode.Standing.Container.NumEntrants,
                 StandingDetails = new StandingDetails
                 {
+                    IsActive = tempNode.Standing.IsActive,
                     Placement = tempNode.Standing.Placement,
                     GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
                     EventId = tempNode.Standing.Container.Tournament.Id,

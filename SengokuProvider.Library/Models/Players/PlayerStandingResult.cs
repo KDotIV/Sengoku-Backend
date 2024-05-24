@@ -9,6 +9,7 @@
     }
     public class StandingDetails
     {
+        public bool IsActive { get; set; }
         public int Placement { get; set; }
         public string? GamerTag { get; set; }
         public int EventId { get; set; }
@@ -18,6 +19,7 @@
     }
     public class Links
     {
+        public int PlayerId { get; set; }
         public int EntrantId { get; set; }
         public int StandingId { get; set; }
     }

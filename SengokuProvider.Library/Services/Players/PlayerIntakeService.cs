@@ -13,6 +13,9 @@ namespace SengokuProvider.Library.Services.Players
 
         private readonly string _connectionString;
         private ConcurrentDictionary<int, int> _playersCache;
+        private ConcurrentDictionary<int, string> _playerRegistry;
+        private HashSet<int> _eventCache;
+        private int _currentEventId;
         private static Random _rand = new Random();
         public PlayerIntakeService(string connectionString, IPlayerQueryService playerQueryService, 
             ILegendQueryService legendQueryService)
@@ -21,6 +24,8 @@ namespace SengokuProvider.Library.Services.Players
             _queryService = playerQueryService;
             _legendQueryService = legendQueryService;
             _playersCache = new ConcurrentDictionary<int, int>();
+            _playerRegistry = new ConcurrentDictionary<int, string>();
+            _eventCache = new HashSet<int>();
         }
         public async Task<int> IntakePlayerData(IntakePlayersByTournamentCommand command)
         {
@@ -28,13 +33,82 @@ namespace SengokuProvider.Library.Services.Players
             {
                 PlayerGraphQLResult? newPlayerData = await _queryService.GetPlayerDataFromStartgg(command);
                 if(newPlayerData == null) { return 0; }
-                return await ProcessPlayerData(newPlayerData);
+
+                _eventCache.Add(newPlayerData.Data.Id);
+                _currentEventId = newPlayerData.Data.Id;
+                int playerSuccess =  await ProcessPlayerData(newPlayerData);
+
+                var standingsSuccess = await ProcessLegendsFromNewPlayers(_playerRegistry);
+
+                Console.WriteLine($"{standingsSuccess} total standings added for player");
+
+                return playerSuccess;
             }
             catch (Exception ex)
             {
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
+
+        private async Task<int> ProcessLegendsFromNewPlayers(ConcurrentDictionary<int, string> registeredPlayers)
+        {
+            var currentStandings = new List<PlayerStandingResult>();
+            if (registeredPlayers.Count == 0) throw new ApplicationException("Players must exist before new standings data is created");
+            foreach (var newPlayer in registeredPlayers)
+            {
+                PlayerStandingResult newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
+                if (newStanding == null) { continue; }
+
+                newStanding.TournamentLinks.PlayerId = newPlayer.Key;
+                currentStandings.Add(newStanding);
+            }
+            return await IntakePlayerStandingData(currentStandings);
+        }
+
+        private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
+        {
+            var totalSuccess = 0;
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                using (var transaction = await conn.BeginTransactionAsync())
+                {
+                    foreach (var data in currentStandings)
+                    {
+                        var createInsertCommand = @"
+                            INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active)
+                            VALUES (@EntrantInput, @PlayerId, @TournamentLink, @PlacementInput, @NumEntrants, @IsActive)
+                            ON CONFLICT (entrant_id) DO UPDATE SET
+                                player_id = EXCLUDED.player_id,
+                                tournament_link = EXCLUDED.tournament_link,
+                                placement = EXCLUDED.placement,
+                                entrants_num = EXCLUDED.entrants_num,
+                                active = EXCLUDED.active;";
+
+                        using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
+                        {
+                            cmd.Transaction = transaction;
+                            cmd.Parameters.AddWithValue("@EntrantInput", data.TournamentLinks.EntrantId);
+                            cmd.Parameters.AddWithValue("@PlayerId", data.TournamentLinks.PlayerId);
+                            cmd.Parameters.AddWithValue("@TournamentLink", data.StandingDetails.TournamentId);
+                            cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
+                            cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
+                            cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
+
+                            int result = await cmd.ExecuteNonQueryAsync();
+                            if(result > 0) 
+                            { 
+                                _playerRegistry.TryRemove(data.TournamentLinks.PlayerId, out _);
+                                Console.WriteLine("Player removed from registry");
+                            }
+                        }
+                    }
+                    await transaction.CommitAsync();
+                }
+            }
+            return totalSuccess;
+        }
+
         private async Task<int> ProcessPlayerData(PlayerGraphQLResult queryData)
         {
             var players = new List<PlayerData>();
@@ -83,8 +157,8 @@ namespace SengokuProvider.Library.Services.Players
                             cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
                             cmd.Parameters.AddWithValue("@PlayerLinkId", player.PlayerLinkID);
 
-                            var result = await cmd.ExecuteNonQueryAsync();
-                            if (result > 0) totalSuccess += result;
+                            int result = await cmd.ExecuteNonQueryAsync();
+                            if(result > 0) { _playerRegistry.TryAdd(player.Id, player.PlayerName); } totalSuccess += result;
                         }
                     }
                     await transaction.CommitAsync();

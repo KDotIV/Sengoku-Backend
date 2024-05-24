@@ -51,6 +51,8 @@ namespace SengokuProvider.Library.Models.Players
 
         [JsonProperty("placement")]
         public int Placement { get; set; }
+        [JsonProperty("isFinal")]
+        public bool IsActive { get; set; }
 
         [JsonProperty("container")]
         public Container? Container { get; set; }
