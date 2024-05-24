@@ -39,10 +39,9 @@ namespace SengokuProvider.Library.Services.Players
                 int playerSuccess =  await ProcessPlayerData(newPlayerData);
 
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
-                await Task.Delay(800);
 
                 Console.WriteLine("Starting Standings Processing");
-                var standingsSuccess = await ProcessLegendsFromNewPlayers(_playerRegistry);
+                var standingsSuccess = await ProcessLegendsFromNewPlayers();
 
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
 
@@ -53,11 +52,11 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
-        private async Task<int> ProcessLegendsFromNewPlayers(ConcurrentDictionary<int, string> registeredPlayers)
+        private async Task<int> ProcessLegendsFromNewPlayers()
         {
             var currentStandings = new List<PlayerStandingResult>();
-            if (registeredPlayers.Count == 0) throw new ApplicationException("Players must exist before new standings data is created");
-            foreach (var newPlayer in registeredPlayers)
+            if (!_playerRegistry.Any()) throw new ApplicationException("Players must exist before new standings data is created");
+            foreach (var newPlayer in _playerRegistry)
             {
                 Console.WriteLine("Querying Standings Data");
                 await Task.Delay(1000);
