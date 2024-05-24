@@ -1,6 +1,5 @@
 ﻿using Dapper;
 using Npgsql;
-using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Legends;
 using System.Collections.Concurrent;

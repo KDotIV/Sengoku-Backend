@@ -301,48 +301,6 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<PlayerStandingResult> QueryPlayerStandings(GetPlayerStandingsCommand command)
-        {
-            try
-            {
-                var data = await QueryStartggStandings(command);
-                if (data == null) { throw new NullReferenceException(); }
-
-                var newStandingResult = MapStandingsData(data);
-
-                return newStandingResult;
-            }
-            catch (Exception ex)
-            {
-                return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}" };
-                throw;
-            }
-        }
-        private PlayerStandingResult MapStandingsData(StandingGraphQLResult data)
-        {
-            var tempNode = data.Event.Entrants.Nodes.FirstOrDefault();
-            var mappedResult = new PlayerStandingResult
-            {
-                Response = "Open",
-                Standing = tempNode.Standing.Placement,
-                GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
-                EntrantsNum = tempNode.Standing.Container.NumEntrants,
-                EventDetails = new EventDetails
-                {
-                    EventId = tempNode.Standing.Container.Tournament.Id,
-                    EventName = tempNode.Standing.Container.Tournament.Name,
-                    TournamentId = tempNode.Standing.Container.Id,
-                    TournamentName = tempNode.Standing.Container.Name
-                },
-                TournamentLinks = new Links
-                {
-                    EntrantId = tempNode.Id,
-                    StandingId = tempNode.Standing.Id
-                }
-            };
-
-            return mappedResult;
-        }
         public async Task<EventGraphQLResult?> QueryStartggEventByEventId(int eventId)
         {
             var tempQuery = @"query TournamentQuery($tournamentId: ID!) 
@@ -371,47 +329,6 @@ namespace SengokuProvider.Library.Services.Events
                 var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
                 return eventData;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                throw;
-            }
-        }
-        private async Task<StandingGraphQLResult> QueryStartggStandings(GetPlayerStandingsCommand queryCommand)
-        {
-            var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
-                              event(id: $eventId) {
-                                id
-                                name
-                                entrants(query: {
-                                  perPage: $perPage
-                                  filter: { name: $gamerTag }}) {
-                                  nodes {id participants { id gamerTag } standing { id placement container {
-                                        __typename
-                                        ... on Tournament { id name countryCode startAt endAt events { id name }}
-                                        ... on Event { id name startAt numEntrants tournament { id name }}
-                                        ... on Set { id event { id name } startAt completedAt games { id }}
-                                      }}}}}}";
-            var request = new GraphQLHttpRequest
-            {
-                Query = tempQuery,
-                Variables = new
-                {
-                    queryCommand.PerPage,
-                    queryCommand.EventId,
-                    queryCommand.GamerTag
-                }
-            };
-            try
-            {
-                var response = await _client.SendQueryAsync<JObject>(request);
-                if (response.Data == null) throw new ApplicationException($"Failed to retrieve standing data");
-
-                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-
-                var standingsData = JsonConvert.DeserializeObject<StandingGraphQLResult>(tempJson);
-                return standingsData;
             }
             catch (Exception ex)
             {

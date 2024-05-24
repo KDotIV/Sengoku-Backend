@@ -16,4 +16,19 @@ namespace SengokuProvider.Library.Models.Players
             return false;
         }
     }
+    public class GetPlayerStandingsCommand : ICommand
+    {
+        public required int EventId { get; set; }
+        public required int PerPage { get; set; }
+        public required string GamerTag { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (EventId > 0 &&
+                PerPage > 0 &&
+                string.IsNullOrEmpty(GamerTag)) return true;
+            else return false;
+        }
+    }
 }

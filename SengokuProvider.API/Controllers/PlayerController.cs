@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
@@ -48,6 +50,31 @@ namespace SengokuProvider.API.Controllers
                 _log.LogError(ex, "Error Intaking Player Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
 
+            }
+        }
+        [HttpGet("QueryPlayerStandings")]
+        public async Task<IActionResult> QueryPlayerStandingsByEventId([FromBody] GetPlayerStandingsCommand command)
+        {
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                var result = await _playerQueryService.QueryPlayerStandings(parsedRequest);
+                if (result.Response != "Open" || string.IsNullOrEmpty(result.StandingDetails.GamerTag) || result.StandingDetails.Placement <= 0)
+                {
+                    return new BadRequestObjectResult($"Error Occurred for Result: {result.Response} - {result.StandingDetails.GamerTag} - {result.StandingDetails.Placement}");
+                }
+                var resultJson = JsonConvert.SerializeObject(result);
+                return new OkObjectResult($"{resultJson}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
     }

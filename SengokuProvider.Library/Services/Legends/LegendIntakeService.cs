@@ -15,5 +15,6 @@ namespace SengokuProvider.Library.Services.Legends
             _connectionString = connectionString;
             _legendQueryService = queryService;
         }
+
     }
 }
