@@ -38,6 +38,10 @@ namespace SengokuProvider.Library.Services.Players
                 _currentEventId = newPlayerData.Data.Id;
                 int playerSuccess =  await ProcessPlayerData(newPlayerData);
 
+                Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
+                await Task.Delay(800);
+
+                Console.WriteLine("Starting Standings Processing");
                 var standingsSuccess = await ProcessLegendsFromNewPlayers(_playerRegistry);
 
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
@@ -49,18 +53,20 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
-
         private async Task<int> ProcessLegendsFromNewPlayers(ConcurrentDictionary<int, string> registeredPlayers)
         {
             var currentStandings = new List<PlayerStandingResult>();
             if (registeredPlayers.Count == 0) throw new ApplicationException("Players must exist before new standings data is created");
             foreach (var newPlayer in registeredPlayers)
             {
+                Console.WriteLine("Querying Standings Data");
+                await Task.Delay(1000);
                 PlayerStandingResult newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
-                if (newStanding == null) { continue; }
+                if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
 
                 newStanding.TournamentLinks.PlayerId = newPlayer.Key;
                 currentStandings.Add(newStanding);
+                Console.WriteLine("Player Standing Data added");
             }
             return await IntakePlayerStandingData(currentStandings);
         }
@@ -99,6 +105,7 @@ namespace SengokuProvider.Library.Services.Players
                             if(result > 0) 
                             { 
                                 _playerRegistry.TryRemove(data.TournamentLinks.PlayerId, out _);
+                                totalSuccess += result;
                                 Console.WriteLine("Player removed from registry");
                             }
                         }

@@ -25,21 +25,23 @@ namespace SengokuProvider.Library.Services.Players
             try
             {
                 var data = await QueryStartggStandings(command);
-                if (data == null) { throw new NullReferenceException(); }
 
                 var newStandingResult = MapStandingsData(data);
+
+                if(newStandingResult == null) { Console.WriteLine("No Data found for this Player"); throw new ArgumentNullException("No Data found for this Player"); }
 
                 return newStandingResult;
             }
             catch (Exception ex)
             {
                 return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}" };
-                throw;
             }
         }
-        private PlayerStandingResult MapStandingsData(StandingGraphQLResult data)
+        private PlayerStandingResult? MapStandingsData(StandingGraphQLResult data)
         {
             var tempNode = data.Data.Entrants.Nodes.FirstOrDefault();
+            if (tempNode == null) return null;
+
             var mappedResult = new PlayerStandingResult
             {
                 Response = "Open",
@@ -51,7 +53,7 @@ namespace SengokuProvider.Library.Services.Players
                     GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
                     EventId = tempNode.Standing.Container.Tournament.Id,
                     EventName = tempNode.Standing.Container.Tournament.Name,
-                    TournamentId = tempNode.Standing.Container.Id,
+                    TournamentId = tempNode.Standing.Container.Tournament.Id,
                     TournamentName = tempNode.Standing.Container.Name
                 },
                 TournamentLinks = new Links
