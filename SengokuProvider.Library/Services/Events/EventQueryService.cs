@@ -64,16 +64,15 @@ namespace SengokuProvider.Library.Services.Events
         }
         public async Task<RegionData?> QueryRegion(GetRegionCommand command)
         {
-            if (!command.Validate())
-            {
-                Console.WriteLine("Invalid command parameters:");
-                Console.WriteLine($"Param Name: {command.QueryParameter.Item1}");
-                Console.WriteLine($"Param value: {command.QueryParameter.Item2}");
-                throw new ArgumentException("Invalid command parameters");
-            }
-
             try
             {
+                if (!command.Validate())
+                {
+                    Console.WriteLine("Invalid command parameters:");
+                    Console.WriteLine($"Param Name: {command.QueryParameter.Item1}");
+                    Console.WriteLine($"Param value: {command.QueryParameter.Item2}");
+                    throw new ArgumentException("Invalid command parameters");
+                }
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();

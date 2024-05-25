@@ -17,6 +17,7 @@ namespace SengokuProvider.Library.Services.Players
         private HashSet<int> _eventCache;
         private int _currentEventId;
         private static Random _rand = new Random();
+
         public PlayerIntakeService(string connectionString, IPlayerQueryService playerQueryService, 
             ILegendQueryService legendQueryService)
         {
@@ -72,15 +73,20 @@ namespace SengokuProvider.Library.Services.Players
 
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
-            var totalSuccess = 0;
-            using (var conn = new NpgsqlConnection(_connectionString))
+            try
             {
-                await conn.OpenAsync();
-                using (var transaction = await conn.BeginTransactionAsync())
+                var totalSuccess = 0;
+                using (var conn = new NpgsqlConnection(_connectionString))
                 {
-                    foreach (var data in currentStandings)
+                    await conn.OpenAsync();
+                    using (var transaction = await conn.BeginTransactionAsync())
                     {
-                        var createInsertCommand = @"
+                        foreach (var data in currentStandings)
+                        {
+                            int exists = await VerifyPlayer(data.TournamentLinks.PlayerId);
+                            if (exists == 0) { continue; }
+
+                            var createInsertCommand = @"
                             INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active)
                             VALUES (@EntrantInput, @PlayerId, @TournamentLink, @PlacementInput, @NumEntrants, @IsActive)
                             ON CONFLICT (entrant_id) DO UPDATE SET
@@ -90,29 +96,71 @@ namespace SengokuProvider.Library.Services.Players
                                 entrants_num = EXCLUDED.entrants_num,
                                 active = EXCLUDED.active;";
 
-                        using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
-                        {
-                            cmd.Transaction = transaction;
-                            cmd.Parameters.AddWithValue("@EntrantInput", data.TournamentLinks.EntrantId);
-                            cmd.Parameters.AddWithValue("@PlayerId", data.TournamentLinks.PlayerId);
-                            cmd.Parameters.AddWithValue("@TournamentLink", data.StandingDetails.TournamentId);
-                            cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
-                            cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
-                            cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
+                            using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
+                            {
+                                cmd.Transaction = transaction;
+                                cmd.Parameters.AddWithValue("@EntrantInput", data.TournamentLinks.EntrantId);
+                                cmd.Parameters.AddWithValue("@PlayerId", data.TournamentLinks.PlayerId);
+                                cmd.Parameters.AddWithValue("@TournamentLink", data.StandingDetails.TournamentId);
+                                cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
+                                cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
+                                cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
 
-                            int result = await cmd.ExecuteNonQueryAsync();
-                            if(result > 0) 
-                            { 
-                                _playerRegistry.TryRemove(data.TournamentLinks.PlayerId, out _);
-                                totalSuccess += result;
-                                Console.WriteLine("Player removed from registry");
+                                int result = await cmd.ExecuteNonQueryAsync();
+                                if (result > 0)
+                                {
+                                    _playerRegistry.TryRemove(data.TournamentLinks.PlayerId, out _);
+                                    totalSuccess += result;
+                                    Console.WriteLine("Player removed from registry");
+                                }
+                            }
+                        }
+                        await transaction.CommitAsync();
+                    }
+                    return totalSuccess;
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return 0;
+        }
+        private async Task<int> VerifyPlayer(int playerId)
+        {
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var cmd = new NpgsqlCommand(@"SELECT id FROM players WHERE id = @Input", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", playerId);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                return reader.GetInt32(reader.GetOrdinal("id"));
                             }
                         }
                     }
-                    await transaction.CommitAsync();
                 }
             }
-            return totalSuccess;
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return 0;
         }
 
         private async Task<int> ProcessPlayerData(PlayerGraphQLResult queryData)
@@ -135,42 +183,56 @@ namespace SengokuProvider.Library.Services.Players
                             PlayerLinkID = firstRecord.Player.Id,
                         };
                         players.Add(newPlayerData);
+                        databaseId = newPlayerData.Id;
                     }
                 }
+                _playerRegistry.TryAdd(databaseId, firstRecord.Player.GamerTag);
             }
             return await InsertNewPlayerData(players);
         }
         private async Task<int> InsertNewPlayerData(List<PlayerData> players)
         {
-            int totalSuccess = 0;
-            using(var conn = new NpgsqlConnection(_connectionString))
+            try
             {
-                await conn.OpenAsync();
-                using(var transaction = await conn.BeginTransactionAsync())
+                int totalSuccess = 0;
+                using (var conn = new NpgsqlConnection(_connectionString))
                 {
-                    foreach (var player in players)
+                    await conn.OpenAsync();
+                    using (var transaction = await conn.BeginTransactionAsync())
                     {
-                        var createInsertCommand = @"
+                        foreach (var player in players)
+                        {
+                            var createInsertCommand = @"
                             INSERT INTO players (id, player_name, startgg_link)
                             VALUES (@IdInput, @PlayerName, @PlayerLinkId)
                             ON CONFLICT (id) DO UPDATE SET
                                 player_name = EXCLUDED.player_name,
                                 startgg_link = EXCLUDED.startgg_link;";
-                        using(var cmd = new NpgsqlCommand(createInsertCommand, conn))
-                        {
-                            cmd.Transaction = transaction;
-                            cmd.Parameters.AddWithValue("@IdInput",player.Id);
-                            cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
-                            cmd.Parameters.AddWithValue("@PlayerLinkId", player.PlayerLinkID);
+                            using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
+                            {
+                                cmd.Transaction = transaction;
+                                cmd.Parameters.AddWithValue("@IdInput", player.Id);
+                                cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
+                                cmd.Parameters.AddWithValue("@PlayerLinkId", player.PlayerLinkID);
 
-                            int result = await cmd.ExecuteNonQueryAsync();
-                            if(result > 0) { _playerRegistry.TryAdd(player.Id, player.PlayerName); } totalSuccess += result;
+                                int result = await cmd.ExecuteNonQueryAsync();
+                                if (result > 0) { Console.WriteLine("Player Inserted"); totalSuccess += result; }
+                            }
                         }
+                        await transaction.CommitAsync();
                     }
-                    await transaction.CommitAsync();
                 }
+                return totalSuccess;
             }
-            return totalSuccess;
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return 0;
         }
         private async Task<int> GenerateNewPlayerId()
         {
