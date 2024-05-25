@@ -17,6 +17,7 @@ var bearerToken = builder.Configuration["GraphQLSettings:Bearer"];
 // Add services to the container.
 builder.Services.AddTransient<CommandProcessor>();
 builder.Services.AddSingleton<IntakeValidator>();
+builder.Services.AddSingleton<RequestThrottler>();
 builder.Services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
 {
     HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
@@ -46,7 +47,8 @@ builder.Services.AddScoped<ILegendQueryService, LegendQueryService>(provider =>
 builder.Services.AddScoped<IPlayerQueryService, PlayerQueryService>(provider =>
 {
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
-    return new PlayerQueryService(connectionString, graphQlClient);
+    var throttler = provider.GetService<RequestThrottler>();
+    return new PlayerQueryService(connectionString, graphQlClient, throttler);
 });
 builder.Services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
 {

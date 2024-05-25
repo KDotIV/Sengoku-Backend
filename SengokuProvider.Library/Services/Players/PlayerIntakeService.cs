@@ -53,24 +53,43 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
-        private async Task<int> ProcessLegendsFromNewPlayers()
+        private async Task<int> ProcessLegendsFromNewPlayers(int volumeLimit = 100)
         {
-            var currentStandings = new List<PlayerStandingResult>();
-            if (!_playerRegistry.Any()) throw new ApplicationException("Players must exist before new standings data is created");
+            List<Task<int>> batchTasks = new List<Task<int>>();
+            List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
+
+            // Process each player in the registry
             foreach (var newPlayer in _playerRegistry)
             {
                 Console.WriteLine("Querying Standings Data");
-                await Task.Delay(1000);
-                PlayerStandingResult newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
+                PlayerStandingResult? newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
                 if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
 
                 newStanding.TournamentLinks.PlayerId = newPlayer.Key;
-                currentStandings.Add(newStanding);
+                currentBatch.Add(newStanding);
                 Console.WriteLine("Player Standing Data added");
-            }
-            return await IntakePlayerStandingData(currentStandings);
-        }
 
+                // Check if the current batch has reached the batch size
+                if (currentBatch.Count >= volumeLimit)
+                {
+                    Console.WriteLine("Intaking Standings Batch");
+                    // Process the current batch asynchronously
+                    batchTasks.Add(IntakePlayerStandingData(new List<PlayerStandingResult>(currentBatch)));
+                    currentBatch.Clear();
+                    Console.WriteLine($"Batch cleared: {currentBatch.Count}");
+                }
+            }
+
+            // Process any remaining entries in the final batch
+            if (currentBatch.Count > 0)
+            {
+                batchTasks.Add(IntakePlayerStandingData(currentBatch));
+            }
+
+            // Await all batch tasks to complete
+            var results = await Task.WhenAll(batchTasks);
+            return results.Sum();
+        }
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             try
