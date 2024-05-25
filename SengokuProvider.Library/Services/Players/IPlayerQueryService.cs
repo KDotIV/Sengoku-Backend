@@ -5,7 +5,7 @@ namespace SengokuProvider.Library.Services.Players
 {
     public interface IPlayerQueryService
     {
-        public Task<PlayerGraphQLResult> GetPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand);
+        public Task<PlayerGraphQLResult?> GetPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand);
         public Task<PlayerStandingResult?> QueryPlayerStandings(GetPlayerStandingsCommand command);
 
     }

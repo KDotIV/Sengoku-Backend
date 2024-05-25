@@ -19,7 +19,7 @@ namespace SengokuProvider.Library.Services.Players
             _connectionString = connectionString;
             _client = graphQlClient;
         }
-        public async Task<PlayerGraphQLResult> GetPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
+        public async Task<PlayerGraphQLResult?> GetPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
         {
             return await QueryStartggPlayerData(queryCommand);
         }
