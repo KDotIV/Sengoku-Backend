@@ -1,5 +1,7 @@
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Worker.Factories;
 
 namespace SengokuProvider.Worker.Handlers
@@ -8,18 +10,18 @@ namespace SengokuProvider.Worker.Handlers
     {
         private readonly ILogger<DataIntegrityWorker> _logger;
         private readonly IEventIntakeService _eventIntakeService;
-        private readonly IEventQueryService _eventQueryService;
-        private readonly IEventIntegrityService _eventIntegrityService;
         private readonly IEventIntegrityFactory _eventFactory;
+        private readonly ILegendIntegrityFactory _legendFactory;
+        private readonly IPlayerIntegrityFactory _playerFactory;
 
-        public DataIntegrityWorker(ILogger<DataIntegrityWorker> logger, IEventIntakeService eventsIntake, IEventQueryService eventsQuery,
-            IEventIntegrityService eventIntegrity, IEventIntegrityFactory eventFactory)
+        public DataIntegrityWorker(ILogger<DataIntegrityWorker> logger, IEventIntakeService eventsIntake, IEventIntegrityFactory eventFactory, 
+            IPlayerIntegrityFactory playerFactory, ILegendIntegrityFactory legendFactory)
         {
             _logger = logger;
             _eventIntakeService = eventsIntake;
-            _eventQueryService = eventsQuery;
-            _eventIntegrityService = eventIntegrity;
             _eventFactory = eventFactory;
+            _legendFactory = legendFactory;
+            _playerFactory = playerFactory;
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -50,7 +52,6 @@ namespace SengokuProvider.Worker.Handlers
                                 Console.WriteLine($"Tournament_Link: {link} updated");
                             }
                         }
-                        await Task.Delay(1000);
                     }
                     catch (Exception ex)
                     {
@@ -67,7 +68,6 @@ namespace SengokuProvider.Worker.Handlers
                         Console.WriteLine($"Attempting to Update EventId: {currentEventLink}");
 
                         UpdateEventCommand? updatedEventCommand = await _eventHandler.CreateUpdateCommand(currentEventLink);
-                        await Task.Delay(1000);
                         if (updatedEventCommand == null) { continue; }
 
                         var updatedEvent = await _eventIntakeService.UpdateEventData(updatedEventCommand);
@@ -79,6 +79,9 @@ namespace SengokuProvider.Worker.Handlers
                         Console.WriteLine($"Error while Processing EventData Integrity {ex.Message} - {ex.StackTrace}");
                     }
                 }
+
+                var legendHandler = _legendFactory.CreateLegendFactory();
+                var legendsToUpdate = await legendHandler.BeginLegendIntegrity();
             }
         }
     }

@@ -6,9 +6,11 @@ using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
 using System.Collections.Concurrent;
+using System.Net;
 using System.Text;
 
 namespace SengokuProvider.Library.Services.Events
@@ -18,15 +20,18 @@ namespace SengokuProvider.Library.Services.Events
         private readonly IntakeValidator _validator;
         private readonly GraphQLHttpClient _client;
         private readonly IEventQueryService _queryService;
+        private readonly RequestThrottler _requestThrottler;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<string, int> _addressCache;
-        public EventIntakeService(string connectionString, GraphQLHttpClient client, IEventQueryService eventQueryService, IntakeValidator validator)
+        public EventIntakeService(string connectionString, GraphQLHttpClient client, IEventQueryService eventQueryService,
+            IntakeValidator validator, RequestThrottler throttler)
         {
             _connectionString = connectionString;
             _validator = validator;
             _client = client;
             _queryService = eventQueryService;
+            _requestThrottler = throttler;
             _addressCache = new ConcurrentDictionary<string, int>();
         }
         #region Create Tournament Data
@@ -470,6 +475,7 @@ namespace SengokuProvider.Library.Services.Events
                                     videogame {
                                       id
                                     }}}}}";
+
             var request = new GraphQLHttpRequest
             {
                 Query = tempQuery,
@@ -478,22 +484,49 @@ namespace SengokuProvider.Library.Services.Events
                     tournamentId = tournamentId
                 }
             };
-            try
+
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 1000;
+
+            while(!success && retryCount < maxRetries)
             {
-                var response = await _client.SendQueryAsync<JObject>(request);
-                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+                await _requestThrottler.WaitIfPaused();
 
-                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
 
-                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
 
-                return eventData;
+                    var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                    success = true;
+                    return eventData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests();
+                        throw;
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    throw;
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                throw;
-            }
+            return null;
         }
         private async Task<EventGraphQLResult?> QueryStartggEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
@@ -541,44 +574,87 @@ namespace SengokuProvider.Library.Services.Events
         private async Task<EventGraphQLResult?> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
         {
             var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
-                {tournaments(query: {
+                { tournaments(query: {
                     perPage: $perPage, page: $pagenum
                     filter: {
                         addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                             }}) {
-                            nodes {
-                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt}}}";
+                            nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt }
+                            pageInfo { total totalPages page perPage sortBy filter }}}";
 
+            var allNodes = new List<EventNode>();
+            int currentPage = 1;
+            bool hasNextPage = true;
 
-            var request = new GraphQLHttpRequest
+            while (hasNextPage)
             {
-                Query = tempQuery,
-                Variables = new
+                var request = new GraphQLHttpRequest
                 {
-                    perPage = command.PerPage,
-                    page = command.PageNum,
-                    state = command.StateCode,
-                    yearStart = command.StartDate,
-                    yearEnd = command.EndDate,
+                    Query = tempQuery,
+                    Variables = new
+                    {
+                        perPage = command.PerPage,
+                        page = command.PageNum,
+                        state = command.StateCode,
+                        yearStart = command.StartDate,
+                        yearEnd = command.EndDate,
+                    }
+                };
+                bool success = false;
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int delay = 1000;
+
+                while (!success && retryCount < maxRetries)
+                {
+                    await _requestThrottler.WaitIfPaused();
+
+                    try
+                    {
+                        var response = await _client.SendQueryAsync<JObject>(request);
+                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+
+                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                        var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                        if(eventData?.Tournaments?.Nodes != null)
+                        {
+                            allNodes.AddRange(eventData.Tournaments.Nodes);
+                        }
+
+                        var pageInfo = response.Data["tournaments"]["pageInfo"];
+                        int totalPages = pageInfo["totalPages"].ToObject<int>();
+                        currentPage = pageInfo["page"].ToObject<int>() + 1;
+
+                        hasNextPage = currentPage <= totalPages;
+                        success = true;
+                    }
+                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        var errorContent = ex.Content;
+                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            Console.WriteLine("Max retries reached. Pausing further requests.");
+                            await _requestThrottler.PauseRequests();
+                            throw;
+                        }
+                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                        await Task.Delay(delay);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                        return null;
+                    }
                 }
+            }
+            var eventResult = new EventGraphQLResult
+            {
+                Tournaments = new TournamentResult{ Nodes = allNodes }
             };
-
-            try
-            {
-                var response = await _client.SendQueryAsync<JObject>(request);
-                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
-
-                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-
-                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
-
-                return eventData;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                throw;
-            }
+            return eventResult;
         }
         #endregion
 

@@ -23,7 +23,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
         });
-
+        services.AddSingleton<RequestThrottler>();
         services.AddSingleton<ICommonDatabaseService, CommonDatabaseService>(provider =>
         {
             return new CommonDatabaseService(connectionString);
@@ -38,7 +38,8 @@ IHost host = Host.CreateDefaultBuilder(args)
             var intakeValidator = provider.GetService<IntakeValidator>();
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
             var queryService = provider.GetService<IEventQueryService>();
-            return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator);
+            var throttler = provider.GetService<RequestThrottler>();
+            return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator, throttler);
         });
         services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
         {
