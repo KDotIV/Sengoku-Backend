@@ -1,7 +1,5 @@
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Events;
-using SengokuProvider.Library.Services.Legends;
-using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Worker.Factories;
 
 namespace SengokuProvider.Worker.Handlers
@@ -14,7 +12,7 @@ namespace SengokuProvider.Worker.Handlers
         private readonly ILegendIntegrityFactory _legendFactory;
         private readonly IPlayerIntegrityFactory _playerFactory;
 
-        public DataIntegrityWorker(ILogger<DataIntegrityWorker> logger, IEventIntakeService eventsIntake, IEventIntegrityFactory eventFactory, 
+        public DataIntegrityWorker(ILogger<DataIntegrityWorker> logger, IEventIntakeService eventsIntake, IEventIntegrityFactory eventFactory,
             IPlayerIntegrityFactory playerFactory, ILegendIntegrityFactory legendFactory)
         {
             _logger = logger;
@@ -42,7 +40,7 @@ namespace SengokuProvider.Worker.Handlers
                     {
                         Console.WriteLine($"Attempting to Update Link {link}");
 
-                        var result = await _eventIntakeService.IntakeEventsByTournamentId(link);
+                        var result = await _eventIntakeService.IntakeTournamentsByEventId(link);
                         if (result)
                         {
                             var verify = await _eventHandler.VerifyTournamentLinkChange(link);

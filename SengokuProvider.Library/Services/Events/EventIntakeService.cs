@@ -6,7 +6,6 @@ using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
-using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
 using System.Collections.Concurrent;
@@ -35,14 +34,23 @@ namespace SengokuProvider.Library.Services.Events
             _addressCache = new ConcurrentDictionary<string, int>();
         }
         #region Create Tournament Data
-        public async Task<Tuple<int, int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand)
+        public async Task<List<int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand)
         {
             try
             {
                 EventGraphQLResult? newEventData = await QueryStartggTournamentsByState(intakeCommand);
-                if (newEventData == null) { return new Tuple<int, int>(0, 0); }
+                if (newEventData == null) { return new List<int> { 0, 0, 0 }; }
 
-                return await ProcessEventData(newEventData);
+                var intakeResult = new List<int>();
+                var eventsResult = await ProcessEventData(newEventData);
+                intakeResult.Add(eventsResult.Item1);
+                intakeResult.Add(eventsResult.Item2);
+
+                Console.WriteLine($"Addresses Inserted: {eventsResult.Item1} - Events Inserted: {eventsResult.Item2}");
+
+                intakeResult.Add(await ProcessGameData(newEventData));
+
+                return intakeResult;
             }
             catch (Exception ex)
             {
@@ -63,11 +71,11 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<bool> IntakeEventsByTournamentId(int tournamentId)
+        public async Task<bool> IntakeTournamentsByEventId(int eventId)
         {
             try
             {
-                EventGraphQLResult? newEventData = await QueryStartggEventByTournamentId(tournamentId);
+                EventGraphQLResult? newEventData = await QueryStartggEventByTournamentId(eventId);
                 if (newEventData == null) { return false; }
 
                 var eventResult = await ProcessEventData(newEventData);
@@ -116,19 +124,21 @@ namespace SengokuProvider.Library.Services.Events
                     foreach (var tournament in currentBatch)
                     {
                         var createInsertCommand = @"
-                            INSERT INTO tournament_links (id, url_slug, games_ids)
-                            VALUES (@Input, @UrlSlug, @Games)
+                            INSERT INTO tournament_links (id, url_slug, game_id, event_id, last_updated)
+                            VALUES (@Input, @UrlSlug, @Game, @EventId, @LastUpdated)
                             ON CONFLICT (id) DO UPDATE SET
                                 url_slug = EXCLUDED.url_slug,
-                                games_ids = EXCLUDED.games_ids;";
+                                game_id = EXCLUDED.game_id,
+                                event_id = EXCLUDED.event_id,
+                                last_updated = EXCLUDED.last_updated;";
                         using (var command = new NpgsqlCommand(createInsertCommand, conn))
                         {
                             command.Transaction = transaction;
                             command.Parameters.AddWithValue(@"Input", tournament.Id);
                             command.Parameters.AddWithValue(@"UrlSlug", tournament.UrlSlug);
-
-                            var gamesParam = CreateDBIntArrayType("Games", tournament.Games);
-                            command.Parameters.Add(gamesParam);
+                            command.Parameters.AddWithValue(@"Game", tournament.GameId);
+                            command.Parameters.AddWithValue(@"EventId", tournament.EventId);
+                            command.Parameters.AddWithValue(@"LastUpdated", tournament.LastUpdated);
 
                             var result = await command.ExecuteNonQueryAsync();
                             if (result > 0) totalSuccess += result;
@@ -145,30 +155,30 @@ namespace SengokuProvider.Library.Services.Events
             if (newEventData == null) { return null; }
             var tournamentBatch = new List<TournamentData>();
 
-            foreach (var tournament in newEventData.Tournaments.Nodes)
+            foreach (var currentEvent in newEventData.Events.Nodes)
             {
-                TournamentData newTournamentData = new TournamentData { Id = tournament.Id, UrlSlug = tournament.Slug };
-                if (tournament.Events == null || !tournament.Events.Any())
+                if (currentEvent.Tournaments == null) continue;
+                if (currentEvent.Tournaments.Count == 0) continue;
+
+                foreach (var tournament in currentEvent.Tournaments)
                 {
-                    newTournamentData.Games = [0];
-                }
-                else
-                {
-                    TournamentData newTournament = new TournamentData
+                    TournamentData newTournamentData = new TournamentData
                     {
                         Id = tournament.Id,
-                        UrlSlug = tournament.Slug,
-                        Games = tournament.Events.Select(x => x.Videogame.Id).ToArray()
+                        UrlSlug = tournament.UrlSlug,
+                        EventId = currentEvent.Id,
+                        GameId = tournament.Videogame.Id,
+                        LastUpdated = DateTime.UtcNow
                     };
-                }
 
-                if (!await VerifyTournamentLink(newTournamentData.Id))
-                {
-                    await IntakeEventsByTournamentId(tournament.Id);
-                    throw new Exception($"ID: {tournament.Id} does not exist in database. Attempting to Find Events/Tournaments");
+                    if (!await VerifyTournamentLink(currentEvent.Id))
+                    {
+                        await IntakeTournamentsByEventId(currentEvent.Id);
+                        Console.WriteLine(($"ID: {currentEvent.Id} does not exist in database. Attempting to Find Events/Tournaments"));
+                        continue;
+                    }
+                    tournamentBatch.Add(newTournamentData);
                 }
-
-                tournamentBatch.Add(newTournamentData);
             }
             return tournamentBatch;
         }
@@ -239,8 +249,8 @@ namespace SengokuProvider.Library.Services.Events
                             if (newEvent == null) continue;
                             await EnsureLinkIdExists(newEvent.LinkID, conn);
 
-                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open,online_tournament) 
-                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen, @IsOnline)
+                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open,online_tournament,last_updated) 
+                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen, @IsOnline, @Updated)
                             ON CONFLICT (link_id) DO UPDATE SET
                                 event_name = EXCLUDED.event_name,
                                 event_description = EXCLUDED.event_description,
@@ -263,6 +273,7 @@ namespace SengokuProvider.Library.Services.Events
                                 command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration);
                                 command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen);
                                 command.Parameters.AddWithValue(@"IsOnline", newEvent.IsOnline);
+                                command.Parameters.AddWithValue(@"Updated", newEvent.LastUpdate);
                                 var result = await command.ExecuteNonQueryAsync();
                                 if (result > 0) totalSuccess++;
                             }
@@ -287,7 +298,7 @@ namespace SengokuProvider.Library.Services.Events
             var addresses = new List<AddressData>();
             var events = new List<EventData>();
 
-            foreach (var node in queryData.Tournaments.Nodes)
+            foreach (var node in queryData.Events.Nodes)
             {
                 if (!_addressCache.TryGetValue(node.VenueAddress, out int addressId))
                 {
@@ -324,7 +335,7 @@ namespace SengokuProvider.Library.Services.Events
             }
 
             // Process events after all addresses are handled
-            foreach (var node in queryData.Tournaments.Nodes)
+            foreach (var node in queryData.Events.Nodes)
             {
                 if (!await CheckDuplicateEvents(node.Id))
                 {
@@ -340,7 +351,8 @@ namespace SengokuProvider.Library.Services.Events
                         EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
                         ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
                         IsRegistrationOpen = node.IsRegistrationOpen,
-                        IsOnline = node.IsOnline
+                        IsOnline = node.IsOnline,
+                        LastUpdate = DateTime.UtcNow
                     };
                     events.Add(eventData);
                 }
@@ -472,9 +484,9 @@ namespace SengokuProvider.Library.Services.Events
                                 }
                               }) {
                                 nodes {id, name, addrState, lat, lng, venueAddress, startAt, endAt, slug, events {
-                                    videogame {
-                                      id
-                                    }}}}}";
+                                    id,
+                                    slug,
+                                    videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -490,7 +502,7 @@ namespace SengokuProvider.Library.Services.Events
             const int maxRetries = 3;
             const int delay = 1000;
 
-            while(!success && retryCount < maxRetries)
+            while (!success && retryCount < maxRetries)
             {
                 await _requestThrottler.WaitIfPaused();
 
@@ -536,11 +548,7 @@ namespace SengokuProvider.Library.Services.Events
                                     filter: {
                                       videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
                                     }}) {
-                                    nodes {
-                                      id name slug startAt endAt events {
-                                        videogame {
-                                          id
-                                        }}}}}";
+                                    nodes { id name slug startAt endAt events { id, slug, videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -579,7 +587,8 @@ namespace SengokuProvider.Library.Services.Events
                     filter: {
                         addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                             }}) {
-                            nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt }
+                            nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt,
+                            events { id, slug, videogame { id }}}
                             pageInfo { total totalPages page perPage sortBy filter }}}";
 
             var allNodes = new List<EventNode>();
@@ -617,9 +626,9 @@ namespace SengokuProvider.Library.Services.Events
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
-                        if(eventData?.Tournaments?.Nodes != null)
+                        if (eventData?.Events?.Nodes != null)
                         {
-                            allNodes.AddRange(eventData.Tournaments.Nodes);
+                            allNodes.AddRange(eventData.Events.Nodes);
                         }
 
                         var pageInfo = response.Data["tournaments"]["pageInfo"];
@@ -652,7 +661,7 @@ namespace SengokuProvider.Library.Services.Events
             }
             var eventResult = new EventGraphQLResult
             {
-                Tournaments = new TournamentResult{ Nodes = allNodes }
+                Events = new EventResult { Nodes = allNodes }
             };
             return eventResult;
         }
@@ -752,8 +761,7 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     await conn.OpenAsync();
 
-                    var newQuery = @"SELECT link_id FROM events 
-                        WHERE link_id = @Input AND link_id IN (SELECT id FROM tournament_links);";
+                    var newQuery = @"SELECT link_id FROM events WHERE link_id = @Input;";
                     var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = id });
 
                     if (result <= 0) return false;

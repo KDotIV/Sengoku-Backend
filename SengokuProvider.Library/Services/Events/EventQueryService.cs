@@ -68,10 +68,7 @@ namespace SengokuProvider.Library.Services.Events
             {
                 if (!command.Validate())
                 {
-                    Console.WriteLine("Invalid command parameters:");
-                    Console.WriteLine($"Param Name: {command.QueryParameter.Item1}");
-                    Console.WriteLine($"Param value: {command.QueryParameter.Item2}");
-                    throw new ArgumentException("Invalid command parameters");
+                    throw new ArgumentException($"Invalid command parameters for Parameter: {command.QueryParameter.Item1} - Value: {command.QueryParameter.Item2}");
                 }
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {

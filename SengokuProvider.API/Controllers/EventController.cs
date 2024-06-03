@@ -42,7 +42,7 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _eventIntakeService.IntakeTournamentData(command);
-                return new OkObjectResult($"Addresses Inserted: {result.Item1} - Events Inserted: {result.Item2}");
+                return new OkObjectResult($"Addresses Inserted: {result[0]} - Events Inserted: {result[1]} - Tournaments Inserted: {result[2]}");
             }
             catch (Exception ex)
             {
@@ -97,7 +97,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _eventIntakeService.IntakeEventsByTournamentId(command.TournamentId);
+                var result = await _eventIntakeService.IntakeTournamentsByEventId(command.TournamentId);
                 return new OkObjectResult($"Tournaments Inserted: {result}");
             }
             catch (Exception ex)
