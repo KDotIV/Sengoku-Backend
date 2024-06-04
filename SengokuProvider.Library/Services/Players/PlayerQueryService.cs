@@ -1,9 +1,9 @@
 ﻿using GraphQL.Client.Http;
-using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SengokuProvider.Library.Models.Players;
-using System.Net;
 using SengokuProvider.Library.Services.Common;
+using System.Net;
 
 namespace SengokuProvider.Library.Services.Players
 {
@@ -37,7 +37,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             catch (Exception ex)
             {
-                return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}" };
+                return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}", LastUpdated = DateTime.UtcNow };
             }
         }
         private PlayerStandingResult? MapStandingsData(StandingGraphQLResult? data)
@@ -50,6 +50,7 @@ namespace SengokuProvider.Library.Services.Players
             {
                 Response = "Open",
                 EntrantsNum = tempNode.Standing.Container.NumEntrants,
+                LastUpdated = DateTime.UtcNow,
                 StandingDetails = new StandingDetails
                 {
                     IsActive = tempNode.Standing.IsActive,

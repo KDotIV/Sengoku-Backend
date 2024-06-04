@@ -21,7 +21,6 @@
                 _pauseSemaphore.Release();
             }
         }
-
         public async Task PauseRequests()
         {
             await _pauseSemaphore.WaitAsync();

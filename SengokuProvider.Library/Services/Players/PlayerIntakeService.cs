@@ -18,7 +18,7 @@ namespace SengokuProvider.Library.Services.Players
         private int _currentEventId;
         private static Random _rand = new Random();
 
-        public PlayerIntakeService(string connectionString, IPlayerQueryService playerQueryService, 
+        public PlayerIntakeService(string connectionString, IPlayerQueryService playerQueryService,
             ILegendQueryService legendQueryService)
         {
             _connectionString = connectionString;
@@ -33,11 +33,11 @@ namespace SengokuProvider.Library.Services.Players
             try
             {
                 PlayerGraphQLResult? newPlayerData = await _queryService.GetPlayerDataFromStartgg(command);
-                if(newPlayerData == null) { return 0; }
+                if (newPlayerData == null) { return 0; }
 
                 _eventCache.Add(newPlayerData.Data.Id);
                 _currentEventId = newPlayerData.Data.Id;
-                int playerSuccess =  await ProcessPlayerData(newPlayerData);
+                int playerSuccess = await ProcessPlayerData(newPlayerData);
 
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
 
@@ -106,8 +106,8 @@ namespace SengokuProvider.Library.Services.Players
                             if (exists == 0) { continue; }
 
                             var createInsertCommand = @"
-                            INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active)
-                            VALUES (@EntrantInput, @PlayerId, @TournamentLink, @PlacementInput, @NumEntrants, @IsActive)
+                            INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active, last_updated)
+                            VALUES (@EntrantInput, @PlayerId, @TournamentLink, @PlacementInput, @NumEntrants, @IsActive, @LastUpdated)
                             ON CONFLICT (entrant_id) DO UPDATE SET
                                 player_id = EXCLUDED.player_id,
                                 tournament_link = EXCLUDED.tournament_link,
@@ -124,6 +124,7 @@ namespace SengokuProvider.Library.Services.Players
                                 cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
                                 cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
                                 cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
+                                cmd.Parameters.AddWithValue("@LastUpdated", data.LastUpdated);
 
                                 int result = await cmd.ExecuteNonQueryAsync();
                                 if (result > 0)
@@ -193,13 +194,14 @@ namespace SengokuProvider.Library.Services.Players
                 if (!_playersCache.TryGetValue(firstRecord.Player.Id, out int databaseId))
                 {
                     databaseId = await CheckDuplicatePlayer(firstRecord);
-                    if(databaseId == 0)
+                    if (databaseId == 0)
                     {
                         var newPlayerData = new PlayerData
                         {
                             Id = await GenerateNewPlayerId(),
                             PlayerName = firstRecord.Player.GamerTag,
                             PlayerLinkID = firstRecord.Player.Id,
+                            LastUpdate = DateTime.UtcNow,
                         };
                         players.Add(newPlayerData);
                         databaseId = newPlayerData.Id;
@@ -222,8 +224,8 @@ namespace SengokuProvider.Library.Services.Players
                         foreach (var player in players)
                         {
                             var createInsertCommand = @"
-                            INSERT INTO players (id, player_name, startgg_link)
-                            VALUES (@IdInput, @PlayerName, @PlayerLinkId)
+                            INSERT INTO players (id, player_name, startgg_link, last_updated)
+                            VALUES (@IdInput, @PlayerName, @PlayerLinkId, @LastUpdated)
                             ON CONFLICT (id) DO UPDATE SET
                                 player_name = EXCLUDED.player_name,
                                 startgg_link = EXCLUDED.startgg_link;";
@@ -233,6 +235,7 @@ namespace SengokuProvider.Library.Services.Players
                                 cmd.Parameters.AddWithValue("@IdInput", player.Id);
                                 cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
                                 cmd.Parameters.AddWithValue("@PlayerLinkId", player.PlayerLinkID);
+                                cmd.Parameters.AddWithValue("@LastUpdated", player.LastUpdate);
 
                                 int result = await cmd.ExecuteNonQueryAsync();
                                 if (result > 0) { Console.WriteLine("Player Inserted"); totalSuccess += result; }
@@ -280,7 +283,7 @@ namespace SengokuProvider.Library.Services.Players
 
                     var newQuery = @"SELECT id FROM players WHERE startgg_link = @Input";
                     databaseId = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = participantRecord.Player.Id });
-                    if (databaseId != 0) _playersCache.TryAdd(participantRecord.Player.Id , databaseId);
+                    if (databaseId != 0) _playersCache.TryAdd(participantRecord.Player.Id, databaseId);
 
                     return databaseId;
                 }

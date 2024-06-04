@@ -16,6 +16,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
         var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
         var bearerToken = configuration["GraphQLSettings:Bearer"];
+        var serviceBusConnection = configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
 
         // Add services to the container.
         services.AddSingleton<IEventIntegrityFactory, EventIntegrityFactory>();

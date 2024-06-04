@@ -6,6 +6,7 @@
         public Links? TournamentLinks { get; set; }
         public int EntrantsNum { get; set; }
         public required string Response { get; set; }
+        public required DateTime LastUpdated { get; set; }
     }
     public class StandingDetails
     {
