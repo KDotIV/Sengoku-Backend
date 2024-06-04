@@ -1,6 +1,6 @@
 using Azure.Messaging.ServiceBus;
 using Newtonsoft.Json;
-using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Worker.Factories;
@@ -28,7 +28,7 @@ namespace SengokuProvider.Worker.Handlers
             _eventIntakeService = eventsIntake;
             _eventFactory = eventFactory;
         }
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -40,7 +40,10 @@ namespace SengokuProvider.Worker.Handlers
                 _processor.ProcessMessageAsync += MessageHandler;
                 _processor.ProcessErrorAsync += Errorhandler;
             }
+
+            return Task.CompletedTask;
         }
+
         private Task Errorhandler(ProcessErrorEventArgs args)
         {
             _log.LogError($"Error Processing Message: {args.ErrorSource}: {args.FullyQualifiedNamespace} {args.EntityPath} {args.Exception}");
@@ -69,8 +72,7 @@ namespace SengokuProvider.Worker.Handlers
                 throw;
             }
         }
-
-        private async Task<IServiceBusCommand?> ParseMessage(ServiceBusReceivedMessage message)
+        private async Task<EventReceivedData?> ParseMessage(ServiceBusReceivedMessage message)
         {
             using Stream bodyStream = message.Body.ToStream();
             using var reader = new StreamReader(bodyStream);
@@ -79,7 +81,7 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
-                return JsonConvert.DeserializeObject<IServiceBusCommand>(data);
+                return JsonConvert.DeserializeObject<EventReceivedData>(data);
             }
             catch (JsonException ex)
             {
