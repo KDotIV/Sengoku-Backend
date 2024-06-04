@@ -11,7 +11,7 @@ IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
     {
         var configuration = context.Configuration;
-        services.AddHostedService<DataIntegrityWorker>();
+        services.AddHostedService<EventReceivedWorker>();
 
         var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
         var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
@@ -19,7 +19,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         var serviceBusConnection = configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
 
         // Add services to the container.
-        services.AddSingleton<IEventIntegrityFactory, EventIntegrityFactory>();
+        services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
         services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {
             HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }

@@ -4,6 +4,8 @@ namespace SengokuProvider.Worker.Factories
 {
     public interface IEventHandlerFactory
     {
-        public IEventIntegrityService CreateEventFactory();
+        public IEventIntegrityService CreateIntegrityHandler();
+        public IEventIntakeService CreateIntakeHandler();
+        public IEventQueryService CreateQueryHandler();
     }
 }

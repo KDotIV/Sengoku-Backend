@@ -7,19 +7,19 @@ using SengokuProvider.Worker.Factories;
 
 namespace SengokuProvider.Worker.Handlers
 {
-    public class DataIntegrityWorker : BackgroundService
+    public class EventReceivedWorker : BackgroundService
     {
-        private readonly ILogger<DataIntegrityWorker> _log;
+        private readonly ILogger<EventReceivedWorker> _log;
         private readonly IEventIntakeService _eventIntakeService;
-        private readonly IEventIntegrityFactory _eventFactory;
+        private readonly IEventHandlerFactory _eventFactory;
         private readonly IConfiguration _configuration;
         private readonly CommandProcessor _commandProcessor;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
 
-        public DataIntegrityWorker(ILogger<DataIntegrityWorker> logger, IConfiguration config, CommandProcessor commandProcessor, ServiceBusClient client,
-            IEventIntakeService eventsIntake, IEventIntegrityFactory eventFactory)
+        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, CommandProcessor commandProcessor, ServiceBusClient client,
+            IEventIntakeService eventsIntake, IEventHandlerFactory eventFactory)
         {
             _log = logger;
             _configuration = config;
