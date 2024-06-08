@@ -280,7 +280,9 @@ namespace SengokuProvider.Library.Services.Events
                                     StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),
                                     EndTime = reader.GetDateTime(reader.GetOrdinal("end_time")),
                                     LinkId = reader.GetInt32(reader.GetOrdinal("link_id")),
-                                    ClosingRegistration = reader.GetDateTime(reader.GetOrdinal("closing_registration_date"))
+                                    ClosingRegistration = reader.GetDateTime(reader.GetOrdinal("closing_registration_date")),
+                                    UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
+                                    IsOnline = reader.GetBoolean(reader.GetOrdinal("online_tournament"))
                                 });
                             }
                         }

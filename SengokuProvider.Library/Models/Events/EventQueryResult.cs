@@ -13,5 +13,7 @@
         public DateTime EndTime { get; set; }
         public required int LinkId { get; set; }
         public required DateTime ClosingRegistration { get; set; }
+        public required string UrlSlug { get; set; }
+        public required bool IsOnline { get; set; }
     }
 }
