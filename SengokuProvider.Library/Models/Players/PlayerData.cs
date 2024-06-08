@@ -3,10 +3,11 @@
     public class PlayerData
     {
         public required int Id { get; set; }
-        public required string GamerTag { get; set; }
+        public required string PlayerName { get; set; }
         public string? Style { get; set; }
         public required int PlayerLinkID { get; set; }
-        public required int UserLinkID { get; set; }
-        public required int LegendID { get; set; }
+        public int UserId { get; set; }
+        public string? LegendCheckSum { get; set; }
+        public required DateTime LastUpdate { get; set; }
     }
 }

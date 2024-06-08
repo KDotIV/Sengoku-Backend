@@ -13,5 +13,6 @@
         public DateTime? ClosingRegistration { get; set; }
         public bool? IsRegistrationOpen { get; set; }
         public bool IsOnline { get; set; }
+        public required DateTime LastUpdate { get; set; }
     }
 }

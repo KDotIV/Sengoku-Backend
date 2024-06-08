@@ -10,7 +10,7 @@ namespace SengokuProvider.Library.Models.Events
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
         public string? Response { get; set; }
-
+        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (PerPage > 0 && PageNum > 0 &&
@@ -27,27 +27,12 @@ namespace SengokuProvider.Library.Models.Events
         public required int PerPage { get; set; }
         public required string Priority { get; set; }
         public string? Response { get; set; }
-
+        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (RegionId > 0 &&
                 !string.IsNullOrEmpty(Priority) &&
                 PerPage > 0) return true;
-            else return false;
-        }
-    }
-    public class GetPlayerStandingsCommand : ICommand
-    {
-        public required int EventId { get; set; }
-        public required int PerPage { get; set; }
-        public required string GamerTag { get; set; }
-        public string? Response { get; set; }
-
-        public bool Validate()
-        {
-            if (EventId > 0 &&
-                PerPage > 0 &&
-                string.IsNullOrEmpty(GamerTag)) return true;
             else return false;
         }
     }
@@ -59,7 +44,7 @@ namespace SengokuProvider.Library.Models.Events
         public required int EndDate { get; set; }
         public required int[] GameIDs { get; set; }
         public string? Response { get; set; }
-
+        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (Page > 0 &&
@@ -74,7 +59,7 @@ namespace SengokuProvider.Library.Models.Events
     {
         public required int TournamentId { get; set; }
         public string? Response { get; set; }
-
+        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (TournamentId > 0) return true;
@@ -86,6 +71,7 @@ namespace SengokuProvider.Library.Models.Events
         public int EventId { get; set; }
         public List<Tuple<string, string>> UpdateParameters { get; set; }
         public string? Response { get; set; }
+        public EventCommandRegistry Topic { get; set; }
 
         public UpdateEventCommand()
         {
@@ -99,5 +85,13 @@ namespace SengokuProvider.Library.Models.Events
                 UpdateParameters.Count > 0) return true;
             else return false;
         }
+    }
+    public enum EventCommandRegistry
+    {
+        UpdateEvent,
+        IntakeEventsByTournament,
+        IntakeEventsByLocation,
+        IntakeEventsByGames,
+        GetTournamentByLocation
     }
 }

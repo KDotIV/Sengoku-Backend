@@ -11,19 +11,20 @@ IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureServices((context, services) =>
     {
         var configuration = context.Configuration;
-        services.AddHostedService<DataIntegrityWorker>();
+        services.AddHostedService<EventReceivedWorker>();
 
         var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
         var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
         var bearerToken = configuration["GraphQLSettings:Bearer"];
+        var serviceBusConnection = configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
 
         // Add services to the container.
-        services.AddSingleton<IEventIntegrityFactory, EventIntegrityFactory>();
+        services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
         services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {
             HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
         });
-
+        services.AddSingleton<RequestThrottler>();
         services.AddSingleton<ICommonDatabaseService, CommonDatabaseService>(provider =>
         {
             return new CommonDatabaseService(connectionString);
@@ -38,7 +39,8 @@ IHost host = Host.CreateDefaultBuilder(args)
             var intakeValidator = provider.GetService<IntakeValidator>();
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
             var queryService = provider.GetService<IEventQueryService>();
-            return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator);
+            var throttler = provider.GetService<RequestThrottler>();
+            return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator, throttler);
         });
         services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
         {

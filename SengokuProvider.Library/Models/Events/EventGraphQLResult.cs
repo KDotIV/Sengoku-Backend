@@ -5,10 +5,10 @@ namespace SengokuProvider.Library.Models.Events
     public class EventGraphQLResult
     {
         [JsonProperty("tournaments")]
-        public required TournamentResult Tournaments { get; set; }
+        public required EventResult Events { get; set; }
     }
 
-    public class TournamentResult
+    public class EventResult
     {
         [JsonProperty("nodes")]
         public required List<EventNode> Nodes { get; set; }
@@ -42,7 +42,7 @@ namespace SengokuProvider.Library.Models.Events
         [JsonProperty("slug")]
         public required string Slug { get; set; }
         [JsonProperty("events")]
-        public List<EventDetail>? Events { get; set; }
+        public List<TournamentDetails>? Tournaments { get; set; }
         [JsonProperty("registrationClosesAt")]
         public long RegistrationClosesAt { get; set; }
         [JsonProperty("isRegistrationOpen")]
@@ -52,10 +52,14 @@ namespace SengokuProvider.Library.Models.Events
         [JsonProperty("city")]
         public string? City { get; set; }
     }
-    public class EventDetail
+    public class TournamentDetails
     {
+        [JsonProperty("id")]
+        public int Id { get; set; }
         [JsonProperty("videogame")]
         public Videogame? Videogame { get; set; }
+        [JsonProperty("slug")]
+        public string? UrlSlug { get; set; }
     }
 
     public class Videogame

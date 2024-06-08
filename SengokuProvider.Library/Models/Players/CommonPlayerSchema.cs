@@ -1,13 +1,12 @@
 ﻿using Newtonsoft.Json;
 
-namespace SengokuProvider.Library.Models.Events
+namespace SengokuProvider.Library.Models.Players
 {
-    public class StandingGraphQLResult
+    public class CommonPlayerSchema
     {
         [JsonProperty("event")]
-        public required Event Event { get; set; }
+        public required Event Data { get; set; }
     }
-
     public class Event
     {
         [JsonProperty("id")]
@@ -19,20 +18,18 @@ namespace SengokuProvider.Library.Models.Events
         [JsonProperty("entrants")]
         public required EntrantList Entrants { get; set; }
     }
-
     public class EntrantList
     {
         [JsonProperty("nodes")]
         public required List<EntrantNode> Nodes { get; set; }
     }
-
     public class EntrantNode
     {
         [JsonProperty("id")]
         public int Id { get; set; }
 
         [JsonProperty("participants")]
-        public List<Participant>? Participants { get; set; }
+        public required List<Participant> Participants { get; set; }
 
         [JsonProperty("standing")]
         public Standing? Standing { get; set; }
@@ -41,12 +38,12 @@ namespace SengokuProvider.Library.Models.Events
     public class Participant
     {
         [JsonProperty("id")]
-        public int Id { get; set; }
+        public required int Id { get; set; }
+        public required string GamerTag { get; set; }
 
-        [JsonProperty("gamerTag")]
-        public string? GamerTag { get; set; }
+        [JsonProperty("player")]
+        public required Player Player { get; set; }
     }
-
     public class Standing
     {
         [JsonProperty("id")]
@@ -54,6 +51,8 @@ namespace SengokuProvider.Library.Models.Events
 
         [JsonProperty("placement")]
         public int Placement { get; set; }
+        [JsonProperty("isFinal")]
+        public bool IsActive { get; set; }
 
         [JsonProperty("container")]
         public Container? Container { get; set; }

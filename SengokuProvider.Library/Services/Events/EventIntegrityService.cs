@@ -59,7 +59,7 @@ namespace SengokuProvider.Library.Services.Events
         {
             try
             {
-                var eventToUpdate = new EventData();
+                var eventToUpdate = new EventData { LastUpdate = DateTime.UtcNow };
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     await connection.OpenAsync();
@@ -109,7 +109,7 @@ namespace SengokuProvider.Library.Services.Events
 
             if (result == null) return null;
 
-            var firstNode = result.Tournaments.Nodes.FirstOrDefault();
+            var firstNode = result.Events.Nodes.FirstOrDefault();
             if (firstNode == null) { Console.WriteLine("No Nodes were Retrieved. Check EventId"); return null; }
             var tempDateTime = DateTimeOffset.FromUnixTimeSeconds(firstNode.RegistrationClosesAt).DateTime;
 
@@ -175,11 +175,10 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     await conn.OpenAsync();
 
-                    var newQuery = @"Select url_slug, games_ids from tournament_links
+                    var newQuery = @"Select url_slug, game_id from tournament_links
                                    WHERE id = @Input";
                     var link = await conn.QueryFirstOrDefaultAsync<TournamentData>(newQuery, new { Input = linkId });
-                    if (link == null || link.Games == null ||
-                        link.Games.Length == 0 || string.IsNullOrEmpty(link.UrlSlug))
+                    if (link == null || string.IsNullOrEmpty(link.UrlSlug))
                     {
                         return false;
                     }
@@ -205,13 +204,12 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     await conn.OpenAsync();
 
-                    var newQuery = @"Select id from tournament_links
-                                   WHERE url_slug IS NULL and games_ids IS NULL;";
-                    using (var reader = await conn.ExecuteReaderAsync(newQuery))
+                    var linkQuery = @"Select id WHERE url_slug IS NULL OR last_updated IS NULL OR event_id IS NULL OR last_updated >= NOW() - INTERVAL '1 HOURS'";
+                    using (var reader = await conn.ExecuteReaderAsync(linkQuery))
                     {
                         while (await reader.ReadAsync())
                         {
-                            linksToProcess.Add(reader.GetInt32(0));
+                            linksToProcess.Add(reader.GetInt32(reader.GetOrdinal("id")));
                         }
                     }
                 }

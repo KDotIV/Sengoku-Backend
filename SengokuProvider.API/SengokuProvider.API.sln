@@ -11,12 +11,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "API", "API", "{BD491C8C-EC4
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Worker", "Worker", "{9B18D3C2-D611-485D-8FA2-036AC6FE0CFC}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{663708D9-F97F-4DA6-8DD3-F6A93D7B21B7}"
-	ProjectSection(SolutionItems) = preProject
-		.editorconfig = .editorconfig
-		DevNotes.txt = DevNotes.txt
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Libraries", "Libraries", "{FACDBAB8-DDD1-4C7C-B0EA-40EE5FC647D0}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SengokuProvider.Library", "..\SengokuProvider.Library\SengokuProvider.Library.csproj", "{6DDFA0D7-3242-426E-BC9F-A1B3EE80F824}"

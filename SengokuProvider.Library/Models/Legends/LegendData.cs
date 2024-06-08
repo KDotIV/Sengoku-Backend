@@ -7,11 +7,10 @@ namespace SengokuProvider.Library.Models.Legends
     public class LegendData
     {
         public required int Id { get; set; }
-        public required string Name { get; set; }
-        public string? Description { get; set; }
-        public Game game { get; set; }
-        public List<PlayerData>? playerData { get; set; }
-        public List<EventData>? eventData { get; set; }
-
+        public required string LegendName { get; set; }
+        public required int PlayerId { get; set; }
+        public required int PlayerLinkId { get; set; }
+        public required string PlayerName { get; set; }
+        public Game[]? Games { get; set; }
     }
 }
