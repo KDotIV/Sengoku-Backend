@@ -2,7 +2,7 @@ name: Build and deploy .NET Core application to Web App sengoku-alexandria-qa
 on:
   push:
     branches:
-    - master
+    - Release
 env:
   AZURE_WEBAPP_NAME: sengoku-alexandria-qa
   AZURE_WEBAPP_PACKAGE_PATH: .\publish
