@@ -3,8 +3,8 @@ on:
   push:
     branches:
     - master
-    - dev
-    - features
+    - dev/*
+    - features/*
 env:
   AZURE_WEBAPP_NAME: sengoku-alexandria-qa
   AZURE_WEBAPP_PACKAGE_PATH: .\publish
