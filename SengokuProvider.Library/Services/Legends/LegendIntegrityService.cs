@@ -1,11 +1,4 @@
-﻿using SengokuProvider.Library.Services.Events;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SengokuProvider.Library.Services.Legends
+﻿namespace SengokuProvider.Library.Services.Legends
 {
     public class LegendIntegrityService : ILegendIntegrityService
     {

@@ -2,7 +2,6 @@ using Azure.Messaging.ServiceBus;
 using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
-using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Worker.Factories;
 
 namespace SengokuProvider.Worker.Handlers
@@ -10,7 +9,6 @@ namespace SengokuProvider.Worker.Handlers
     public class EventReceivedWorker : BackgroundService
     {
         private readonly ILogger<EventReceivedWorker> _log;
-        private readonly IEventIntakeService _eventIntakeService;
         private readonly IEventHandlerFactory _eventFactory;
         private readonly IConfiguration _configuration;
         private readonly CommandProcessor _commandProcessor;
@@ -18,14 +16,12 @@ namespace SengokuProvider.Worker.Handlers
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
 
-        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, CommandProcessor commandProcessor, ServiceBusClient client,
-            IEventIntakeService eventsIntake, IEventHandlerFactory eventFactory)
+        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, CommandProcessor commandProcessor, ServiceBusClient client, IEventHandlerFactory eventFactory)
         {
             _log = logger;
             _configuration = config;
             _commandProcessor = commandProcessor;
             _client = client;
-            _eventIntakeService = eventsIntake;
             _eventFactory = eventFactory;
         }
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -43,13 +39,11 @@ namespace SengokuProvider.Worker.Handlers
 
             return Task.CompletedTask;
         }
-
         private Task Errorhandler(ProcessErrorEventArgs args)
         {
             _log.LogError($"Error Processing Message: {args.ErrorSource}: {args.FullyQualifiedNamespace} {args.EntityPath} {args.Exception}");
             return Task.CompletedTask;
         }
-
         private async Task MessageHandler(ProcessMessageEventArgs args)
         {
             _log.LogWarning("Received Message...");
@@ -61,7 +55,12 @@ namespace SengokuProvider.Worker.Handlers
             {
                 switch (currentMessage.Topic)
                 {
-
+                    case EventCommandRegistry.UpdateEvent:
+                        await UpdateEvent(currentMessage);
+                        break;
+                    case EventCommandRegistry.IntakeEventsByLocation:
+                        await IntakeLocationEvents(currentMessage);
+                        break;
                 }
                 await args.CompleteMessageAsync(args.Message);
             }
@@ -71,6 +70,29 @@ namespace SengokuProvider.Worker.Handlers
                 await args.DeadLetterMessageAsync(args.Message);
                 throw;
             }
+        }
+        private async Task IntakeLocationEvents(EventReceivedData? currentMessage)
+        {
+            if (currentMessage == null) { return; }
+            if (currentMessage.Command is IntakeEventsByLocationCommand intakeCommand)
+            {
+                var currentIntakeHandler = _eventFactory.CreateIntakeHandler();
+                var result = await currentIntakeHandler.IntakeTournamentData(intakeCommand);
+                if (result.Count <= 0) new ApplicationException($"Failed to Intake Tournament Batch");
+            }
+            else { throw new InvalidOperationException("Command is not of expected type IntakeLocationCommand"); }
+        }
+        private async Task UpdateEvent(EventReceivedData? currentMessage)
+        {
+            if (currentMessage == null) { return; }
+            if (currentMessage.Command is UpdateEventCommand updateCommand)
+            {
+                var currentUpdateHandler = _eventFactory.CreateIntakeHandler();
+                var result = await currentUpdateHandler.UpdateEventData(updateCommand);
+                if (!result) new ApplicationException($"Failed to update Event Data");
+            }
+            else { throw new InvalidOperationException("Command is not of expected type UpdateEventCommand"); }
+            _log.LogInformation("Successfully Updated Event");
         }
         private async Task<EventReceivedData?> ParseMessage(ServiceBusReceivedMessage message)
         {

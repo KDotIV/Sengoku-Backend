@@ -1,11 +1,6 @@
 ﻿using GraphQL.Client.Http;
 using Npgsql;
 using SengokuProvider.Library.Models.Legends;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SengokuProvider.Library.Services.Legends
 {
@@ -42,7 +37,7 @@ namespace SengokuProvider.Library.Services.Legends
                             while (await reader.ReadAsync())
                             {
                                 return new LegendData
-                                { 
+                                {
                                     Id = reader.GetInt32(reader.GetOrdinal("id")),
                                     LegendName = reader.GetString(reader.GetOrdinal("legend_name")),
                                     PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
