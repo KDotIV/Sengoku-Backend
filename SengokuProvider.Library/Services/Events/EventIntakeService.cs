@@ -377,7 +377,10 @@ namespace SengokuProvider.Library.Services.Events
 
             var tempCity = addressSplit[1].Trim();
             int tempZipCode = 0;
-            if (addressSplit.Length > 2) { tempZipCode = int.Parse(addressSplit[2].Trim().Split(" ")[1]); }
+            if (addressSplit.Length > 2)
+            {
+                if (!int.TryParse(addressSplit[2].Trim().Split(" ")[1], out tempZipCode)) return 0;
+            }
 
             var cityQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", tempCity) };
             var result = await VerifyRegion(cityQuery);

@@ -61,7 +61,8 @@ builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {
     var intakeValidator = provider.GetService<IntakeValidator>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
-    return new EventQueryService(connectionString, graphQlClient, intakeValidator);
+    var throttler = provider.GetService<RequestThrottler>();
+    return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler);
 });
 
 builder.Services.AddControllers();

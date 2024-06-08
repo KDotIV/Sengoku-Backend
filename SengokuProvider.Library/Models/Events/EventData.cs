@@ -12,7 +12,8 @@
         public DateTime? EndTime { get; set; }
         public DateTime? ClosingRegistration { get; set; }
         public bool? IsRegistrationOpen { get; set; }
-        public bool IsOnline { get; set; }
+        public bool? IsOnline { get; set; }
+        public string? UrlSlug { get; set; }
         public required DateTime LastUpdate { get; set; }
     }
 }
