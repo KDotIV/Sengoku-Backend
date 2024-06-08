@@ -7,7 +7,7 @@ namespace SengokuProvider.Library.Models.Common
         public const string DatePriority = @"
                             SELECT 
                                 a.address, a.latitude, a.longitude, 
-                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open,
+                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open, e.url_slug, e.online_tournament,
                                 SQRT(
                                     POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
                                 ) AS distance
@@ -27,7 +27,7 @@ namespace SengokuProvider.Library.Models.Common
         public const string DistancePriority = @"
                             SELECT 
                                 a.address, a.latitude, a.longitude, 
-                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open,
+                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open, e.url_slug, e.online_tournament,
                                 SQRT(
                                     POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
                                 ) AS distance
