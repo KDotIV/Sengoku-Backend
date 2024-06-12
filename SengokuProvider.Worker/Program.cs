@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Factories;

@@ -1,4 +1,4 @@
-﻿namespace SengokuProvider.Library.Services.Common
+﻿namespace SengokuProvider.Library.Services.Common.Interfaces
 {
     public interface ICommonDatabaseService
     {

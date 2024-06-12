@@ -1,6 +1,8 @@
+using Azure.Messaging.ServiceBus;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Players;
@@ -13,11 +15,20 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration["ConnectionStrings:AlexandriaConnectionString"];
 var graphQLUrl = builder.Configuration["GraphQLSettings:Endpoint"];
 var bearerToken = builder.Configuration["GraphQLSettings:Bearer"];
+var serviceBusConnection = builder.Configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
 
-// Add services to the container.
+//Singletons
 builder.Services.AddTransient<CommandProcessor>();
 builder.Services.AddSingleton<IntakeValidator>();
 builder.Services.AddSingleton<RequestThrottler>();
+builder.Services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
+
+//Scopes
+builder.Services.AddScoped<IAzureBusApiService, AzureBusApiService>(provider =>
+{
+    var client = provider.GetService<ServiceBusClient>();
+    return new AzureBusApiService(client);
+});
 builder.Services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
 {
     HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
@@ -53,9 +64,11 @@ builder.Services.AddScoped<IPlayerQueryService, PlayerQueryService>(provider =>
 });
 builder.Services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
 {
+    var configuration = provider.GetService<IConfiguration>();
     var playerQueryService = provider.GetService<IPlayerQueryService>();
     var legendQueryService = provider.GetService<ILegendQueryService>();
-    return new PlayerIntakeService(connectionString, playerQueryService, legendQueryService);
+    var serviceBus = provider.GetService<IAzureBusApiService>();
+    return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, serviceBus);
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {

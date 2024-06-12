@@ -1,9 +1,4 @@
 ﻿using SengokuProvider.Library.Models.Common;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SengokuProvider.Library.Models.Legends
 {
@@ -17,5 +12,22 @@ namespace SengokuProvider.Library.Models.Legends
             if (PlayerLinkId != 0) return true;
             return false;
         }
+    }
+    public class OnboardLegendsByPlayerCommand : ICommand
+    {
+        public required int PlayerId { get; set; }
+        public required string GamerTag { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            throw new NotImplementedException();
+        }
+    }
+    public enum LegendCommandRegistry
+    {
+        UpdateLegend,
+        OnboardLegendsByPlayerData,
+        IntakeLegendsByTournament,
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Npgsql;
+using SengokuProvider.Library.Services.Common.Interfaces;
 
 namespace SengokuProvider.Library.Services.Common
 {

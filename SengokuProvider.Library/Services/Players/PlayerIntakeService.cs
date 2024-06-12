@@ -1,6 +1,11 @@
 ﻿using Dapper;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Npgsql;
+using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Legends;
 using System.Collections.Concurrent;
 
@@ -10,6 +15,8 @@ namespace SengokuProvider.Library.Services.Players
     {
         private readonly IPlayerQueryService _queryService;
         private readonly ILegendQueryService _legendQueryService;
+        private readonly IAzureBusApiService _azureBusApiService;
+        private readonly IConfiguration _config;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<int, int> _playersCache;
@@ -18,12 +25,14 @@ namespace SengokuProvider.Library.Services.Players
         private int _currentEventId;
         private static Random _rand = new Random();
 
-        public PlayerIntakeService(string connectionString, IPlayerQueryService playerQueryService,
-            ILegendQueryService legendQueryService)
+        public PlayerIntakeService(string connectionString, IConfiguration configuration, IPlayerQueryService playerQueryService,
+            ILegendQueryService legendQueryService, IAzureBusApiService serviceBus)
         {
             _connectionString = connectionString;
+            _config = configuration;
             _queryService = playerQueryService;
             _legendQueryService = legendQueryService;
+            _azureBusApiService = serviceBus;
             _playersCache = new ConcurrentDictionary<int, int>();
             _playerRegistry = new ConcurrentDictionary<int, string>();
             _eventCache = new HashSet<int>();
@@ -42,7 +51,7 @@ namespace SengokuProvider.Library.Services.Players
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
 
                 Console.WriteLine("Starting Standings Processing");
-                var standingsSuccess = await ProcessLegendsFromNewPlayers();
+                var standingsSuccess = await ProcessNewPlayers();
 
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
 
@@ -53,7 +62,7 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
-        private async Task<int> ProcessLegendsFromNewPlayers(int volumeLimit = 100)
+        private async Task<int> ProcessNewPlayers(int volumeLimit = 100)
         {
             List<Task<int>> batchTasks = new List<Task<int>>();
             List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
@@ -129,8 +138,8 @@ namespace SengokuProvider.Library.Services.Players
                                 int result = await cmd.ExecuteNonQueryAsync();
                                 if (result > 0)
                                 {
-                                    _playerRegistry.TryRemove(data.TournamentLinks.PlayerId, out _);
-                                    totalSuccess += result;
+                                    await SendOnboardMessage(data.TournamentLinks.PlayerId, data.StandingDetails.GamerTag);
+                                    result += totalSuccess;
                                     Console.WriteLine("Player removed from registry");
                                 }
                             }
@@ -149,6 +158,36 @@ namespace SengokuProvider.Library.Services.Players
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;
+        }
+        private async Task SendOnboardMessage(int playerId, string playerName)
+        {
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:legendreceivedqueue"]) || _config == null) { Console.WriteLine("Service Bus Settings Cannot be empty or null"); return; }
+            try
+            {
+                var newCommand = new OnboardReceivedData
+                {
+                    Topic = LegendCommandRegistry.OnboardLegendsByPlayerData,
+                    Command = new OnboardLegendsByPlayerCommand
+                    {
+                        PlayerId = playerId,
+                        GamerTag = playerName
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, Formatting.Indented);
+                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:legendreceivedqueue"], messageJson);
+
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Onboarding Message to Service Bus. Check Data");
+                    return;
+                }
+                _playerRegistry.TryRemove(playerId, out _);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Unexpected Error Sending Onboarding Message {ex.Message} {ex.StackTrace}");
+            }
         }
         private async Task<int> VerifyPlayer(int playerId)
         {

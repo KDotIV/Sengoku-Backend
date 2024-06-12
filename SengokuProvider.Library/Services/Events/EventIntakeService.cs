@@ -211,7 +211,7 @@ namespace SengokuProvider.Library.Services.Events
                                 var result = await command.ExecuteScalarAsync();
                                 if (result != null && int.TryParse(result.ToString(), out int addressId) && addressId > 0)
                                 {
-                                    _addressCache.TryAdd(newAddress.Address, addressId);
+                                    _addressCache.TryAdd(newAddress.Address ?? string.Empty, addressId);
                                     newAddress.Id = addressId;
                                     totalSuccess++;
                                 }
@@ -263,8 +263,8 @@ namespace SengokuProvider.Library.Services.Events
                                 online_tournament = EXCLUDED.online_tournament;";
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
                             {
-                                command.Parameters.AddWithValue("@Event_Name", newEvent.EventName);
-                                command.Parameters.AddWithValue(@"Event_Description", newEvent.EventDescription);
+                                command.Parameters.AddWithValue("@Event_Name", newEvent.EventName ?? string.Empty);
+                                command.Parameters.AddWithValue(@"Event_Description", newEvent.EventDescription ?? string.Empty);
                                 command.Parameters.AddWithValue(@"Region", newEvent.Region);
                                 command.Parameters.AddWithValue("@Address_Id", newEvent.AddressID);
                                 command.Parameters.AddWithValue(@"Start_Time", newEvent.StartTime);
@@ -330,8 +330,8 @@ namespace SengokuProvider.Library.Services.Events
             // Update cache with new IDs
             foreach (var address in addresses)
             {
-                _addressCache[address.Address] = address.Id;
-                addressMap[address.Address] = address.Id;
+                _addressCache[address.Address ?? string.Empty] = address.Id;
+                addressMap[address.Address ?? string.Empty] = address.Id;
             }
 
             // Process events after all addresses are handled
@@ -365,7 +365,7 @@ namespace SengokuProvider.Library.Services.Events
         }
         private async Task<int> GetRegionId(string? city)
         {
-            var queryResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city) });
+            var queryResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city ?? string.Empty) });
             return queryResult?.Id ?? 1;
         }
         public async Task<int> IntakeNewRegion(AddressData addressData)
