@@ -6,38 +6,92 @@ using SengokuProvider.Worker.Factories;
 
 namespace SengokuProvider.Worker.Handlers
 {
-    public class EventReceivedWorker : BackgroundService
+    internal class EventReceivedWorker : BackgroundService
     {
         private readonly ILogger<EventReceivedWorker> _log;
         private readonly IEventHandlerFactory _eventFactory;
         private readonly IConfiguration _configuration;
-        private readonly CommandProcessor _commandProcessor;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
 
-        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, CommandProcessor commandProcessor, ServiceBusClient client, IEventHandlerFactory eventFactory)
+        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, ServiceBusClient client, IEventHandlerFactory eventFactory)
         {
             _log = logger;
             _configuration = config;
-            _commandProcessor = commandProcessor;
             _client = client;
             _eventFactory = eventFactory;
         }
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 5, PrefetchCount = 5, });
+            _processor.ProcessMessageAsync += MessageHandler;
+            _processor.ProcessErrorAsync += Errorhandler;
+
+            await _processor.StartProcessingAsync();
+
+            /*            while (!stoppingToken.IsCancellationRequested)
+                        {
+                            if (_log.IsEnabled(LogLevel.Information))
+                            {
+                                _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                            }
+                            await GroomEventData();
+                        }*/
+            return;
+        }
+
+        private async Task GroomEventData()
+        {
+            var _integrityHandler = _eventFactory.CreateIntegrityHandler();
+            var _intakeHandler = _eventFactory.CreateIntakeHandler();
+
+            var eventsToUpdate = await _integrityHandler.BeginEventIntegrity();
+            Console.WriteLine($"Events to Update: {eventsToUpdate.Count}");
+            foreach (var currentEventLink in eventsToUpdate)
             {
-                if (_log.IsEnabled(LogLevel.Information))
+                try
                 {
-                    _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                    Console.WriteLine($"Attempting to Update EventId: {currentEventLink}");
+
+                    UpdateEventCommand? updatedEventCommand = await _integrityHandler.CreateUpdateCommand(currentEventLink);
+                    if (updatedEventCommand == null) { continue; }
+
+                    var updatedEvent = await _intakeHandler.UpdateEventData(updatedEventCommand);
+                    if (updatedEvent) { Console.WriteLine($"Successfully Updated: {updatedEventCommand.EventId}"); }
+                    else { Console.WriteLine("Failed to update Event"); }
                 }
-                _processor = _client.CreateProcessor(_configuration["ReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 5, PrefetchCount = 5, });
-                _processor.ProcessMessageAsync += MessageHandler;
-                _processor.ProcessErrorAsync += Errorhandler;
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error while Processing EventData Integrity {ex.Message} - {ex.StackTrace}");
+                }
             }
 
-            return Task.CompletedTask;
+            var linksToProcess = await _integrityHandler.BeginIntegrityTournamentLinks();
+            if (linksToProcess.Count == 0) { Console.WriteLine("No Links to Process"); return; }
+            Console.WriteLine($"Links to Process: {linksToProcess.Count}");
+            foreach (var link in linksToProcess)
+            {
+                try
+                {
+                    Console.WriteLine($"Attempting to Update Link {link}");
+
+                    var result = await _intakeHandler.IntakeTournamentsByEventId(link);
+                    if (result)
+                    {
+                        var verify = await _integrityHandler.VerifyTournamentLinkChange(link);
+
+                        if (verify)
+                        {
+                            Console.WriteLine($"Tournament_Link: {link} updated");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error while Processing TournamentLink {ex.Message} - {ex.StackTrace}");
+                }
+            }
         }
         private Task Errorhandler(ProcessErrorEventArgs args)
         {
@@ -59,7 +113,9 @@ namespace SengokuProvider.Worker.Handlers
                         await UpdateEvent(currentMessage);
                         break;
                     case EventCommandRegistry.IntakeEventsByLocation:
-                        await IntakeLocationEvents(currentMessage);
+                        List<int> result = await IntakeLocationEvents(currentMessage);
+                        Console.WriteLine($"Successfully Added: {result} Events");
+
                         break;
                 }
                 await args.CompleteMessageAsync(args.Message);
@@ -71,14 +127,16 @@ namespace SengokuProvider.Worker.Handlers
                 throw;
             }
         }
-        private async Task IntakeLocationEvents(EventReceivedData? currentMessage)
+        private async Task<List<int>> IntakeLocationEvents(EventReceivedData? currentMessage)
         {
-            if (currentMessage == null) { return; }
+            List<int> successList = new List<int>();
+            if (currentMessage == null) { return successList; }
             if (currentMessage.Command is IntakeEventsByLocationCommand intakeCommand)
             {
                 var currentIntakeHandler = _eventFactory.CreateIntakeHandler();
-                var result = await currentIntakeHandler.IntakeTournamentData(intakeCommand);
-                if (result.Count <= 0) new ApplicationException($"Failed to Intake Tournament Batch");
+                successList = await currentIntakeHandler.IntakeTournamentData(intakeCommand);
+                if (successList.Count <= 0) new ApplicationException($"Failed to Intake Tournament Batch");
+                return successList;
             }
             else { throw new InvalidOperationException("Command is not of expected type IntakeLocationCommand"); }
         }
@@ -103,7 +161,11 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
-                return JsonConvert.DeserializeObject<EventReceivedData>(data);
+                var settings = new JsonSerializerSettings
+                {
+                    Converters = new List<JsonConverter> { new CommandSerializer() }
+                };
+                return JsonConvert.DeserializeObject<EventReceivedData>(data, settings);
             }
             catch (JsonException ex)
             {

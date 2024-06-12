@@ -1,6 +1,8 @@
+using Azure.Messaging.ServiceBus;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Factories;
@@ -12,6 +14,7 @@ IHost host = Host.CreateDefaultBuilder(args)
     {
         var configuration = context.Configuration;
         services.AddHostedService<EventReceivedWorker>();
+        services.AddHostedService<LegendReceivedWorker>();
 
         var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
         var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
@@ -20,6 +23,8 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         // Add services to the container.
         services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
+        services.AddSingleton<ILegendHandlerFactory, LegendHandlerFactory>();
+        services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
         services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {
             HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
@@ -46,7 +51,8 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             var intakeValidator = provider.GetService<IntakeValidator>();
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
-            return new EventQueryService(connectionString, graphQlClient, intakeValidator);
+            var throttler = provider.GetService<RequestThrottler>();
+            return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler);
         });
         services.AddSingleton<IEventIntegrityService, EventIntegrityService>(provider =>
         {

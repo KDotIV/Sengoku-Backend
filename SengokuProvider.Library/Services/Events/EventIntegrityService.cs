@@ -3,6 +3,7 @@ using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
+using System.Text.RegularExpressions;
 
 namespace SengokuProvider.Library.Services.Events
 {
@@ -64,7 +65,7 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     await connection.OpenAsync();
 
-                    var query = @"SELECT id, event_name, region, address_id, closing_registration_date, registration_open, link_id
+                    var query = @"SELECT id, event_name, region, address_id, closing_registration_date, registration_open, link_id, online_tournament, url_slug
                           FROM events 
                           WHERE id = @Input;";
                     using (var cmd = new NpgsqlCommand(query, connection))
@@ -82,10 +83,10 @@ namespace SengokuProvider.Library.Services.Events
                                 eventToUpdate.ClosingRegistration = reader.IsDBNull(reader.GetOrdinal("closing_registration_date"))
                                                                     ? null
                                                                     : reader.GetDateTime(reader.GetOrdinal("closing_registration_date"));
-                                eventToUpdate.IsRegistrationOpen = reader.IsDBNull(reader.GetOrdinal("registration_open"))
-                                                                   ? null
-                                                                   : reader.GetBoolean(reader.GetOrdinal("registration_open"));
+                                eventToUpdate.IsRegistrationOpen = reader.IsDBNull(reader.GetOrdinal("registration_open")) ? null : reader.GetBoolean(reader.GetOrdinal("registration_open"));
                                 eventToUpdate.LinkID = reader.GetInt32(reader.GetOrdinal("link_id"));
+                                eventToUpdate.IsOnline = reader.IsDBNull(reader.GetOrdinal("online_tournament")) ? null : reader.GetBoolean(reader.GetOrdinal("online_tournament"));
+                                eventToUpdate.UrlSlug = reader.IsDBNull(reader.GetOrdinal("url_slug")) ? null : reader.GetString(reader.GetOrdinal("url_slug"));
                             }
                         }
                     }
@@ -113,6 +114,11 @@ namespace SengokuProvider.Library.Services.Events
             if (firstNode == null) { Console.WriteLine("No Nodes were Retrieved. Check EventId"); return null; }
             var tempDateTime = DateTimeOffset.FromUnixTimeSeconds(firstNode.RegistrationClosesAt).DateTime;
 
+            newCommand = await BuildUpdateCommand(eventToUpdate, newCommand, firstNode, tempDateTime);
+            return newCommand;
+        }
+        private async Task<UpdateEventCommand> BuildUpdateCommand(EventData eventToUpdate, UpdateEventCommand newCommand, EventNode? firstNode, DateTime tempDateTime)
+        {
             if (!eventToUpdate.ClosingRegistration.HasValue || eventToUpdate.ClosingRegistration != tempDateTime)
             {
                 newCommand.UpdateParameters.Add(new Tuple<string, string>("closing_registration_date", tempDateTime.ToString("yyyy-MM-dd")));
@@ -120,6 +126,14 @@ namespace SengokuProvider.Library.Services.Events
             if (!eventToUpdate.IsRegistrationOpen.HasValue || eventToUpdate.IsRegistrationOpen != firstNode.IsRegistrationOpen)
             {
                 newCommand.UpdateParameters.Add(new Tuple<string, string>("registration_open", firstNode.IsRegistrationOpen.ToString()));
+            }
+            if (!eventToUpdate.IsOnline.HasValue || eventToUpdate.IsOnline != firstNode.IsOnline)
+            {
+                newCommand.UpdateParameters.Add(new Tuple<string, string>("online_tournament", firstNode.IsOnline.ToString()));
+            }
+            if (string.IsNullOrEmpty(eventToUpdate.UrlSlug) || eventToUpdate.UrlSlug != firstNode.Slug)
+            {
+                newCommand.UpdateParameters.Add(new Tuple<string, string>("url_slug", firstNode.Slug));
             }
             if (eventToUpdate.Region == 1)
             {
@@ -146,22 +160,38 @@ namespace SengokuProvider.Library.Services.Events
         {
             if (string.IsNullOrEmpty(addressData.Address)) return null;
 
-            var addressSplit = addressData.Address.Split(",");
-            if (addressSplit.Length < 3) return null;
+            // Regex to extract postal code (assumes postal code is always numbers and possibly a space within, adjust as necessary)
+            var postalCodeRegex = new Regex(@"\b\d{3,6}\b");
+            var match = postalCodeRegex.Match(addressData.Address);
+            string postalCode = match.Success ? match.Value.Trim() : "";
 
-            var tempCity = addressSplit[1].Trim();
-            string tempZipCode = "";
-            if (addressSplit.Length > 2) { tempZipCode = addressSplit[2].Trim().Split(" ")[1]; }
+            // Split address and attempt to identify city by removing known non-city components
+            var addressParts = addressData.Address.Split(new[] { ',', '-' }, StringSplitOptions.RemoveEmptyEntries)
+                               .Select(part => part.Trim()).ToList();
 
-            var cityQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", tempCity) };
-            var cityResult = await _queryService.QueryRegion(cityQuery);
-            if (cityResult == null && !string.IsNullOrEmpty(tempZipCode))
+            // Remove postal code and country if identified
+            if (!string.IsNullOrEmpty(postalCode))
             {
-                var zipCodeQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("id", tempZipCode) };
-                var zipCodeResult = await _queryService.QueryRegion(zipCodeQuery);
+                addressParts.Remove(postalCode);
+            }
+            addressParts.RemoveAll(part => part.Length == 2 || part.All(char.IsDigit)); // Assuming 2-letter parts are states/countries
+
+            // The last remaining element could be the city, typically after removing postal code and country
+            string city = addressParts.FirstOrDefault();
+
+            if (!string.IsNullOrEmpty(city))
+            {
+                var cityResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city) });
+                if (cityResult != null) return cityResult;
+            }
+
+            if (!string.IsNullOrEmpty(postalCode))
+            {
+                var zipCodeResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("id", postalCode) });
                 return zipCodeResult;
             }
-            return cityResult;
+
+            return null;
         }
         public async Task<List<int>> BeginIntegrityTournamentLinks()
         {
@@ -204,7 +234,7 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     await conn.OpenAsync();
 
-                    var linkQuery = @"Select id WHERE url_slug IS NULL OR last_updated IS NULL OR event_id IS NULL OR last_updated >= NOW() - INTERVAL '1 HOURS'";
+                    var linkQuery = @"Select id FROM tournament_links WHERE url_slug IS NULL OR last_updated IS NULL OR event_id IS NULL OR last_updated >= NOW() - INTERVAL '1 HOURS'";
                     using (var reader = await conn.ExecuteReaderAsync(linkQuery))
                     {
                         while (await reader.ReadAsync())

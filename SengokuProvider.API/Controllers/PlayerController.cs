@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
-using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
@@ -27,16 +26,16 @@ namespace SengokuProvider.API.Controllers
         [HttpPost("IntakePlayersByTournament")]
         public async Task<IActionResult> IntakePlayersByTournament([FromBody] IntakePlayersByTournamentCommand command)
         {
-            if(command == null)
+            if (command == null)
             {
                 _log.LogError("Command cannot be empty or null");
                 return new BadRequestObjectResult("Command cannot be null") { StatusCode = StatusCodes.Status400BadRequest };
             }
 
             var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if(!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
             {
-                _log.LogError($"REquest parsing failed: {parsedRequest.Response}");
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);
             }
 

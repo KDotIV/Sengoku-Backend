@@ -6,6 +6,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
+using System.Net;
 
 namespace SengokuProvider.Library.Services.Events
 {
@@ -14,11 +15,13 @@ namespace SengokuProvider.Library.Services.Events
         private readonly string _connectionString;
         private readonly IntakeValidator _validator;
         private readonly GraphQLHttpClient _client;
-        public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator)
+        private readonly RequestThrottler _requestThrottler;
+        public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator, RequestThrottler requestThrottler)
         {
             _connectionString = connectionString;
             _validator = validator;
             _client = client;
+            _requestThrottler = requestThrottler;
         }
         public async Task<List<int>> QueryRelatedRegionsById(int regionId)
         {
@@ -280,7 +283,9 @@ namespace SengokuProvider.Library.Services.Events
                                     StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),
                                     EndTime = reader.GetDateTime(reader.GetOrdinal("end_time")),
                                     LinkId = reader.GetInt32(reader.GetOrdinal("link_id")),
-                                    ClosingRegistration = reader.GetDateTime(reader.GetOrdinal("closing_registration_date"))
+                                    ClosingRegistration = reader.GetDateTime(reader.GetOrdinal("closing_registration_date")),
+                                    UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
+                                    IsOnline = reader.GetBoolean(reader.GetOrdinal("online_tournament"))
                                 });
                             }
                         }
@@ -305,7 +310,7 @@ namespace SengokuProvider.Library.Services.Events
                         id: $tournamentId
                             }}) {
                             nodes {
-                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt}}}";
+                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt,slug}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -315,22 +320,46 @@ namespace SengokuProvider.Library.Services.Events
                     tournamentId = eventId,
                 }
             };
-            try
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 1000;
+
+            while (!success && retryCount < maxRetries)
             {
-                var response = await _client.SendQueryAsync<JObject>(request);
-                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+                await _requestThrottler.WaitIfPaused();
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
 
-                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
 
-                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+                    var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
-                return eventData;
+                    return eventData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests();
+                        throw;
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    throw;
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                throw;
-            }
+            return null;
         }
     }
 }

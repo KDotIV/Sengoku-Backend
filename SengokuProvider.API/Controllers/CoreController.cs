@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 
 namespace SengokuProvider.API.Controllers
 {

@@ -4,7 +4,7 @@
     {
         private bool _isPaused = false;
         private readonly SemaphoreSlim _pauseSemaphore = new SemaphoreSlim(1, 1);
-        private readonly TimeSpan _pauseDuration = TimeSpan.FromSeconds(3);
+        private readonly TimeSpan _pauseDuration = TimeSpan.FromSeconds(5);
 
         public async Task WaitIfPaused()
         {
