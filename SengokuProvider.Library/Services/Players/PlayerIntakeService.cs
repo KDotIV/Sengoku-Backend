@@ -170,7 +170,8 @@ namespace SengokuProvider.Library.Services.Players
                     Command = new OnboardLegendsByPlayerCommand
                     {
                         PlayerId = playerId,
-                        GamerTag = playerName
+                        GamerTag = playerName,
+                        Topic = LegendCommandRegistry.OnboardLegendsByPlayerData
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };

@@ -14,6 +14,7 @@ IHost host = Host.CreateDefaultBuilder(args)
     {
         var configuration = context.Configuration;
         services.AddHostedService<EventReceivedWorker>();
+        services.AddHostedService<LegendReceivedWorker>();
 
         var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
         var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
@@ -22,6 +23,7 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         // Add services to the container.
         services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
+        services.AddSingleton<ILegendHandlerFactory, LegendHandlerFactory>();
         services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
         services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {

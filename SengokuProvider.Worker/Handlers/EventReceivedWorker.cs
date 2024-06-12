@@ -1,11 +1,12 @@
 using Azure.Messaging.ServiceBus;
 using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
 
 namespace SengokuProvider.Worker.Handlers
 {
-    public class EventReceivedWorker : BackgroundService
+    internal class EventReceivedWorker : BackgroundService
     {
         private readonly ILogger<EventReceivedWorker> _log;
         private readonly IEventHandlerFactory _eventFactory;
@@ -23,17 +24,20 @@ namespace SengokuProvider.Worker.Handlers
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                if (_log.IsEnabled(LogLevel.Information))
-                {
-                    _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                }
-                _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 5, PrefetchCount = 5, });
-                _processor.ProcessMessageAsync += MessageHandler;
-                _processor.ProcessErrorAsync += Errorhandler;
-                await GroomEventData();
-            }
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 5, PrefetchCount = 5, });
+            _processor.ProcessMessageAsync += MessageHandler;
+            _processor.ProcessErrorAsync += Errorhandler;
+
+            await _processor.StartProcessingAsync();
+
+            /*            while (!stoppingToken.IsCancellationRequested)
+                        {
+                            if (_log.IsEnabled(LogLevel.Information))
+                            {
+                                _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
+                            }
+                            await GroomEventData();
+                        }*/
             return;
         }
 
@@ -157,7 +161,11 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
-                return JsonConvert.DeserializeObject<EventReceivedData>(data);
+                var settings = new JsonSerializerSettings
+                {
+                    Converters = new List<JsonConverter> { new CommandSerializer() }
+                };
+                return JsonConvert.DeserializeObject<EventReceivedData>(data, settings);
             }
             catch (JsonException ex)
             {

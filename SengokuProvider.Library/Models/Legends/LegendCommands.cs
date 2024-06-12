@@ -18,6 +18,7 @@ namespace SengokuProvider.Library.Models.Legends
         public required int PlayerId { get; set; }
         public required string GamerTag { get; set; }
         public string? Response { get; set; }
+        public required LegendCommandRegistry Topic { get; set; }
 
         public bool Validate()
         {
