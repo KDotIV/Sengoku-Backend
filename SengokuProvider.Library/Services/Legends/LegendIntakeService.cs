@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using SengokuProvider.Library.Models.Legends;
 
 namespace SengokuProvider.Library.Services.Legends
 {
@@ -16,5 +12,13 @@ namespace SengokuProvider.Library.Services.Legends
             _legendQueryService = queryService;
         }
 
+        public async Task<LegendData?> GenerateNewLegends(int playerId)
+        {
+            Console.WriteLine("Beginning Onboarding Process...");
+
+            var currentData = await _legendQueryService.QueryStandingsByPlayerId(playerId);
+
+            return null;
+        }
     }
 }

@@ -1,6 +1,7 @@
 ﻿using GraphQL.Client.Http;
 using Npgsql;
 using SengokuProvider.Library.Models.Legends;
+using SengokuProvider.Library.Models.Players;
 
 namespace SengokuProvider.Library.Services.Legends
 {
@@ -15,12 +16,58 @@ namespace SengokuProvider.Library.Services.Legends
             _client = graphQlClient;
         }
 
-        public async Task<LegendData> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand command)
+        public async Task<LegendData?> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand command)
         {
             return await QueryLegendsByPlayerLink(command.PlayerLinkId);
         }
+        public async Task<StandingsQueryResult?> QueryStandingsByPlayerId(int playerId)
+        {
+            if (playerId == 0) return null;
 
-        private async Task<LegendData> QueryLegendsByPlayerLink(int playerLinkId)
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM standings WHERE player_id = @Input", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", playerId);
+
+                        using(var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            var queryResult = new StandingsQueryResult
+                            {
+                                PlayerID = reader.GetInt32(reader.GetOrdinal("player_id")),
+                                StandingData = new List<StandingsResult>()
+                            };
+                            while (await reader.ReadAsync())
+                            {
+                                var newStanding = new StandingsResult
+                                {
+                                    EntrantID = reader.GetInt32(reader.GetOrdinal("entrant_id")),
+                                    TournamentLink = reader.GetInt32(reader.GetOrdinal("tournament_link")),
+                                    EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                                    Placement = reader.GetInt32(reader.GetOrdinal("placement")),
+                                    IsActive = reader.GetBoolean(reader.GetOrdinal("active"))
+                                };
+                                queryResult.StandingData.Add(newStanding);
+                            }
+                            return queryResult;
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        private async Task<LegendData?> QueryLegendsByPlayerLink(int playerLinkId)
         {
             try
             {

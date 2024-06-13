@@ -1,6 +1,4 @@
 ﻿using SengokuProvider.Library.Models.Common;
-using SengokuProvider.Library.Models.Events;
-using SengokuProvider.Library.Models.Players;
 
 namespace SengokuProvider.Library.Models.Legends
 {

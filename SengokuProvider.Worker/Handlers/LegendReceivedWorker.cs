@@ -83,6 +83,13 @@ namespace SengokuProvider.Worker.Handlers
         {
             if (currentMessage == null) { return 0; }
 
+            var currentIntake = _legendFactory.CreateIntakeHandler();
+            if(currentMessage.Command is OnboardLegendsByPlayerCommand onboardCommand)
+            {
+                var newLegend = await currentIntake.GenerateNewLegends(onboardCommand.PlayerId);
+
+            }
+
             return 0;
         }
 
