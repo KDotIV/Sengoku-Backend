@@ -64,8 +64,8 @@ namespace SengokuProvider.Worker.Handlers
                         break;
                     case LegendCommandRegistry.OnboardLegendsByPlayerData:
                         int result = await OnboardNewPlayer(currentMessage);
-                        if (result == 0) { Console.WriteLine($"Failed to Onboard PlayerId: {result}"); }
-                        Console.WriteLine($"Successfully Added: Legends for PlayerID: {result}");
+                        if (result == 0) { Console.WriteLine($"Failed to Onboard"); }
+                        else { Console.WriteLine($"Successfully Added: Legend ID: {result}"); }
 
                         break;
                 }
@@ -84,12 +84,15 @@ namespace SengokuProvider.Worker.Handlers
             if (currentMessage == null) { return 0; }
 
             var currentIntake = _legendFactory.CreateIntakeHandler();
-            if(currentMessage.Command is OnboardLegendsByPlayerCommand onboardCommand)
+            if (currentMessage.Command is OnboardLegendsByPlayerCommand onboardCommand)
             {
-                var newLegend = await currentIntake.GenerateNewLegends(onboardCommand.PlayerId);
+                var newLegend = await currentIntake.GenerateNewLegends(onboardCommand.PlayerId, onboardCommand.GamerTag);
 
+                if (newLegend == null) { return 0; }
+
+                int newLegendID = await currentIntake.InsertNewLegendData(newLegend);
+                if (newLegendID > 0) { return newLegendID; }
             }
-
             return 0;
         }
 

@@ -16,6 +16,11 @@ namespace SengokuProvider.Library.Services.Legends
             _client = graphQlClient;
         }
 
+        public Task<LegendData> GetLegendByPlayerId(int playerID)
+        {
+            throw new NotImplementedException();
+        }
+
         public async Task<LegendData?> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand command)
         {
             return await QueryLegendsByPlayerLink(command.PlayerLinkId);
@@ -34,11 +39,13 @@ namespace SengokuProvider.Library.Services.Legends
                     {
                         cmd.Parameters.AddWithValue("@Input", playerId);
 
-                        using(var reader = await cmd.ExecuteReaderAsync())
+                        using (var reader = await cmd.ExecuteReaderAsync())
                         {
+                            if (!reader.HasRows) return null;
+
                             var queryResult = new StandingsQueryResult
                             {
-                                PlayerID = reader.GetInt32(reader.GetOrdinal("player_id")),
+                                PlayerID = playerId,
                                 StandingData = new List<StandingsResult>()
                             };
                             while (await reader.ReadAsync())

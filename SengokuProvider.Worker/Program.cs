@@ -4,6 +4,7 @@ using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Factories;
 using SengokuProvider.Worker.Handlers;
@@ -59,6 +60,22 @@ IHost host = Host.CreateDefaultBuilder(args)
             var queryService = provider.GetService<IEventQueryService>();
             var intakeService = provider.GetService<IEventIntakeService>();
             return new EventIntegrityService(queryService, intakeService, connectionString);
+        });
+        services.AddSingleton<ILegendQueryService, LegendQueryService>(provider =>
+        {
+            var client = provider.GetService<GraphQLHttpClient>();
+            return new LegendQueryService(connectionString, client);
+        });
+        services.AddSingleton<ILegendIntakeService, LegendIntakeService>(provider =>
+        {
+            var queryService = provider.GetService<ILegendQueryService>();
+            return new LegendIntakeService(connectionString, queryService);
+        });
+        services.AddSingleton<ILegendIntegrityService, LegendIntegrityService>(provider =>
+        {
+            var queryService = provider.GetService<ILegendQueryService>();
+            var intakeService = provider.GetService<ILegendIntakeService>();
+            return new LegendIntegrityService(connectionString, queryService, intakeService);
         });
     })
     .Build();

@@ -5,6 +5,7 @@ namespace SengokuProvider.Library.Services.Legends
 {
     public interface ILegendQueryService
     {
+        public Task<LegendData> GetLegendByPlayerId(int playerID);
         public Task<LegendData?> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand getLegendsByPlayerLinkCommand);
         public Task<StandingsQueryResult?> QueryStandingsByPlayerId(int playerId);
     }

@@ -10,5 +10,6 @@ namespace SengokuProvider.Library.Models.Legends
         public required int PlayerLinkId { get; set; }
         public required string PlayerName { get; set; }
         public Game[]? Games { get; set; }
+        public List<int>? Standings { get; set; }
     }
 }

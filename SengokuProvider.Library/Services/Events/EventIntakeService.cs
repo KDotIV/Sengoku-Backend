@@ -442,8 +442,8 @@ namespace SengokuProvider.Library.Services.Events
                         cmd.Parameters.AddWithValue("@LongInput", newData.Longitude);
                         cmd.Parameters.AddWithValue("@ProvInput", newData.Province);
 
-                        var result = cmd.ExecuteNonQueryAsync();
-                        return result.Result;
+                        var result = await cmd.ExecuteNonQueryAsync();
+                        return result;
                     }
                 }
             }
