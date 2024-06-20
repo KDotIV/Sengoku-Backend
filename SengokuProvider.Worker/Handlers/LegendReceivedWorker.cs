@@ -30,16 +30,27 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-
             if (_log.IsEnabled(LogLevel.Information))
             {
                 _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             }
-            //await GroomLegendData();
+            await GroomLegendData();
             return;
         }
         private async Task GroomLegendData()
         {
+            var currentIntegrity = _legendFactory.CreateIntegrityHandler();
+
+            var playersToProcess = await currentIntegrity.BeginLegendIntegrity();
+            if (playersToProcess.Count == 0) { Console.WriteLine("No Legends to Update from Players..."); return; }
+
+            foreach (var player in playersToProcess)
+            {
+                int result = await OnboardNewPlayer(player);
+                if (result == 0) { Console.WriteLine($"Failed to Onboard"); }
+                else { Console.WriteLine($"Successfully Added: Legend ID: {result}"); }
+            }
+
             Console.WriteLine("Groom Legend Data Operation Completed...");
         }
         private Task Errorhandler(ProcessErrorEventArgs args)
@@ -95,7 +106,20 @@ namespace SengokuProvider.Worker.Handlers
             }
             return 0;
         }
+        private async Task<int> OnboardNewPlayer(OnboardLegendsByPlayerCommand onboardCommand)
+        {
+            if (onboardCommand == null) { return 0; }
 
+            var currentIntake = _legendFactory.CreateIntakeHandler();
+
+            var newLegend = await currentIntake.GenerateNewLegends(onboardCommand.PlayerId, onboardCommand.GamerTag);
+
+            if (newLegend == null) { return 0; }
+
+            int newLegendID = await currentIntake.InsertNewLegendData(newLegend);
+            if (newLegendID > 0) { return newLegendID; }
+            return 0;
+        }
         private async Task UpdateLegend(OnboardReceivedData currentMessage)
         {
             throw new NotImplementedException();

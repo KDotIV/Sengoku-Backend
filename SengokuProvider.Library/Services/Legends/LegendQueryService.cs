@@ -16,11 +16,10 @@ namespace SengokuProvider.Library.Services.Legends
             _client = graphQlClient;
         }
 
-        public Task<LegendData> GetLegendByPlayerId(int playerID)
+        public Task<LegendData> GetLegendByPlayerIds(List<int> playerID)
         {
             throw new NotImplementedException();
         }
-
         public async Task<LegendData?> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand command)
         {
             return await QueryLegendsByPlayerLink(command.PlayerLinkId);

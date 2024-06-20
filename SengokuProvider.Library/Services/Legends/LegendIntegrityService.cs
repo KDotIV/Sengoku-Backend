@@ -1,4 +1,8 @@
-﻿namespace SengokuProvider.Library.Services.Legends
+﻿
+using Npgsql;
+using SengokuProvider.Library.Models.Legends;
+
+namespace SengokuProvider.Library.Services.Legends
 {
     public class LegendIntegrityService : ILegendIntegrityService
     {
@@ -11,14 +15,52 @@
             _intakeService = legendIntakeService;
             _queryService = legendQueryService;
         }
-        public async Task<List<int>> BeginLegendIntegrity()
+        public async Task<List<OnboardLegendsByPlayerCommand>> BeginLegendIntegrity()
         {
             return await GetLegendsToUpdate();
         }
-
-        private async Task<List<int>> GetLegendsToUpdate()
+        private async Task<List<OnboardLegendsByPlayerCommand>> GetLegendsToUpdate()
         {
-            throw new NotImplementedException();
+            return await GetPlayersByLastUpdated();
+        }
+        private async Task<List<OnboardLegendsByPlayerCommand>> GetPlayersByLastUpdated()
+        {
+            List<OnboardLegendsByPlayerCommand> playersResult = new List<OnboardLegendsByPlayerCommand>();
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var cmd = new NpgsqlCommand(@"SELECT p.id, p.player_name FROM public.players AS p
+                                                        LEFT JOIN public.legends AS l ON l.player_id = p.id
+                                                        WHERE l.last_updated < CURRENT_DATE OR l.last_updated IS NULL;", conn))
+                    {
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var newCommand = new OnboardLegendsByPlayerCommand
+                                {
+                                    PlayerId = reader.GetInt32(reader.GetOrdinal("id")),
+                                    GamerTag = reader.GetString(reader.GetOrdinal("player_name")),
+                                    Topic = LegendCommandRegistry.OnboardLegendsByPlayerData
+                                };
+                                playersResult.Add(newCommand);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+            return playersResult;
         }
     }
 }

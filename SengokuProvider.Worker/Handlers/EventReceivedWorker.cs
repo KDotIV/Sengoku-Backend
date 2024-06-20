@@ -30,14 +30,7 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-            /*            while (!stoppingToken.IsCancellationRequested)
-                        {
-                            if (_log.IsEnabled(LogLevel.Information))
-                            {
-                                _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-                            }
-                            await GroomEventData();
-                        }*/
+            await GroomEventData();
             return;
         }
 

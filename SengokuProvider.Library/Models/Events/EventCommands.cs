@@ -88,10 +88,10 @@ namespace SengokuProvider.Library.Models.Events
     }
     public enum EventCommandRegistry
     {
-        UpdateEvent,
-        IntakeEventsByTournament,
-        IntakeEventsByLocation,
-        IntakeEventsByGames,
-        GetTournamentByLocation
+        UpdateEvent = 101,
+        IntakeEventsByTournament = 102,
+        IntakeEventsByLocation = 103,
+        IntakeEventsByGames = 104,
+        GetTournamentByLocation = 105
     }
 }

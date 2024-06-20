@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
@@ -10,13 +11,17 @@ namespace SengokuProvider.Library.Services.Common
     {
         public override ICommand? ReadJson(JsonReader reader, Type objectType, ICommand? existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            var jsonObject = JObject.Load(reader);
-            var topic = jsonObject["Topic"]?.ToObject<string>();
+            var settings = new JsonSerializerSettings
+            {
+                Converters = new List<JsonConverter> { new StringEnumConverter { AllowIntegerValues = true } }
+            };
+            JObject jsonObject = JObject.Load(reader);
+            var topic = jsonObject["Topic"]?.ToObject<int>(JsonSerializer.Create(settings));
 
             ICommand? command = topic switch
             {
-                nameof(LegendCommandRegistry.OnboardLegendsByPlayerData) => jsonObject.ToObject<OnboardLegendsByPlayerCommand>(),
-                nameof(EventCommandRegistry.IntakeEventsByTournament) => jsonObject.ToObject<IntakeEventsByTournamentIdCommand>(),
+                (int)LegendCommandRegistry.OnboardLegendsByPlayerData => jsonObject["Command"]?.ToObject<OnboardLegendsByPlayerCommand>(JsonSerializer.Create(settings)),
+                (int)EventCommandRegistry.IntakeEventsByTournament => jsonObject["Command"]?.ToObject<IntakeEventsByTournamentIdCommand>(JsonSerializer.Create(settings)),
                 _ => throw new NotSupportedException($"Command topic '{topic}' is not supported")
             };
 
@@ -25,7 +30,13 @@ namespace SengokuProvider.Library.Services.Common
 
         public override void WriteJson(JsonWriter writer, ICommand? value, JsonSerializer serializer)
         {
-            serializer.Serialize(writer, value);
+            var settings = new JsonSerializerSettings
+            {
+                Formatting = Formatting.Indented,
+                Converters = new List<JsonConverter> { new StringEnumConverter { AllowIntegerValues = true } }
+            };
+            JsonSerializer customSerializer = JsonSerializer.Create(settings);
+            customSerializer.Serialize(writer, value);
         }
     }
 }

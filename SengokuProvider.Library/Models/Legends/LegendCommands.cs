@@ -27,8 +27,8 @@ namespace SengokuProvider.Library.Models.Legends
     }
     public enum LegendCommandRegistry
     {
-        UpdateLegend,
-        OnboardLegendsByPlayerData,
-        IntakeLegendsByTournament,
+        UpdateLegend = 301,
+        OnboardLegendsByPlayerData = 1,
+        IntakeLegendsByTournament = 303,
     }
 }
