@@ -69,7 +69,7 @@ namespace SengokuProvider.Worker.Handlers
                 {
                     Console.WriteLine($"Attempting to Update Link {link}");
 
-                    var result = await _intakeHandler.IntakeTournamentsByEventId(link);
+                    var result = await _intakeHandler.SendTournamentIntakeEventMessage(link);
                     if (result)
                     {
                         var verify = await _integrityHandler.VerifyTournamentLinkChange(link);

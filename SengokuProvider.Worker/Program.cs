@@ -5,6 +5,7 @@ using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Factories;
 using SengokuProvider.Worker.Handlers;
@@ -22,7 +23,12 @@ IHost host = Host.CreateDefaultBuilder(args)
         var bearerToken = configuration["GraphQLSettings:Bearer"];
         var serviceBusConnection = configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
 
-        // Add services to the container.
+        services.AddSingleton<IAzureBusApiService, AzureBusApiService>(provider =>
+        {
+            var client = provider.GetService<ServiceBusClient>();
+            return new AzureBusApiService(client);
+        });
+
         services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
         services.AddSingleton<ILegendHandlerFactory, LegendHandlerFactory>();
         services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
@@ -46,7 +52,8 @@ IHost host = Host.CreateDefaultBuilder(args)
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
             var queryService = provider.GetService<IEventQueryService>();
             var throttler = provider.GetService<RequestThrottler>();
-            return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator, throttler);
+            var serviceBus = provider.GetService<IAzureBusApiService>();
+            return new EventIntakeService(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler);
         });
         services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
         {
@@ -76,6 +83,14 @@ IHost host = Host.CreateDefaultBuilder(args)
             var queryService = provider.GetService<ILegendQueryService>();
             var intakeService = provider.GetService<ILegendIntakeService>();
             return new LegendIntegrityService(connectionString, queryService, intakeService);
+        });
+        services.AddSingleton<IPlayerIntakeService, PlayerIntakeService>(provider =>
+        {
+            var playerQueryService = provider.GetService<IPlayerQueryService>();
+            var legendQueryService = provider.GetService<ILegendQueryService>();
+            var serviceBus = provider.GetService<IAzureBusApiService>();
+            return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, serviceBus);
+
         });
     })
     .Build();

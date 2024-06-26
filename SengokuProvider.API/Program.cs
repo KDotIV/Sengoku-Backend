@@ -45,11 +45,13 @@ builder.Services.AddScoped<IUserService, UserService>(provider =>
 });
 builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 {
+    var configuration = provider.GetService<IConfiguration>();
     var intakeValidator = provider.GetService<IntakeValidator>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var queryService = provider.GetService<IEventQueryService>();
     var throttler = provider.GetService<RequestThrottler>();
-    return new EventIntakeService(connectionString, graphQlClient, queryService, intakeValidator, throttler);
+    var serviceBus = provider.GetService<IAzureBusApiService>();
+    return new EventIntakeService(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler);
 });
 builder.Services.AddScoped<ILegendQueryService, LegendQueryService>(provider =>
 {

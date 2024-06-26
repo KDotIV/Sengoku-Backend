@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using GraphQL.Client.Http;
+using Microsoft.Extensions.Configuration;
 using NetTopologySuite.Geometries;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -8,6 +9,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
@@ -20,17 +22,21 @@ namespace SengokuProvider.Library.Services.Events
         private readonly GraphQLHttpClient _client;
         private readonly IEventQueryService _queryService;
         private readonly RequestThrottler _requestThrottler;
+        private readonly IConfiguration _config;
+        private readonly IAzureBusApiService _azureBusApiService;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<string, int> _addressCache;
-        public EventIntakeService(string connectionString, GraphQLHttpClient client, IEventQueryService eventQueryService,
-            IntakeValidator validator, RequestThrottler throttler)
+        public EventIntakeService(string connectionString, IConfiguration configuration, GraphQLHttpClient client, IEventQueryService eventQueryService,
+            IAzureBusApiService busApiService, IntakeValidator validator, RequestThrottler throttler)
         {
+            _config = configuration;
             _connectionString = connectionString;
             _validator = validator;
             _client = client;
             _queryService = eventQueryService;
             _requestThrottler = throttler;
+            _azureBusApiService = busApiService;
             _addressCache = new ConcurrentDictionary<string, int>();
         }
         #region Create Tournament Data
@@ -71,21 +77,29 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<bool> IntakeTournamentsByEventId(int eventId)
+        public async Task<bool> SendTournamentIntakeEventMessage(int eventId)
         {
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null) { Console.WriteLine("Service Bus Settings Cannot be empty or null"); return false; }
             try
             {
-                EventGraphQLResult? newEventData = await QueryStartggEventByTournamentId(eventId);
-                if (newEventData == null) { return false; }
+                var newCommand = new EventReceivedData
+                {
+                    Topic = EventCommandRegistry.IntakeEventsByTournament,
+                    Command = new IntakeEventsByTournamentIdCommand
+                    {
+                        TournamentId = eventId,
+                        Topic = EventCommandRegistry.IntakeEventsByTournament
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, Formatting.Indented);
+                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:eventreceivedqueue"], messageJson);
 
-                var eventResult = await ProcessEventData(newEventData);
-
-                if (eventResult == null) { Console.WriteLine("No Result from Processing Event Records. Either an Error Occured or this Record was already inserted"); return false; }
-
-                var gameResult = await ProcessGameData(newEventData);
-
-                if (gameResult == 0) { Console.WriteLine("No Result from Processing Game Records. Either an Error Occured or no Games exist for this Event"); return false; }
-
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    return false;
+                }
                 return true;
             }
             catch (Exception ex)
@@ -173,7 +187,7 @@ namespace SengokuProvider.Library.Services.Events
 
                     if (!await VerifyTournamentLink(currentEvent.Id))
                     {
-                        await IntakeTournamentsByEventId(currentEvent.Id);
+                        await SendTournamentIntakeEventMessage(currentEvent.Id);
                         Console.WriteLine(($"ID: {currentEvent.Id} does not exist in database. Attempting to Find Events/Tournaments"));
                         continue;
                     }

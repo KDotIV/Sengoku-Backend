@@ -66,7 +66,6 @@ namespace SengokuProvider.API.Controllers
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);
             }
-
             try
             {
                 var result = await _eventIntakeService.IntakeEventsByGameId(command);
@@ -97,7 +96,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _eventIntakeService.IntakeTournamentsByEventId(command.TournamentId);
+                var result = await _eventIntakeService.SendTournamentIntakeEventMessage(command.TournamentId);
                 return new OkObjectResult($"Tournaments Inserted: {result}");
             }
             catch (Exception ex)
