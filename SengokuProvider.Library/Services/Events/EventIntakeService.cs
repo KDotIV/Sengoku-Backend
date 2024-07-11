@@ -14,6 +14,7 @@ using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Worker.Handlers;
 using System.Collections.Concurrent;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 
 namespace SengokuProvider.Library.Services.Events
@@ -40,6 +41,9 @@ namespace SengokuProvider.Library.Services.Events
             _requestThrottler = throttler;
             _azureBusApiService = busApiService;
             _addressCache = new ConcurrentDictionary<string, int>();
+
+            _client.HttpClient.DefaultRequestHeaders.Clear();
+            _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _config["GraphQLSettings:PlayerBearer"]);
         }
         #region Create Tournament Data
         public async Task<List<int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand)

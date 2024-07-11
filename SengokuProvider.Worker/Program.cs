@@ -96,9 +96,10 @@ IHost host = Host.CreateDefaultBuilder(args)
         });
         services.AddSingleton<IPlayerQueryService, PlayerQueryService>(provider =>
         {
+            var configuration = provider.GetService<IConfiguration>();
             var graphClient = provider.GetService<GraphQLHttpClient>();
             var throttler = provider.GetService<RequestThrottler>();
-            return new PlayerQueryService(connectionString, graphClient, throttler);
+            return new PlayerQueryService(connectionString, configuration, graphClient, throttler);
         });
     })
     .Build();

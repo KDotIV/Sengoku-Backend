@@ -1,9 +1,11 @@
 ﻿using GraphQL.Client.Http;
+using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using System.Net;
+using System.Net.Http.Headers;
 
 namespace SengokuProvider.Library.Services.Players
 {
@@ -12,12 +14,16 @@ namespace SengokuProvider.Library.Services.Players
         private readonly GraphQLHttpClient _client;
         private readonly string _connectionString;
         private readonly RequestThrottler _requestThrottler;
+        private readonly IConfiguration _configuration;
 
-        public PlayerQueryService(string connectionString, GraphQLHttpClient graphQlClient, RequestThrottler throttler)
+        public PlayerQueryService(string connectionString, IConfiguration config, GraphQLHttpClient graphQlClient, RequestThrottler throttler)
         {
             _requestThrottler = throttler;
             _connectionString = connectionString;
+            _configuration = config;
             _client = graphQlClient;
+            _client.HttpClient.DefaultRequestHeaders.Clear();
+            _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
         public async Task<PlayerGraphQLResult?> GetPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
         {

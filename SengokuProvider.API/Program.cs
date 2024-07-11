@@ -60,9 +60,10 @@ builder.Services.AddScoped<ILegendQueryService, LegendQueryService>(provider =>
 });
 builder.Services.AddScoped<IPlayerQueryService, PlayerQueryService>(provider =>
 {
+    var configuration = provider.GetService<IConfiguration>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var throttler = provider.GetService<RequestThrottler>();
-    return new PlayerQueryService(connectionString, graphQlClient, throttler);
+    return new PlayerQueryService(connectionString, configuration, graphQlClient, throttler);
 });
 builder.Services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
 {
