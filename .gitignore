@@ -12,3 +12,4 @@ SengokuProvider.Worker/appsettings.Development.json
 /SengokuProvider.Library/bin/Release/net8.0/SengokuProvider.Library.deps.json
 /SengokuProvider.Library/bin/Release/net8.0/SengokuProvider.Library.dll
 /SengokuProvider.Library/bin/Release/net8.0/SengokuProvider.Library.pdb
+/SengokuProvider.Library/bin/QA/net8.0
