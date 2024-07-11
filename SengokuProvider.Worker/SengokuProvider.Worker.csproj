@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dotnet-SengokuProvider.Worker-807b6a45-4aea-44e9-a4fc-1ed0b442878b</UserSecretsId>
+    <Configurations>Debug;Release;QA</Configurations>
   </PropertyGroup>
 
   <ItemGroup>
