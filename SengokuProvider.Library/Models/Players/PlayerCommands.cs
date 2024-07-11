@@ -7,6 +7,7 @@ namespace SengokuProvider.Library.Models.Players
         public required string EventSlug { get; set; }
         public required int PerPage { get; set; }
         public required int PageNum { get; set; }
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -21,13 +22,14 @@ namespace SengokuProvider.Library.Models.Players
         public required int EventId { get; set; }
         public required int PerPage { get; set; }
         public required string GamerTag { get; set; }
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
         {
             if (EventId > 0 &&
                 PerPage > 0 &&
-                string.IsNullOrEmpty(GamerTag)) return true;
+                !string.IsNullOrEmpty(GamerTag)) return true;
             else return false;
         }
     }

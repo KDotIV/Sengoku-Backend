@@ -79,20 +79,23 @@ namespace SengokuProvider.Library.Services.Events
         }
         public async Task<bool> SendTournamentIntakeEventMessage(int eventId)
         {
-            if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null) { Console.WriteLine("Service Bus Settings Cannot be empty or null"); return false; }
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return false;
+            }
             try
             {
                 var newCommand = new EventReceivedData
                 {
-                    Topic = EventCommandRegistry.IntakeEventsByTournament,
                     Command = new IntakeEventsByTournamentIdCommand
                     {
                         TournamentId = eventId,
-                        Topic = EventCommandRegistry.IntakeEventsByTournament
+                        Topic = CommandRegistry.IntakeEventsByTournament,
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };
-                var messageJson = JsonConvert.SerializeObject(newCommand, Formatting.Indented);
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
                 var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:eventreceivedqueue"], messageJson);
 
                 if (!result)

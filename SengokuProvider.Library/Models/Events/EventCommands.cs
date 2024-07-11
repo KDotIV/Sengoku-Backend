@@ -9,8 +9,8 @@ namespace SengokuProvider.Library.Models.Events
         public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (PerPage > 0 && PageNum > 0 &&
@@ -26,8 +26,8 @@ namespace SengokuProvider.Library.Models.Events
         public required int RegionId { get; set; }
         public required int PerPage { get; set; }
         public required string Priority { get; set; }
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (RegionId > 0 &&
@@ -43,8 +43,8 @@ namespace SengokuProvider.Library.Models.Events
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
         public required int[] GameIDs { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (Page > 0 &&
@@ -58,8 +58,8 @@ namespace SengokuProvider.Library.Models.Events
     public class IntakeEventsByTournamentIdCommand : ICommand
     {
         public required int TournamentId { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-        public EventCommandRegistry Topic { get; set; }
         public bool Validate()
         {
             if (TournamentId > 0) return true;
@@ -70,8 +70,8 @@ namespace SengokuProvider.Library.Models.Events
     {
         public int EventId { get; set; }
         public List<Tuple<string, string>> UpdateParameters { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-        public EventCommandRegistry Topic { get; set; }
 
         public UpdateEventCommand()
         {
@@ -85,13 +85,5 @@ namespace SengokuProvider.Library.Models.Events
                 UpdateParameters.Count > 0) return true;
             else return false;
         }
-    }
-    public enum EventCommandRegistry
-    {
-        UpdateEvent = 101,
-        IntakeEventsByTournament = 102,
-        IntakeEventsByLocation = 103,
-        IntakeEventsByGames = 104,
-        GetTournamentByLocation = 105
     }
 }

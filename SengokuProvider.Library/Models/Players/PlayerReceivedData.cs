@@ -1,8 +1,8 @@
 ﻿using SengokuProvider.Library.Models.Common;
 
-namespace SengokuProvider.Library.Models.Legends
+namespace SengokuProvider.Worker.Handlers
 {
-    public class OnboardReceivedData : IServiceBusCommand
+    public class PlayerReceivedData : IServiceBusCommand
     {
         public required ICommand Command { get; set; }
         public required MessagePriority MessagePriority { get; set; }

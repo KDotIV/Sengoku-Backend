@@ -1,5 +1,6 @@
 using Azure.Messaging.ServiceBus;
 using Newtonsoft.Json;
+using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
@@ -30,7 +31,7 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-            await GroomEventData();
+            //await GroomEventData();
             return;
         }
 
@@ -100,12 +101,12 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
-                switch (currentMessage.Topic)
+                switch (currentMessage.Command.Topic)
                 {
-                    case EventCommandRegistry.UpdateEvent:
+                    case CommandRegistry.UpdateEvent:
                         await UpdateEvent(currentMessage);
                         break;
-                    case EventCommandRegistry.IntakeEventsByLocation:
+                    case CommandRegistry.IntakeEventsByLocation:
                         List<int> result = await IntakeLocationEvents(currentMessage);
                         Console.WriteLine($"Successfully Added: {result} Events");
 

@@ -105,7 +105,7 @@ namespace SengokuProvider.Library.Services.Events
         }
         private async Task<UpdateEventCommand?> VerifyMissingData(EventData eventToUpdate)
         {
-            var newCommand = new UpdateEventCommand { EventId = eventToUpdate.Id };
+            var newCommand = new UpdateEventCommand { EventId = eventToUpdate.Id, Topic = CommandRegistry.UpdateEvent };
             var result = await _queryService.QueryStartggEventByEventId(eventToUpdate.LinkID);
 
             if (result == null) return null;

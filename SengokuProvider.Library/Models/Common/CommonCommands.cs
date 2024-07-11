@@ -4,6 +4,7 @@
     {
         public required string TableName { get; set; }
         public Tuple<string, string>[]? TableDefinitions { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()

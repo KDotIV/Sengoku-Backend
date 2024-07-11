@@ -1,5 +1,5 @@
-﻿
-using Npgsql;
+﻿using Npgsql;
+using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Legends;
 
 namespace SengokuProvider.Library.Services.Legends
@@ -44,7 +44,7 @@ namespace SengokuProvider.Library.Services.Legends
                                 {
                                     PlayerId = reader.GetInt32(reader.GetOrdinal("id")),
                                     GamerTag = reader.GetString(reader.GetOrdinal("player_name")),
-                                    Topic = LegendCommandRegistry.OnboardLegendsByPlayerData
+                                    Topic = CommandRegistry.OnboardLegendsByPlayerData
                                 };
                                 playersResult.Add(newCommand);
                             }

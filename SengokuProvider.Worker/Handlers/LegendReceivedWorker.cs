@@ -1,6 +1,7 @@
 ﻿
 using Azure.Messaging.ServiceBus;
 using Newtonsoft.Json;
+using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
@@ -34,7 +35,7 @@ namespace SengokuProvider.Worker.Handlers
             {
                 _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             }
-            await GroomLegendData();
+            //await GroomLegendData();
             return;
         }
         private async Task GroomLegendData()
@@ -68,12 +69,12 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
-                switch (currentMessage.Topic)
+                switch (currentMessage.Command.Topic)
                 {
-                    case LegendCommandRegistry.UpdateLegend:
+                    case CommandRegistry.UpdateLegend:
                         await UpdateLegend(currentMessage);
                         break;
-                    case LegendCommandRegistry.OnboardLegendsByPlayerData:
+                    case CommandRegistry.OnboardLegendsByPlayerData:
                         int result = await OnboardNewPlayer(currentMessage);
                         if (result == 0) { Console.WriteLine($"Failed to Onboard"); }
                         else { Console.WriteLine($"Successfully Added: Legend ID: {result}"); }

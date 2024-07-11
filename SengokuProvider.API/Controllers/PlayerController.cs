@@ -41,8 +41,9 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _playerIntakeService.IntakePlayerData(command);
-                return new OkObjectResult($"Players Inserted: {result}");
+                var result = await _playerIntakeService.SendPlayerIntakeMessage(command.EventSlug, command.PerPage, command.PageNum);
+                if (result) { return new OkObjectResult($"Player Intake Successful"); }
+                else { return new ObjectResult($"Failed to Intake Player with Event: {command.EventSlug}"); }
             }
             catch (Exception ex)
             {

@@ -6,6 +6,5 @@ namespace SengokuProvider.Library.Models.Events
     {
         public required MessagePriority MessagePriority { get; set; }
         public required ICommand Command { get; set; }
-        public required EventCommandRegistry Topic { get; set; }
     }
 }

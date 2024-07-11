@@ -17,6 +17,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         var configuration = context.Configuration;
         services.AddHostedService<EventReceivedWorker>();
         services.AddHostedService<LegendReceivedWorker>();
+        services.AddHostedService<PlayerReceivedWorker>();
 
         var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
         var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
@@ -31,6 +32,7 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
         services.AddSingleton<ILegendHandlerFactory, LegendHandlerFactory>();
+        services.AddSingleton<IPlayerHandlerFactory, PlayerHandlerFactory>();
         services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
         services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {
@@ -91,6 +93,12 @@ IHost host = Host.CreateDefaultBuilder(args)
             var serviceBus = provider.GetService<IAzureBusApiService>();
             return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, serviceBus);
 
+        });
+        services.AddSingleton<IPlayerQueryService, PlayerQueryService>(provider =>
+        {
+            var graphClient = provider.GetService<GraphQLHttpClient>();
+            var throttler = provider.GetService<RequestThrottler>();
+            return new PlayerQueryService(connectionString, graphClient, throttler);
         });
     })
     .Build();

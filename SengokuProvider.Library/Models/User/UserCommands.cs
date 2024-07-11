@@ -7,6 +7,7 @@ namespace SengokuProvider.Library.Models.User
         public required string UserName { get; set; }
         public required string Password { get; set; }
         public required string Email { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -20,6 +21,7 @@ namespace SengokuProvider.Library.Models.User
     {
         public required int UserId { get; set; }
         public required string UserName { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -31,6 +33,7 @@ namespace SengokuProvider.Library.Models.User
     {
         public required int UserId { get; set; }
         public required Tuple<string, string>[]? UpdateDefinitions { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()

@@ -5,6 +5,7 @@ namespace SengokuProvider.Library.Models.Legends
     public class GetLegendsByPlayerLinkCommand : ICommand
     {
         public required int PlayerLinkId { get; set; }
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -17,18 +18,12 @@ namespace SengokuProvider.Library.Models.Legends
     {
         public required int PlayerId { get; set; }
         public required string GamerTag { get; set; }
+        public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-        public required LegendCommandRegistry Topic { get; set; }
 
         public bool Validate()
         {
             throw new NotImplementedException();
         }
-    }
-    public enum LegendCommandRegistry
-    {
-        UpdateLegend = 301,
-        OnboardLegendsByPlayerData = 1,
-        IntakeLegendsByTournament = 303,
     }
 }

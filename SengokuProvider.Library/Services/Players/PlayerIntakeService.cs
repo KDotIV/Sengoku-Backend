@@ -5,8 +5,10 @@ using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
+using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Worker.Handlers;
 using System.Collections.Concurrent;
 
 namespace SengokuProvider.Library.Services.Players
@@ -36,6 +38,46 @@ namespace SengokuProvider.Library.Services.Players
             _playersCache = new ConcurrentDictionary<int, int>();
             _playerRegistry = new ConcurrentDictionary<int, string>();
             _eventCache = new HashSet<int>();
+        }
+        public async Task<bool> SendPlayerIntakeMessage(string eventSlug, int perPage = 50, int pageNum = 5)
+        {
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return false;
+            }
+            if (string.IsNullOrEmpty(eventSlug))
+            {
+                Console.WriteLine("Event Url cannot be null or empty");
+                return false;
+            }
+
+            try
+            {
+                var newCommand = new PlayerReceivedData
+                {
+                    Command = new IntakePlayersByTournamentCommand
+                    {
+                        Topic = CommandRegistry.IntakePlayersByTournament,
+                        EventSlug = eventSlug,
+                        PerPage = perPage,
+                        PageNum = pageNum
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:PlayerReceivedQueue"], messageJson);
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
         }
         public async Task<int> IntakePlayerData(IntakePlayersByTournamentCommand command)
         {
@@ -161,21 +203,24 @@ namespace SengokuProvider.Library.Services.Players
         }
         private async Task SendOnboardMessage(int playerId, string playerName)
         {
-            if (string.IsNullOrEmpty(_config["ServiceBusSettings:legendreceivedqueue"]) || _config == null) { Console.WriteLine("Service Bus Settings Cannot be empty or null"); return; }
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:legendreceivedqueue"]) || _config == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return;
+            }
             try
             {
                 var newCommand = new OnboardReceivedData
                 {
-                    Topic = LegendCommandRegistry.OnboardLegendsByPlayerData,
                     Command = new OnboardLegendsByPlayerCommand
                     {
                         PlayerId = playerId,
                         GamerTag = playerName,
-                        Topic = LegendCommandRegistry.OnboardLegendsByPlayerData
+                        Topic = CommandRegistry.OnboardLegendsByPlayerData,
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };
-                var messageJson = JsonConvert.SerializeObject(newCommand, Formatting.Indented);
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
                 var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:legendreceivedqueue"], messageJson);
 
                 if (!result)

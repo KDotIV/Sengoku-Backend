@@ -5,6 +5,7 @@ namespace SengokuProvider.Library.Models.Regions
     public class GetRegionCommand : ICommand
     {
         public required Tuple<string, string> QueryParameter { get; set; }
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
@@ -16,6 +17,7 @@ namespace SengokuProvider.Library.Models.Regions
     }
     public class InsertRegionCommand : ICommand
     {
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
