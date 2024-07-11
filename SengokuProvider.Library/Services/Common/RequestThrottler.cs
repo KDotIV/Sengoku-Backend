@@ -5,6 +5,7 @@
         private bool _isPaused = false;
         private readonly SemaphoreSlim _pauseSemaphore = new SemaphoreSlim(1, 1);
         private readonly TimeSpan _pauseDuration = TimeSpan.FromSeconds(5);
+        private int _releaseLock;
 
         public async Task WaitIfPaused()
         {
@@ -14,6 +15,11 @@
                 while (_isPaused)
                 {
                     await Task.Delay(1000); // Check every second if the pause is lifted
+                    if (_releaseLock < 5)
+                    {
+                        _releaseLock++;
+                    }
+                    else { _isPaused = false; break; }
                 }
             }
             finally
