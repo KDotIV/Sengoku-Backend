@@ -7,9 +7,11 @@ using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Worker.Handlers;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
@@ -110,6 +112,78 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
+        public async Task<bool> SendEventIntakeLocationMessage(IntakeEventsByLocationCommand command)
+        {
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return false;
+            }
+            try
+            {
+                var newCommand = new EventReceivedData
+                {
+                    Command = new IntakeEventsByLocationCommand
+                    {
+                        PerPage = command.PerPage,
+                        PageNum = command.PageNum,
+                        StateCode = command.StateCode,
+                        StartDate = command.StartDate,
+                        EndDate = command.EndDate,
+                        Topic = CommandRegistry.IntakeEventsByLocation
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:eventreceivedqueue"], messageJson);
+
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        private async Task<bool> SendPlayerOnboardMessage(string urlSlug, int perPage = 50, int pageNum = 5)
+        {
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return false;
+            }
+            try
+            {
+                var newCommand = new PlayerReceivedData
+                {
+                    Command = new IntakePlayersByTournamentCommand
+                    {
+                        Topic = CommandRegistry.IntakePlayersByTournament,
+                        EventSlug = urlSlug,
+                        PerPage = perPage,
+                        PageNum = pageNum
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:PlayerReceivedQueue"], messageJson);
+
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
         private async Task<int> ProcessGameData(EventGraphQLResult newEventData)
         {
             var totalSuccess = 0;
@@ -158,7 +232,11 @@ namespace SengokuProvider.Library.Services.Events
                             command.Parameters.AddWithValue(@"LastUpdated", tournament.LastUpdated);
 
                             var result = await command.ExecuteNonQueryAsync();
-                            if (result > 0) totalSuccess += result;
+                            if (result > 0)
+                            {
+                                totalSuccess += result;
+                                if (await SendPlayerOnboardMessage(tournament.UrlSlug)) { Console.WriteLine("Player Onbaord Message Sent to ServiceBus"); }
+                            }
                         }
                     }
                     await transaction.CommitAsync();

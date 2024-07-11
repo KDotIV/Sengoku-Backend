@@ -84,6 +84,14 @@ namespace SengokuProvider.Library.Services.Common
                     CommandRegistry.OnboardPlayerData => commandToken.ToObject<OnboardLegendsByPlayerCommand>(localSerializer),
                     CommandRegistry.IntakeEventsByTournament => commandToken.ToObject<IntakeEventsByTournamentIdCommand>(localSerializer),
                     CommandRegistry.IntakePlayersByTournament => commandToken.ToObject<IntakePlayersByTournamentCommand>(localSerializer),
+                    CommandRegistry.UpdateEvent => throw new NotImplementedException(),
+                    CommandRegistry.IntakeEventsByLocation => commandToken.ToObject<IntakeEventsByLocationCommand>(localSerializer),
+                    CommandRegistry.IntakeEventsByGames => throw new NotImplementedException(),
+                    CommandRegistry.GetTournamentByLocation => throw new NotImplementedException(),
+                    CommandRegistry.UpdatePlayer => throw new NotImplementedException(),
+                    CommandRegistry.UpdateLegend => throw new NotImplementedException(),
+                    CommandRegistry.OnboardLegendsByPlayerData => throw new NotImplementedException(),
+                    CommandRegistry.IntakeLegendsByTournament => throw new NotImplementedException(),
                     _ => throw new NotSupportedException($"Unsupported command topic: {topic}")
                 };
 

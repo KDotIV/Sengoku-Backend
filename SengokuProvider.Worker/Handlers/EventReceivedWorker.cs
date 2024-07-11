@@ -31,7 +31,7 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-            //await GroomEventData();
+            await GroomEventData();
             return;
         }
 
@@ -109,7 +109,8 @@ namespace SengokuProvider.Worker.Handlers
                     case CommandRegistry.IntakeEventsByLocation:
                         List<int> result = await IntakeLocationEvents(currentMessage);
                         Console.WriteLine($"Successfully Added: {result} Events");
-
+                        break;
+                    case CommandRegistry.IntakeEventsByTournament:
                         break;
                 }
                 await args.CompleteMessageAsync(args.Message);

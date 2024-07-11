@@ -9,7 +9,7 @@ namespace SengokuProvider.Library.Models.Events
         public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
-        public required CommandRegistry Topic { get; set; }
+        public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
         public bool Validate()
         {
