@@ -43,7 +43,7 @@ namespace SengokuProvider.Library.Services.Events
             _addressCache = new ConcurrentDictionary<string, int>();
 
             _client.HttpClient.DefaultRequestHeaders.Clear();
-            _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _config["GraphQLSettings:PlayerBearer"]);
+            _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _config["GraphQLSettings:EventBearer"]);
         }
         #region Create Tournament Data
         public async Task<List<int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand)
