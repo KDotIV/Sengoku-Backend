@@ -31,7 +31,7 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-            await GroomEventData();
+            //await GroomEventData();
             return;
         }
 
@@ -107,10 +107,13 @@ namespace SengokuProvider.Worker.Handlers
                         await UpdateEvent(currentMessage);
                         break;
                     case CommandRegistry.IntakeEventsByLocation:
-                        List<int> result = await IntakeLocationEvents(currentMessage);
-                        Console.WriteLine($"Successfully Added: {result} Events");
+                        List<int> locationResult = await IntakeLocationEvents(currentMessage);
+                        Console.WriteLine($"Successfully Added: {locationResult} Events");
                         break;
                     case CommandRegistry.IntakeEventsByTournament:
+                        int tournamentResult = await IntakeEventByTournamentId(currentMessage);
+                        if (tournamentResult == 0) { Console.WriteLine($"Failed to Intake Tournament"); }
+                        Console.WriteLine($"Successfully Added Tournament Data");
                         break;
                 }
                 await args.CompleteMessageAsync(args.Message);
@@ -118,10 +121,22 @@ namespace SengokuProvider.Worker.Handlers
             catch (Exception ex)
             {
                 _log.LogError(ex.Message, ex);
-                await args.DeadLetterMessageAsync(args.Message);
+                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace.ToString());
                 throw;
             }
         }
+
+        private async Task<int> IntakeEventByTournamentId(EventReceivedData currentMessage)
+        {
+            if (currentMessage == null) { return 0; }
+            if (currentMessage.Command is IntakeEventsByTournamentIdCommand intakeCommand)
+            {
+                var currentIntakeHandler = _eventFactory.CreateIntakeHandler();
+                return await currentIntakeHandler.IntakeTournamentIdData(intakeCommand);
+            }
+            return 0;
+        }
+
         private async Task<List<int>> IntakeLocationEvents(EventReceivedData? currentMessage)
         {
             List<int> successList = new List<int>();

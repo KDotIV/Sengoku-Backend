@@ -60,7 +60,7 @@ namespace SengokuProvider.Library.Services.Events
 
                 Console.WriteLine($"Addresses Inserted: {eventsResult.Item1} - Events Inserted: {eventsResult.Item2}");
 
-                intakeResult.Add(await ProcessGameData(newEventData));
+                intakeResult.Add(await ProcessTournamentData(newEventData));
 
                 return intakeResult;
             }
@@ -69,6 +69,14 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
+        public async Task<int> IntakeTournamentIdData(IntakeEventsByTournamentIdCommand command)
+        {
+            EventGraphQLResult? newEventData = await QueryStartggEventByTournamentId(command.TournamentId);
+            if (newEventData == null) { return 0; }
+
+            var processedEvent = await ProcessEventData(newEventData);
+            return await ProcessTournamentData(newEventData);
+        }
         public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
             try
@@ -76,7 +84,7 @@ namespace SengokuProvider.Library.Services.Events
                 EventGraphQLResult? newEventData = await QueryStartggEventsByGameId(intakeCommand);
                 if (newEventData == null) { return 0; }
 
-                return await ProcessGameData(newEventData);
+                return await ProcessTournamentData(newEventData);
             }
             catch (Exception ex)
             {
@@ -188,7 +196,7 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        private async Task<int> ProcessGameData(EventGraphQLResult newEventData)
+        private async Task<int> ProcessTournamentData(EventGraphQLResult newEventData)
         {
             var totalSuccess = 0;
             try
