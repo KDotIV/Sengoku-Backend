@@ -2,6 +2,12 @@
 
 namespace SengokuProvider.Library.Models.Common
 {
+    public struct BearerConstants
+    {
+        public static readonly string[] BearerArray = ["2a7b93add38208847a394e01bd3e4575", "2b0160ef106be1c250e4db077b743429", "10cf2895837a1e6e9ea826fd997180e0",
+            "72730e024c5658ebc2b99710cb1119e4", "758d4c2a29fe920513d61550c54744b0", "85d0bf37972496fdea13addc7a2634b1"];
+        public static readonly Queue<string> TokenQueue = new Queue<string>(BearerArray);
+    }
     public struct QueryConstants
     {
         public const string DatePriority = @"

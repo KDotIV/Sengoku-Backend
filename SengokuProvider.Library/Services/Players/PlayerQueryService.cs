@@ -225,8 +225,7 @@ namespace SengokuProvider.Library.Services.Players
                         if (retryCount >= maxRetries)
                         {
                             Console.WriteLine("Max retries reached. Pausing further requests.");
-                            await _requestThrottler.PauseRequests();
-                            throw;
+                            await _requestThrottler.PauseRequests(_client);
                         }
                         Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
                         await Task.Delay(delay);
@@ -317,8 +316,7 @@ namespace SengokuProvider.Library.Services.Players
                     if (retryCount >= maxRetries)
                     {
                         Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests();
-                        throw;
+                        await _requestThrottler.PauseRequests(_client);
                     }
                     Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
                     await Task.Delay(delay);
@@ -387,8 +385,7 @@ namespace SengokuProvider.Library.Services.Players
                     if (retryCount >= maxRetries)
                     {
                         Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests();
-                        throw;
+                        await _requestThrottler.PauseRequests(_client);
                     }
                     Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
                     await Task.Delay(delay);

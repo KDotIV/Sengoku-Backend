@@ -38,7 +38,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
         });
-        services.AddSingleton<RequestThrottler>();
+        services.AddSingleton(provider => { var config = provider.GetService<IConfiguration>(); return new RequestThrottler(config); });
         services.AddSingleton<ICommonDatabaseService, CommonDatabaseService>(provider =>
         {
             return new CommonDatabaseService(connectionString);

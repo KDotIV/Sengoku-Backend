@@ -112,7 +112,7 @@ namespace SengokuProvider.Library.Services.Players
             {
                 PastEventPlayerData? queryResult = await _queryService.QueryStartggPreviousEventData(command);
 
-                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User.PreviousEvents.Nodes.Count == 0) { return 0; }
+                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User == null || queryResult.PlayerQuery.User.PreviousEvents == null || queryResult.PlayerQuery.User.PreviousEvents.Nodes.Count == 0) { return 0; }
 
                 List<PreviousNodes>? eventData = queryResult.PlayerQuery.User.PreviousEvents.Nodes;
                 var standingsSuccess = await ProcessPreviousTournamentData(command, volumeLimit, batchTasks, currentBatch, eventData);
@@ -131,7 +131,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var node in eventData)
             {
                 Console.WriteLine("Querying Standings Data");
-                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = node.Id, GamerTag = command.GamerTag, PerPage = 20 });
+                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = node.Id, GamerTag = command.GamerTag, PerPage = 200 });
 
                 if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
 
@@ -169,7 +169,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var newPlayer in _playerRegistry)
             {
                 Console.WriteLine("Querying Standings Data");
-                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
+                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 200 });
                 if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
 
                 newStanding.TournamentLinks.PlayerId = newPlayer.Key;
