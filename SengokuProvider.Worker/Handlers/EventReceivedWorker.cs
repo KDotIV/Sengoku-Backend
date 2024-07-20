@@ -25,13 +25,13 @@ namespace SengokuProvider.Worker.Handlers
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 5, PrefetchCount = 5, });
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 2, PrefetchCount = 2, });
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += Errorhandler;
 
             await _processor.StartProcessingAsync();
 
-            await GroomEventData();
+            //await GroomEventData();
             return;
         }
 

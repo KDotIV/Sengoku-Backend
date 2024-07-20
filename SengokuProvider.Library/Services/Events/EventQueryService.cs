@@ -46,6 +46,7 @@ namespace SengokuProvider.Library.Services.Events
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
+                            if (!reader.HasRows) { return relatedRegions; }
                             while (await reader.ReadAsync())
                             {
                                 relatedRegions.Add(reader.GetInt32(0));

@@ -53,7 +53,7 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("QueryPlayerStandings")]
-        public async Task<IActionResult> QueryPlayerStandingsByEventId([FromBody] GetPlayerStandingsCommand command)
+        public async Task<IActionResult> QueryPlayerStandingsByEventId([FromBody] QueryPlayerStandingsCommand command)
         {
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
@@ -63,10 +63,10 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                var result = await _playerQueryService.QueryPlayerStandings(parsedRequest);
-                if (result.Response != "Open" || string.IsNullOrEmpty(result.StandingDetails.GamerTag) || result.StandingDetails.Placement <= 0)
+                var result = await _playerQueryService.GetPlayerStandingResults(parsedRequest);
+                if (result.Count == 0)
                 {
-                    return new BadRequestObjectResult($"Error Occurred for Result: {result.Response} - {result.StandingDetails.GamerTag} - {result.StandingDetails.Placement}");
+                    return new OkObjectResult($"No Standings exist for this Player");
                 }
                 var resultJson = JsonConvert.SerializeObject(result);
                 return new OkObjectResult($"{resultJson}");

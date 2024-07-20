@@ -45,4 +45,19 @@ namespace SengokuProvider.Library.Models.Players
             else return false;
         }
     }
+    public class QueryPlayerStandingsCommand : ICommand
+    {
+        public required int PlayerId { get; set; }
+        public string? PlayerName { get; set; }
+        public string? Filter { get; set; }
+        public string? Sort { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (PlayerId > 0) return true;
+            else return false;
+        }
+    }
 }

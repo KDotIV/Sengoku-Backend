@@ -38,6 +38,7 @@ namespace SengokuProvider.Library.Services.Events
                     using (var cmd = new NpgsqlCommand(newQuery, conn))
                     using (var reader = await cmd.ExecuteReaderAsync())
                     {
+                        if (!reader.HasRows) return eventsToUpdate;
                         while (await reader.ReadAsync())
                         {
                             eventsToUpdate.Add(reader.GetInt32(0));
@@ -74,6 +75,11 @@ namespace SengokuProvider.Library.Services.Events
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
+                            if (!reader.HasRows)
+                            {
+                                Console.WriteLine("No standings found for the provided player ID.");
+                                return new UpdateEventCommand { Topic = CommandRegistry.UpdateEvent };
+                            }
                             while (await reader.ReadAsync())
                             {
                                 eventToUpdate.Id = reader.GetInt32(reader.GetOrdinal("id"));
@@ -237,6 +243,7 @@ namespace SengokuProvider.Library.Services.Events
                     var linkQuery = @"Select id FROM tournament_links WHERE url_slug IS NULL OR last_updated IS NULL OR event_id IS NULL OR last_updated >= NOW() - INTERVAL '1 HOURS'";
                     using (var reader = await conn.ExecuteReaderAsync(linkQuery))
                     {
+                        if (!reader.HasRows) return linksToProcess;
                         while (await reader.ReadAsync())
                         {
                             linksToProcess.Add(reader.GetInt32(reader.GetOrdinal("id")));

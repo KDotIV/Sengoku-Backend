@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Npgsql;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using System.Net;
@@ -29,7 +30,7 @@ namespace SengokuProvider.Library.Services.Players
         {
             return await QueryStartggPlayerData(queryCommand);
         }
-        public async Task<PlayerStandingResult?> QueryPlayerStandings(GetPlayerStandingsCommand command)
+        public async Task<PlayerStandingResult?> QueryStartggPlayerStandings(GetPlayerStandingsCommand command)
         {
             try
             {
@@ -46,6 +47,76 @@ namespace SengokuProvider.Library.Services.Players
                 return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}", LastUpdated = DateTime.UtcNow };
             }
         }
+        public async Task<List<PlayerStandingResult>> GetPlayerStandingResults(QueryPlayerStandingsCommand command)
+        {
+            List<PlayerStandingResult> playerStandingResults = new List<PlayerStandingResult>();
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT standings.entrant_id, standings.player_id, standings.tournament_link, 
+                                                        standings.placement, standings.entrants_num, standings.active, standings.last_updated,
+                                                        players.player_name, tournament_links.event_id, tournament_links.id, tournament_links.url_slug, 
+                                                        events.event_name
+                                                        FROM standings
+                                                        JOIN players ON standings.player_id = players.id
+                                                        JOIN tournament_links ON standings.tournament_link = tournament_links.id
+                                                        JOIN events ON events.link_id = tournament_links.id
+                                                        WHERE standings.player_id = @Input
+                                                        ORDER BY standings.active DESC;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", command.PlayerId);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows)
+                            {
+                                Console.WriteLine("No standings found for the provided player ID.");
+                                return playerStandingResults;
+                            }
+                            while (await reader.ReadAsync())
+                            {
+                                playerStandingResults.Add(ParseStandingsRecords(reader));
+                            }
+                        }
+                    }
+                }
+                return playerStandingResults;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        private PlayerStandingResult ParseStandingsRecords(NpgsqlDataReader reader)
+        {
+            return new PlayerStandingResult
+            {
+                StandingDetails = new StandingDetails
+                {
+                    IsActive = reader.IsDBNull(reader.GetOrdinal("active")) ? false : reader.GetBoolean(reader.GetOrdinal("active")),
+                    Placement = reader.IsDBNull(reader.GetOrdinal("placement")) ? 0 : reader.GetInt32(reader.GetOrdinal("placement")),
+                    GamerTag = reader.IsDBNull(reader.GetOrdinal("player_name")) ? "" : reader.GetString(reader.GetOrdinal("player_name")),
+                    EventId = reader.IsDBNull(reader.GetOrdinal("event_id")) ? 0 : reader.GetInt32(reader.GetOrdinal("event_id")),
+                    EventName = reader.IsDBNull(reader.GetOrdinal("event_name")) ? "" : reader.GetString(reader.GetOrdinal("event_name")),
+                    TournamentId = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32(reader.GetOrdinal("id")),
+                    TournamentName = reader.IsDBNull(reader.GetOrdinal("url_slug")) ? "" : reader.GetString(reader.GetOrdinal("url_slug"))
+                },
+                TournamentLinks = new Links
+                {
+                    EntrantId = reader.GetInt32(reader.GetOrdinal("entrant_id")),
+                    PlayerId = reader.GetInt32(reader.GetOrdinal("player_id"))
+                },
+                EntrantsNum = reader.IsDBNull(reader.GetOrdinal("entrants_num")) ? 0 : reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                LastUpdated = reader.IsDBNull(reader.GetOrdinal("last_updated")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("last_updated")),
+            };
+        }
+
         private PlayerStandingResult? MapStandingsData(StandingGraphQLResult? data)
         {
             if (data == null) return null;

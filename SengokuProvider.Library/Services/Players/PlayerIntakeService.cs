@@ -131,7 +131,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var node in eventData)
             {
                 Console.WriteLine("Querying Standings Data");
-                PlayerStandingResult? newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = node.Id, GamerTag = command.GamerTag, PerPage = 20 });
+                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = node.Id, GamerTag = command.GamerTag, PerPage = 20 });
 
                 if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
 
@@ -169,7 +169,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var newPlayer in _playerRegistry)
             {
                 Console.WriteLine("Querying Standings Data");
-                PlayerStandingResult? newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
+                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 20 });
                 if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
 
                 newStanding.TournamentLinks.PlayerId = newPlayer.Key;
