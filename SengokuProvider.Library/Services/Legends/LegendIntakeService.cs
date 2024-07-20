@@ -1,19 +1,29 @@
 ﻿using Dapper;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Npgsql;
+using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
+using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Worker.Handlers;
 
 namespace SengokuProvider.Library.Services.Legends
 {
     public class LegendIntakeService : ILegendIntakeService
     {
+        private readonly IConfiguration _configuration;
         private readonly ILegendQueryService _legendQueryService;
+        private readonly IAzureBusApiService _azureBusApiService;
         private readonly string _connectionString;
         private static Random _rand = new Random();
-        public LegendIntakeService(string connectionString, ILegendQueryService queryService)
+        public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IAzureBusApiService azureServiceBus)
         {
+            _configuration = configuration;
             _connectionString = connectionString;
             _legendQueryService = queryService;
+            _azureBusApiService = azureServiceBus;
         }
 
         public async Task<LegendData?> GenerateNewLegends(int playerId, string playerName)
@@ -31,6 +41,8 @@ namespace SengokuProvider.Library.Services.Legends
             catch (Exception ex)
             {
                 Console.WriteLine($"Error While Generating New Legend for PlayerID: {playerId} - {ex.Message}", ex.StackTrace);
+                Console.WriteLine($"Sending Player for Onboarding");
+                if (await SendPlayerIntakeMessage(playerId, playerName)) { Console.WriteLine("Successfully Sent Player Onbaord Message"); }
             }
 
             return null;
@@ -125,7 +137,45 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return 0;
         }
+        private async Task<bool> SendPlayerIntakeMessage(int playerId, string gamerTag)
+        {
+            if (string.IsNullOrEmpty(_configuration["ServiceBusSettings:PlayerReceivedQueue"]) || _configuration == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return false;
+            }
+            if (string.IsNullOrEmpty(gamerTag) || playerId == 0)
+            {
+                Console.WriteLine("Player Intake Data cannot be null or empty");
+                return false;
+            }
 
+            try
+            {
+                var newCommand = new PlayerReceivedData
+                {
+                    Command = new OnboardPlayerDataCommand
+                    {
+                        Topic = CommandRegistry.OnboardPlayerData,
+                        PlayerId = playerId,
+                        GamerTag = gamerTag
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+                var result = await _azureBusApiService.SendBatchAsync(_configuration["ServiceBusSettings:PlayerReceivedQueue"], messageJson);
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
         private async Task<int> GenerateNewLegendId()
         {
             using (var conn = new NpgsqlConnection(_connectionString))

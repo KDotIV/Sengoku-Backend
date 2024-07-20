@@ -79,13 +79,13 @@ namespace SengokuProvider.Library.Services.Players
         private async Task<PlayerGraphQLResult?> QueryStartggPlayerData(IntakePlayersByTournamentCommand command)
         {
             var tempQuery = @"query EventEntrants($perPage: Int!, $eventSlug: String!, $pageNum: Int) {
-                            event(slug: $eventSlug) {
-                                id
-                                name
-                                entrants(query: {perPage: $perPage, page: $pageNum, filter: {}}) {
-                                    nodes { id participants { id player { id gamerTag}}
-                                        standing { id placement }}
-                                    pageInfo { total totalPages page perPage sortBy filter}}}}";
+                    event(slug: $eventSlug) {
+                        id
+                        name
+                        entrants(query: {perPage: $perPage, page: $pageNum, filter: {}}) {
+                            nodes { id participants { id player { id gamerTag}}
+                                standing { id placement }}
+                            pageInfo { total totalPages page perPage sortBy filter}}}}";
 
             var allNodes = new List<EntrantNode>();
             int currentPage = 1;
@@ -187,18 +187,18 @@ namespace SengokuProvider.Library.Services.Players
         private async Task<StandingGraphQLResult?> QueryStartggStandings(GetPlayerStandingsCommand queryCommand)
         {
             var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
-                              event(id: $eventId) {
-                                id
-                                name
-                                entrants(query: {
-                                  perPage: $perPage
-                                  filter: { name: $gamerTag }}) {
-                                  nodes {id participants { id gamerTag } standing { id placement container {
-                                        __typename
-                                        ... on Tournament { id name countryCode startAt endAt events { id name }}
-                                        ... on Event { id name startAt numEntrants tournament { id name }}
-                                        ... on Set { id event { id name } startAt completedAt games { id }}
-                                      }}}}}}";
+                      event(id: $eventId) {
+                        id
+                        name
+                        entrants(query: {
+                          perPage: $perPage
+                          filter: { name: $gamerTag }}) {
+                          nodes {id participants { id gamerTag } standing { id placement container {
+                                __typename
+                                ... on Tournament { id name countryCode startAt endAt events { id name }}
+                                ... on Event { id name startAt numEntrants tournament { id name }}
+                                ... on Set { id event { id name } startAt completedAt games { id }}
+                              }}}}}}";
             var request = new GraphQLHttpRequest
             {
                 Query = tempQuery,
@@ -237,6 +237,76 @@ namespace SengokuProvider.Library.Services.Players
                     var standingsData = JsonConvert.DeserializeObject<StandingGraphQLResult>(tempJson);
                     success = true;
                     return standingsData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests();
+                        throw;
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    return null;
+                }
+            }
+            throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
+        }
+        public async Task<PastEventPlayerData?> QueryStartggPreviousEventData(OnboardPlayerDataCommand queryCommand)
+        {
+            var tempQuery = @"query PlayerQuery($playerId: ID!){
+                            player(id: $playerId){
+                            id,
+                            gamerTag,
+                            user {
+                                id,
+                                events(query: {
+                                filter: { minEntrantCount: 30, location: { countryCode:""US"" }}})
+                                { nodes { id, name}}}}}";
+
+            var request = new GraphQLHttpRequest
+            {
+                Query = tempQuery,
+                Variables = new
+                {
+                    queryCommand.PlayerId
+                }
+            };
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 3000;
+
+            while (!success && retryCount < maxRetries)
+            {
+                await _requestThrottler.WaitIfPaused();
+
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+
+                    if (response.Errors != null && response.Errors.Any())
+                    {
+                        throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                    }
+
+                    if (response.Data == null)
+                    {
+                        throw new ApplicationException("Failed to retrieve standing data");
+                    }
+
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                    var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
+                    success = true;
+                    return playerData;
                 }
                 catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
                 {

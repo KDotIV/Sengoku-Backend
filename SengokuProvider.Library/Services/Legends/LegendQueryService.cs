@@ -34,7 +34,7 @@ namespace SengokuProvider.Library.Services.Legends
                 {
                     await conn.OpenAsync();
 
-                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM standings WHERE player_id = @Input", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM standings WHERE player_id = @Input AND last_updated BETWEEN CURRENT_DATE - INTERVAL '5 days' AND CURRENT_DATE;", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", playerId);
 

@@ -35,7 +35,7 @@ namespace SengokuProvider.Worker.Handlers
             {
                 _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             }
-            //await GroomLegendData();
+            await GroomLegendData();
             return;
         }
         private async Task GroomLegendData()

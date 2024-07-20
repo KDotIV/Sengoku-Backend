@@ -81,7 +81,7 @@ namespace SengokuProvider.Library.Services.Common
 
                 ICommand? result = topic switch
                 {
-                    CommandRegistry.OnboardPlayerData => commandToken.ToObject<OnboardLegendsByPlayerCommand>(localSerializer),
+                    CommandRegistry.OnboardPlayerData => commandToken.ToObject<OnboardPlayerDataCommand>(localSerializer),
                     CommandRegistry.IntakeEventsByTournament => commandToken.ToObject<IntakeEventsByTournamentIdCommand>(localSerializer),
                     CommandRegistry.IntakePlayersByTournament => commandToken.ToObject<IntakePlayersByTournamentCommand>(localSerializer),
                     CommandRegistry.UpdateEvent => throw new NotImplementedException(),

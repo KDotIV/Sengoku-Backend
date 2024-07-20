@@ -39,7 +39,7 @@ namespace SengokuProvider.Library.Services.Players
             _playerRegistry = new ConcurrentDictionary<int, string>();
             _eventCache = new HashSet<int>();
         }
-        public async Task<bool> SendPlayerIntakeMessage(string eventSlug, int perPage = 50, int pageNum = 5)
+        public async Task<bool> SendPlayerIntakeMessage(string eventSlug, int perPage = 50, int pageNum = 1)
         {
             if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
             {
@@ -104,6 +104,62 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
+        public async Task<int> OnboardPreviousTournamentData(OnboardPlayerDataCommand command, int volumeLimit = 100)
+        {
+            List<Task<int>> batchTasks = new List<Task<int>>();
+            List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
+            try
+            {
+                PastEventPlayerData? queryResult = await _queryService.QueryStartggPreviousEventData(command);
+
+                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User.PreviousEvents.Nodes.Count == 0) { return 0; }
+
+                List<PreviousNodes>? eventData = queryResult.PlayerQuery.User.PreviousEvents.Nodes;
+                var standingsSuccess = await ProcessPreviousTournamentData(command, volumeLimit, batchTasks, currentBatch, eventData);
+                Console.WriteLine($"{standingsSuccess} total standings added for player");
+
+                return standingsSuccess;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
+            }
+        }
+
+        private async Task<int> ProcessPreviousTournamentData(OnboardPlayerDataCommand command, int volumeLimit, List<Task<int>> batchTasks, List<PlayerStandingResult> currentBatch, List<PreviousNodes> eventData)
+        {
+            foreach (var node in eventData)
+            {
+                Console.WriteLine("Querying Standings Data");
+                PlayerStandingResult? newStanding = await _queryService.QueryPlayerStandings(new GetPlayerStandingsCommand { EventId = node.Id, GamerTag = command.GamerTag, PerPage = 20 });
+
+                if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
+
+                newStanding.TournamentLinks.PlayerId = command.PlayerId;
+                currentBatch.Add(newStanding);
+                Console.WriteLine("Player Standing Data added");
+
+                // Check if the current batch has reached the batch size
+                if (currentBatch.Count >= volumeLimit)
+                {
+                    Console.WriteLine("Intaking Standings Batch");
+                    // Process the current batch asynchronously
+                    batchTasks.Add(IntakePlayerStandingData(new List<PlayerStandingResult>(currentBatch)));
+                    currentBatch.Clear();
+                    Console.WriteLine($"Batch cleared: {currentBatch.Count}");
+                }
+            }
+            // Process any remaining entries in the final batch
+            if (currentBatch.Count > 0)
+            {
+                batchTasks.Add(IntakePlayerStandingData(currentBatch));
+            }
+
+            // Await all batch tasks to complete
+            var results = await Task.WhenAll(batchTasks);
+            return results.Sum();
+        }
+
         private async Task<int> ProcessNewPlayers(int volumeLimit = 100)
         {
             List<Task<int>> batchTasks = new List<Task<int>>();
@@ -267,7 +323,6 @@ namespace SengokuProvider.Library.Services.Players
             }
             return 0;
         }
-
         private async Task<int> ProcessPlayerData(PlayerGraphQLResult queryData)
         {
             var players = new List<PlayerData>();

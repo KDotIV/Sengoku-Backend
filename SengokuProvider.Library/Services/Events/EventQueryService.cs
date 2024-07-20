@@ -305,12 +305,11 @@ namespace SengokuProvider.Library.Services.Events
         public async Task<EventGraphQLResult?> QueryStartggEventByEventId(int eventId)
         {
             var tempQuery = @"query TournamentQuery($tournamentId: ID!) 
-                {tournaments(query: {
-                    filter: {
-                        id: $tournamentId
-                            }}) {
-                            nodes {
-                                id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt,slug}}}";
+                            {tournaments(query: {
+                            filter: {
+                                id: $tournamentId
+                                    }}) {
+                                    nodes {id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt,slug}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -331,12 +330,12 @@ namespace SengokuProvider.Library.Services.Events
                 try
                 {
                     var response = await _client.SendQueryAsync<JObject>(request);
-                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+                    if (response.Data == null) throw new Exception("Failed to retrieve tournament data.");
 
                     var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-
                     var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
+                    success = true;
                     return eventData;
                 }
                 catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)

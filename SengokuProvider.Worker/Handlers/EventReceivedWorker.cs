@@ -31,7 +31,7 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-            //await GroomEventData();
+            await GroomEventData();
             return;
         }
 
@@ -108,7 +108,7 @@ namespace SengokuProvider.Worker.Handlers
                         break;
                     case CommandRegistry.IntakeEventsByLocation:
                         List<int> locationResult = await IntakeLocationEvents(currentMessage);
-                        Console.WriteLine($"Successfully Added: {locationResult} Events");
+                        Console.WriteLine($"Successfully Added: {locationResult.Count} Events");
                         break;
                     case CommandRegistry.IntakeEventsByTournament:
                         int tournamentResult = await IntakeEventByTournamentId(currentMessage);
@@ -145,7 +145,7 @@ namespace SengokuProvider.Worker.Handlers
             {
                 var currentIntakeHandler = _eventFactory.CreateIntakeHandler();
                 successList = await currentIntakeHandler.IntakeTournamentData(intakeCommand);
-                if (successList.Count <= 0) new ApplicationException($"Failed to Intake Tournament Batch");
+                if (successList.Count == 0) new ApplicationException($"Failed to Intake Tournament Batch");
                 return successList;
             }
             else { throw new InvalidOperationException("Command is not of expected type IntakeLocationCommand"); }

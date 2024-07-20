@@ -138,7 +138,6 @@ namespace SengokuProvider.Library.Services.Events
                     Command = new IntakeEventsByLocationCommand
                     {
                         PerPage = command.PerPage,
-                        PageNum = command.PageNum,
                         StateCode = command.StateCode,
                         StartDate = command.StartDate,
                         EndDate = command.EndDate,
@@ -480,13 +479,24 @@ namespace SengokuProvider.Library.Services.Events
             if (string.IsNullOrEmpty(addressData.Address)) return 0;
 
             var addressSplit = addressData.Address.Split(",");
-            if (addressSplit.Length < 3) return 0;
+            if (addressSplit.Length < 3)
+            {
+                Console.WriteLine("Address data is insufficient for processing.");
+                return 0;
+            }
 
             var tempCity = addressSplit[1].Trim();
             int tempZipCode = 0;
+
+            // Ensure the split operation has the expected length to avoid out-of-bounds errors
             if (addressSplit.Length > 2)
             {
-                if (!int.TryParse(addressSplit[2].Trim().Split(" ")[1], out tempZipCode)) return 0;
+                var zipCodePart = addressSplit[2].Trim().Split(" ");
+                if (zipCodePart.Length > 1 && !int.TryParse(zipCodePart[1], out tempZipCode))
+                {
+                    Console.WriteLine("Failed to parse ZIP code from address.");
+                    return 0;
+                }
             }
 
             var cityQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", tempCity) };
@@ -507,13 +517,17 @@ namespace SengokuProvider.Library.Services.Events
                         Province = regionResult
                     });
 
-                    if (insertResult > 0) { return tempZipCode; }
+                    if (insertResult > 0)
+                    {
+                        return tempZipCode;
+                    }
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error While Inserting Region Data: {ex.Message} - {ex.StackTrace}");
                 }
             }
+
             return 0;
         }
         private string DetermineProvince(AddressData addressData)
@@ -588,15 +602,15 @@ namespace SengokuProvider.Library.Services.Events
         private async Task<EventGraphQLResult?> QueryStartggEventByTournamentId(int tournamentId)
         {
             var tempQuery = @"query TournamentQuery($tournamentId: ID) {
-                              tournaments(query: {
-                                filter: {
-                                  id:$tournamentId
-                                }
-                              }) {
-                                nodes {id, name, addrState, lat, lng, venueAddress, startAt, endAt, slug, events {
-                                    id,
-                                    slug,
-                                    videogame { id }}}}}";
+                      tournaments(query: {
+                        filter: {
+                          id: $tournamentId
+                        }
+                      }) {
+                        nodes {id, name, addrState, lat, lng, venueAddress, startAt, endAt, slug, events {
+                            id,
+                            slug,
+                            videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -619,10 +633,9 @@ namespace SengokuProvider.Library.Services.Events
                 try
                 {
                     var response = await _client.SendQueryAsync<JObject>(request);
-                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
 
                     var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-
                     var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
                     success = true;
@@ -653,12 +666,12 @@ namespace SengokuProvider.Library.Services.Events
         private async Task<EventGraphQLResult?> QueryStartggEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
             var tempQuery = @"query TournamentQuery($perPage: Int, $videogameIds: [ID], $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) {
-                                  tournaments(query: {
-                                    perPage: $perPage
-                                    filter: {
-                                      videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
-                                    }}) {
-                                    nodes { id name slug startAt endAt events { id, slug, videogame { id }}}}}";
+                          tournaments(query: {
+                            perPage: $perPage
+                            filter: {
+                              videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
+                            }}) {
+                            nodes { id name slug startAt endAt events { id, slug, videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -672,34 +685,60 @@ namespace SengokuProvider.Library.Services.Events
                     videogameIds = intakeCommand.GameIDs
                 }
             };
-            try
+
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 1000;
+
+            while (!success && retryCount < maxRetries)
             {
-                var response = await _client.SendQueryAsync<JObject>(request);
-                if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+                await _requestThrottler.WaitIfPaused();
 
-                var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
 
-                var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                    var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
-                return eventData;
+                    success = true;
+                    return eventData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests();
+                        throw;
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    throw;
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                throw;
-            }
+            return null;
         }
         private async Task<EventGraphQLResult?> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
         {
             var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
-                { tournaments(query: {
-                    perPage: $perPage, page: $pagenum
-                    filter: {
-                        addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
-                            }}) {
-                            nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt,
-                            events { id, slug, videogame { id }}}
-                            pageInfo { total totalPages page perPage sortBy filter }}}";
+        { tournaments(query: {
+            perPage: $perPage, page: $pagenum
+            filter: {
+                addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
+                    }}) {
+                    nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt,
+                    events { id, slug, videogame { id }}}
+                    pageInfo { total totalPages page perPage sortBy filter }}}";
 
             var allNodes = new List<EventNode>();
             int currentPage = 1;
@@ -713,12 +752,13 @@ namespace SengokuProvider.Library.Services.Events
                     Variables = new
                     {
                         perPage = command.PerPage,
-                        page = command.PageNum,
+                        pagenum = currentPage,
                         state = command.StateCode,
                         yearStart = command.StartDate,
                         yearEnd = command.EndDate,
                     }
                 };
+
                 bool success = false;
                 int retryCount = 0;
                 const int maxRetries = 3;
@@ -731,7 +771,7 @@ namespace SengokuProvider.Library.Services.Events
                     try
                     {
                         var response = await _client.SendQueryAsync<JObject>(request);
-                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. ");
+                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. {response.Errors.ToString()}");
 
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
@@ -745,7 +785,7 @@ namespace SengokuProvider.Library.Services.Events
                         int totalPages = pageInfo["totalPages"].ToObject<int>();
                         currentPage = pageInfo["page"].ToObject<int>() + 1;
 
-                        hasNextPage = currentPage <= totalPages;
+                        hasNextPage = currentPage < totalPages;
                         success = true;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)

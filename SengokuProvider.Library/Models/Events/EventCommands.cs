@@ -5,7 +5,6 @@ namespace SengokuProvider.Library.Models.Events
     public class IntakeEventsByLocationCommand : ICommand
     {
         public required int PerPage { get; set; }
-        public required int PageNum { get; set; }
         public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
@@ -13,7 +12,7 @@ namespace SengokuProvider.Library.Models.Events
         public string? Response { get; set; }
         public bool Validate()
         {
-            if (PerPage > 0 && PageNum > 0 &&
+            if (PerPage > 0 &&
                 !string.IsNullOrEmpty(StateCode) &&
                 StartDate > 0 &&
                 EndDate > 0)

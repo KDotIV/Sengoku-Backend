@@ -65,9 +65,12 @@ namespace SengokuProvider.Worker.Handlers
                     case CommandRegistry.UpdatePlayer:
                         break;
                     case CommandRegistry.OnboardPlayerData:
+                        int onboardResult = await OnboardNewPlayer(currentMessage);
+                        Console.WriteLine($"{onboardResult}");
                         break;
                     case CommandRegistry.IntakePlayersByTournament:
                         int result = await IntakeNewPlayers(currentMessage);
+                        Console.WriteLine($"{result}");
                         break;
                 }
                 await args.CompleteMessageAsync(args.Message);
@@ -78,6 +81,17 @@ namespace SengokuProvider.Worker.Handlers
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace.ToString());
                 throw;
             }
+        }
+
+        private async Task<int> OnboardNewPlayer(PlayerReceivedData currentMessage)
+        {
+            if (currentMessage == null) { return 0; }
+            var currentIntake = _playerFactory.CreateIntakeHandler();
+            if (currentMessage.Command is OnboardPlayerDataCommand command)
+            {
+                return await currentIntake.OnboardPreviousTournamentData(command);
+            }
+            return 0;
         }
         private async Task<int> IntakeNewPlayers(PlayerReceivedData currentMessage)
         {

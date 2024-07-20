@@ -17,6 +17,18 @@ namespace SengokuProvider.Library.Models.Players
             return false;
         }
     }
+    public class OnboardPlayerDataCommand : ICommand
+    {
+        public required int PlayerId { get; set; }
+        public required string GamerTag { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            throw new NotImplementedException();
+        }
+    }
     public class GetPlayerStandingsCommand : ICommand
     {
         public required int EventId { get; set; }
