@@ -274,19 +274,19 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 sortedAddresses.Add(new AddressEventResult
                                 {
-                                    Address = reader.GetString(reader.GetOrdinal("address")),
-                                    Latitude = reader.GetDouble(reader.GetOrdinal("latitude")),
-                                    Longitude = reader.GetDouble(reader.GetOrdinal("longitude")),
-                                    Distance = Math.Round(reader.GetDouble(reader.GetOrdinal("distance")), 4),
-                                    EventName = reader.GetString(reader.GetOrdinal("event_name")),
-                                    EventDescription = reader.GetString(reader.GetOrdinal("event_description")),
-                                    Region = reader.GetInt32(reader.GetOrdinal("region")),
-                                    StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),
-                                    EndTime = reader.GetDateTime(reader.GetOrdinal("end_time")),
-                                    LinkId = reader.GetInt32(reader.GetOrdinal("link_id")),
-                                    ClosingRegistration = reader.GetDateTime(reader.GetOrdinal("closing_registration_date")),
-                                    UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
-                                    IsOnline = reader.GetBoolean(reader.GetOrdinal("online_tournament"))
+                                    Address = reader.IsDBNull(reader.GetOrdinal("address")) ? string.Empty : reader.GetString(reader.GetOrdinal("address")),
+                                    Latitude = reader.IsDBNull(reader.GetOrdinal("latitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("latitude")),
+                                    Longitude = reader.IsDBNull(reader.GetOrdinal("longitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("longitude")),
+                                    Distance = reader.IsDBNull(reader.GetOrdinal("distance")) ? 0.0 : Math.Round(reader.GetDouble(reader.GetOrdinal("distance")), 4),
+                                    EventName = reader.IsDBNull(reader.GetOrdinal("event_name")) ? string.Empty : reader.GetString(reader.GetOrdinal("event_name")),
+                                    EventDescription = reader.IsDBNull(reader.GetOrdinal("event_description")) ? string.Empty : reader.GetString(reader.GetOrdinal("event_description")),
+                                    Region = reader.IsDBNull(reader.GetOrdinal("region")) ? 0 : reader.GetInt32(reader.GetOrdinal("region")),
+                                    StartTime = reader.IsDBNull(reader.GetOrdinal("start_time")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("start_time")),
+                                    EndTime = reader.IsDBNull(reader.GetOrdinal("end_time")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("end_time")),
+                                    LinkId = reader.IsDBNull(reader.GetOrdinal("link_id")) ? 0 : reader.GetInt32(reader.GetOrdinal("link_id")),
+                                    ClosingRegistration = reader.IsDBNull(reader.GetOrdinal("closing_registration_date")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("closing_registration_date")),
+                                    UrlSlug = reader.IsDBNull(reader.GetOrdinal("url_slug")) ? string.Empty : reader.GetString(reader.GetOrdinal("url_slug")),
+                                    IsOnline = reader.IsDBNull(reader.GetOrdinal("online_tournament")) ? false : reader.GetBoolean(reader.GetOrdinal("online_tournament"))
                                 });
                             }
                         }
