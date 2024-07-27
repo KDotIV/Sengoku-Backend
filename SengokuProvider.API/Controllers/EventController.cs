@@ -124,6 +124,7 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _eventQueryService.QueryEventsByLocation(parsedRequest);
+                if(result.Count == 0) { return new OkObjectResult($"There are no tournaments under that region id"); }
                 var resultJson = JsonConvert.SerializeObject(result);
                 return new OkObjectResult($"{resultJson}");
             }

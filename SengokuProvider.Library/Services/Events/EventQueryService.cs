@@ -231,6 +231,7 @@ namespace SengokuProvider.Library.Services.Events
                     await conn.OpenAsync();
 
                     var regionData = await GetRegionData(currentRegions);
+                    if(regionData == null || regionData.Count == 0) return sortedAddresses;
                     var regionIds = new List<int>();
                     var locationReference = regionData.FirstOrDefault(x => x.Id == command.RegionId);
 
