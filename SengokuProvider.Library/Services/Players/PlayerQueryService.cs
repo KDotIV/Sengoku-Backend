@@ -160,6 +160,7 @@ namespace SengokuProvider.Library.Services.Players
                         name
                         tournament { id, name }
                         slug
+                        numEntrants
                         entrants(query: {perPage: $perPage, filter: {}}) {
                             nodes { id, participants { 
                                             id, player { 
