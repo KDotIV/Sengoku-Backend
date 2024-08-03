@@ -231,7 +231,7 @@ namespace SengokuProvider.Library.Services.Events
                     await conn.OpenAsync();
 
                     var regionData = await GetRegionData(currentRegions);
-                    if(regionData == null || regionData.Count == 0) return sortedAddresses;
+                    if (regionData == null || regionData.Count == 0) return sortedAddresses;
                     var regionIds = new List<int>();
                     var locationReference = regionData.FirstOrDefault(x => x.Id == command.RegionId);
 
@@ -265,8 +265,8 @@ namespace SengokuProvider.Library.Services.Events
                         regionIdsParam.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer;
 
                         cmd.Parameters.Add(regionIdsParam);
-                        cmd.Parameters.AddWithValue("@ReferenceLatitude", locationReference.Latitude);
-                        cmd.Parameters.AddWithValue("@ReferenceLongitude", locationReference.Longitude);
+                        cmd.Parameters.AddWithValue("@ReferenceLatitude", locationReference?.Latitude ?? 0);
+                        cmd.Parameters.AddWithValue("@ReferenceLongitude", locationReference?.Longitude ?? 0);
                         cmd.Parameters.AddWithValue("@PerPage", command.PerPage);
 
                         using (var reader = await cmd.ExecuteReaderAsync())

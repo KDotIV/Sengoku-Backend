@@ -89,9 +89,9 @@ namespace SengokuProvider.Worker.Handlers
         private async Task<List<PlayerStandingResult>> QueryPlayerStandings(PlayerReceivedData currentMessage)
         {
             List<PlayerStandingResult> result = new List<PlayerStandingResult>();
-            if(currentMessage == null) { return result; }
+            if (currentMessage == null) { return result; }
             var currentQuery = _playerFactory.CreateQueryHandler();
-            if(currentMessage.Command is QueryPlayerStandingsCommand command)
+            if (currentMessage.Command is GetPlayerStandingsCommand command)
             {
                 result = await currentQuery.GetPlayerStandingResults(command);
             }

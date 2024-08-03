@@ -19,6 +19,7 @@ namespace SengokuProvider.Library.Models.Players
     {
         public required int PlayerId { get; set; }
         public required string GamerTag { get; set; }
+        public int? PerPage { get; set; }
         public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 

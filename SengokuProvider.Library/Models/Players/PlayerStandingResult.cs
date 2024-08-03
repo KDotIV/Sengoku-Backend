@@ -21,8 +21,8 @@
     }
     public class Links
     {
-        public int PlayerId { get; set; }
-        public int EntrantId { get; set; }
+        public required int PlayerId { get; set; }
+        public required int EntrantId { get; set; }
         public int StandingId { get; set; }
     }
 }

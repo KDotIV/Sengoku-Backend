@@ -32,15 +32,39 @@ namespace SengokuProvider.Library.Models.Players
     public class PreviousEvents
     {
         [JsonProperty("nodes")]
-        public List<PreviousNodes>? Nodes { get; set; }
+        public List<PreviousEventNode>? Nodes { get; set; }
     }
 
-    public class PreviousNodes
+    public class PreviousEventNode : BaseNode
+    {
+        [JsonProperty("tournament")]
+        public PreviousTournament? PreviousTournament { get; set; }
+
+        [JsonProperty("entrants")]
+        public PreviousEntrantList? Entrants { get; set; }
+    }
+
+    public class PreviousTournament : BaseTournament { }
+
+    public class PreviousEntrantList
+    {
+        [JsonProperty("nodes")]
+        public List<PreviousEntrantNode>? Nodes { get; set; }
+    }
+
+    public class PreviousEntrantNode
     {
         [JsonProperty("id")]
         public int Id { get; set; }
 
-        [JsonProperty("name")]
-        public string? Name { get; set; }
+        [JsonProperty("participants")]
+        public List<PreviousParticipant>? Participants { get; set; }
+
+        [JsonProperty("standing")]
+        public PreviousStanding? Standing { get; set; }
     }
+
+    public class PreviousParticipant : BaseParticipant { }
+
+    public class PreviousStanding : BaseStanding { }
 }

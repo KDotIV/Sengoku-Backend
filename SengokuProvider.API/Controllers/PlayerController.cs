@@ -53,7 +53,7 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("QueryPlayerStandings")]
-        public async Task<IActionResult> QueryPlayerStandingsByPlayer([FromBody] QueryPlayerStandingsCommand command)
+        public async Task<IActionResult> QueryPlayerStandingsByPlayer([FromBody] GetPlayerStandingsCommand command)
         {
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))

@@ -117,7 +117,7 @@ namespace SengokuProvider.Library.Services.Players
             };
         }
 
-        private List<PlayerStandingResult> MapStandingsData(StandingGraphQLResult? data)
+        private List<PlayerStandingResult> MapStandingsData(PlayerGraphQLResult? data)
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
@@ -135,7 +135,7 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         IsActive = tempNode.Standing.IsActive,
                         Placement = tempNode.Standing.Placement,
-                        GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
+                        GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
                         EventId = data.Data.Id,
                         EventName = data.Data.Name,
                         TournamentId = data.Data.Tournament.Id,
@@ -144,7 +144,8 @@ namespace SengokuProvider.Library.Services.Players
                     TournamentLinks = new Links
                     {
                         EntrantId = tempNode.Id,
-                        StandingId = tempNode.Standing.Id
+                        StandingId = tempNode.Standing.Id,
+                        PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
                     }
                 };
                 mappedResult.Add(newStandings);
@@ -153,7 +154,6 @@ namespace SengokuProvider.Library.Services.Players
         }
         private async Task<PlayerGraphQLResult?> QueryStartggPlayerData(IntakePlayersByTournamentCommand command, int perPage = 40)
         {
-            //TODO: REMAP THIS QUERY TO THE COMMONPLAYERSCHEMA MODEL
             var tempQuery = @"query EventEntrants($perPage: Int!, $eventId: ID!) {
                     event(id: $eventId) {
                         id
@@ -169,12 +169,14 @@ namespace SengokuProvider.Library.Services.Players
                             pageInfo { total totalPages page perPage sortBy filter}}}}";
 
             var allNodes = new List<EntrantNode>();
-            int currentTournamentId = 0;
-            string currentTournamentName = "";
+            int currentEventLinkId = 0;
+            string currentEventLinkName = "";
             int currentPage = 1;
             bool hasNextPage = true;
-            string currentEventName = "";
-            int currentEventId = 0;
+            string currentTournamentLinkName = "";
+            int currentTournamentLinkId = 0;
+            int currentEntrantsNum = 0;
+            string currentTournamentLinkSlug = "";
 
             while (hasNextPage)
             {
@@ -220,8 +222,13 @@ namespace SengokuProvider.Library.Services.Players
                             allNodes.AddRange(playerData.Data.Entrants.Nodes);
                         }
 
-                        currentEventName = playerData.Data.Name;
-                        currentEventId = playerData.Data.Id;
+                        currentEventLinkName = playerData.Data.Name;
+                        currentEventLinkId = playerData.Data.Id;
+                        currentTournamentLinkName = playerData.Data.Tournament.Name;
+                        currentTournamentLinkId = playerData.Data.Tournament.Id;
+                        currentEntrantsNum = playerData.Data.NumEntrants;
+                        currentTournamentLinkSlug = playerData.Data.Slug;
+
                         var pageInfo = response.Data["event"]["entrants"]["pageInfo"];
                         int totalPages = pageInfo["totalPages"].ToObject<int>();
                         currentPage = pageInfo["page"].ToObject<int>() + 1;
@@ -255,16 +262,18 @@ namespace SengokuProvider.Library.Services.Players
             {
                 Data = new Event
                 {
-                    Id = currentEventId,
-                    Name = currentEventName,
+                    Id = currentTournamentLinkId,
+                    Name = currentTournamentLinkName,
+                    NumEntrants = currentEntrantsNum,
+                    Slug = currentTournamentLinkSlug,
                     Entrants = new EntrantList
                     {
                         Nodes = allNodes
                     },
                     Tournament = new Tournament
                     {
-                        Id = currentTournamentId,
-                        Name = currentTournamentName
+                        Id = currentEventLinkId,
+                        Name = currentEventLinkName
                     },
 
                 }
@@ -272,7 +281,7 @@ namespace SengokuProvider.Library.Services.Players
 
             return result;
         }
-        private async Task<StandingGraphQLResult?> QueryStartggEventStandings(int tournamentLink)
+        private async Task<PlayerGraphQLResult?> QueryStartggEventStandings(int tournamentLink)
         {
             var tempQuery = @"query EventEntrants($eventId: ID!) {
                                 event(id: $eventId) { id name numEntrants slug tournament {
@@ -314,7 +323,7 @@ namespace SengokuProvider.Library.Services.Players
                     }
 
                     var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var standingsData = JsonConvert.DeserializeObject<StandingGraphQLResult>(tempJson);
+                    var standingsData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson);
                     success = true;
                     return standingsData;
                 }
@@ -341,72 +350,112 @@ namespace SengokuProvider.Library.Services.Players
         }
         public async Task<PastEventPlayerData?> QueryStartggPreviousEventData(OnboardPlayerDataCommand queryCommand)
         {
-            var tempQuery = @"query PlayerQuery($playerId: ID!){
-                            player(id: $playerId){
-                            id,
-                            gamerTag,
-                            user {
-                                id,
-                                events(query: {
-                                filter: { minEntrantCount: 30, location: { countryCode:""US"" }}})
-                                { nodes { id, name}}}}}";
+            var tempQuery = @"query UserPreviousEventsQuery($playerId: ID!, $perPage: Int!, $playerName: String!) {
+                                player(id: $playerId) { id, gamerTag
+                                    user { id
+                                        events(query: {filter: {minEntrantCount: 10, location: {countryCode: ""US""}}}) {
+                                            nodes { id, name, numEntrants, slug, tournament { id, name }
+                                                entrants(query: {perPage: $perPage, filter: {name: $playerName}}) {
+                                                    nodes { id 
+                                                        participants { id player { id gamerTag } }
+                                                        standing { id placement isFinal }}}}}}}}";
 
-            var request = new GraphQLHttpRequest
+            var allNodes = new List<PreviousEventNode>();
+            bool hasNextPage = true;
+            int currentPage = 1;
+            int currentUserLinkId = 0;
+
+            while (hasNextPage)
             {
-                Query = tempQuery,
-                Variables = new
+                var request = new GraphQLHttpRequest
                 {
-                    queryCommand.PlayerId
-                }
-            };
-            bool success = false;
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const int delay = 3000;
-
-            while (!success && retryCount < maxRetries)
-            {
-                await _requestThrottler.WaitIfPaused();
-
-                try
-                {
-                    var response = await _client.SendQueryAsync<JObject>(request);
-
-                    if (response.Errors != null && response.Errors.Any())
+                    Query = tempQuery,
+                    Variables = new
                     {
-                        throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                        playerId = queryCommand.PlayerId,
+                        perPage = queryCommand.PerPage,
+                        playerName = queryCommand.GamerTag,
+                        pageNum = currentPage
                     }
+                };
 
-                    if (response.Data == null)
-                    {
-                        throw new ApplicationException("Failed to retrieve standing data");
-                    }
+                bool success = false;
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int delay = 3000;
 
-                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
-                    success = true;
-                    return playerData;
-                }
-                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+                while (!success && retryCount < maxRetries)
                 {
-                    var errorContent = ex.Content;
-                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                    retryCount++;
-                    if (retryCount >= maxRetries)
+                    await _requestThrottler.WaitIfPaused();
+
+                    try
                     {
-                        Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests(_client);
+                        var response = await _client.SendQueryAsync<JObject>(request);
+
+                        if (response.Errors != null && response.Errors.Any())
+                        {
+                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                        }
+
+                        if (response.Data == null)
+                        {
+                            throw new ApplicationException("Failed to retrieve standing data");
+                        }
+
+                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                        var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
+
+                        if (playerData?.PlayerQuery?.User?.PreviousEvents?.Nodes != null)
+                        {
+                            allNodes.AddRange(playerData.PlayerQuery.User.PreviousEvents.Nodes);
+                        }
+                        currentUserLinkId = playerData.PlayerQuery.User.Id;
+
+                        var pageInfo = response.Data["player"]["user"]["events"]["pageInfo"];
+                        int totalPages = pageInfo["totalPages"].ToObject<int>();
+                        currentPage = pageInfo["page"].ToObject<int>() + 1;
+
+                        hasNextPage = currentPage <= totalPages;
+                        success = true;
                     }
-                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                    await Task.Delay(delay);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    return null;
+                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+                    {
+                        var errorContent = ex.Content;
+                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            Console.WriteLine("Max retries reached. Pausing further requests.");
+                            await _requestThrottler.PauseRequests(_client);
+                        }
+                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                        await Task.Delay(delay);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                        return null;
+                    }
                 }
             }
-            throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
+
+            var result = new PastEventPlayerData
+            {
+                PlayerQuery = new PlayerQuery
+                {
+                    Id = queryCommand.PlayerId,
+                    GamerTag = queryCommand.GamerTag,
+                    User = new PastEventUser
+                    {
+                        Id = currentUserLinkId,
+                        PreviousEvents = new PreviousEvents
+                        {
+                            Nodes = allNodes
+                        }
+                    }
+                }
+            };
+            return result;
         }
     }
 }

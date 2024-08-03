@@ -91,7 +91,7 @@ namespace SengokuProvider.Library.Services.Players
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
 
                 Console.WriteLine("Starting Standings Processing");
-                var standingsSuccess = await ProcessNewPlayers(command.TournamentLink);
+                var standingsSuccess = await ProcessNewPlayerStandings(newPlayerData);
 
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
 
@@ -110,10 +110,11 @@ namespace SengokuProvider.Library.Services.Players
             {
                 PastEventPlayerData? queryResult = await _queryService.QueryStartggPreviousEventData(command);
 
-                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User == null || queryResult.PlayerQuery.User.PreviousEvents == null || queryResult.PlayerQuery.User.PreviousEvents.Nodes.Count == 0) { return 0; }
+                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User == null || queryResult.PlayerQuery.User.PreviousEvents == null || queryResult?.PlayerQuery?.User?.PreviousEvents?.Nodes?.Count == 0) { return 0; }
 
-                List<PreviousNodes>? eventData = queryResult.PlayerQuery.User.PreviousEvents.Nodes;
-                var standingsSuccess = await ProcessPreviousTournamentData(command, volumeLimit, batchTasks, currentBatch, eventData);
+                var mappedResult = MapPreviousTournamentData(queryResult);
+                var standingsSuccess = await IntakePlayerStandingData(mappedResult);
+
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
 
                 return standingsSuccess;
@@ -124,75 +125,86 @@ namespace SengokuProvider.Library.Services.Players
             }
         }
 
-        private async Task<int> ProcessPreviousTournamentData(OnboardPlayerDataCommand command, int volumeLimit, List<Task<int>> batchTasks, List<PlayerStandingResult> currentBatch, List<PreviousNodes> eventData)
+        private List<PlayerStandingResult> MapPreviousTournamentData(PastEventPlayerData? playerData)
         {
-            foreach (var node in eventData)
+            List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
+            if (playerData == null || playerData?.PlayerQuery?.User?.PreviousEvents == null ||
+                playerData?.PlayerQuery?.User?.PreviousEvents?.Nodes == null || playerData?.PlayerQuery?.User?.PreviousEvents?.Nodes?.Count == 0) { Console.WriteLine("No PastPlayerData to process"); return mappedResult; }
+            foreach (PreviousEventNode tempNode in playerData.PlayerQuery.User.PreviousEvents.Nodes)
             {
-                Console.WriteLine("Querying Standings Data");
-                PastEventPlayerData newStanding = await _queryService.QueryStartggPreviousEventData(new OnboardPlayerDataCommand { PlayerId = node.Id, GamerTag = command.GamerTag });
-
-                if (newStanding?.PlayerQuery?.User?.PreviousEvents?.Nodes?.Count == 0) { continue; }
-
-                newStanding.TournamentLinks.PlayerId = command.PlayerId;
-                currentBatch.Add(newStanding);
-                Console.WriteLine("Player Standing Data added");
-
-                // Check if the current batch has reached the batch size
-                if (currentBatch.Count >= volumeLimit)
+                if (tempNode == null) continue;
+                var firstRecord = tempNode?.Entrants?.Nodes?.FirstOrDefault();
+                var newStanding = new PlayerStandingResult
                 {
-                    Console.WriteLine("Intaking Standings Batch");
-                    // Process the current batch asynchronously
-                    batchTasks.Add(IntakePlayerStandingData(new List<PlayerStandingResult>(currentBatch)));
-                    currentBatch.Clear();
-                    Console.WriteLine($"Batch cleared: {currentBatch.Count}");
-                }
+                    Response = "Open",
+                    EntrantsNum = tempNode.NumEntrants,
+                    UrlSlug = tempNode.Slug,
+                    LastUpdated = DateTime.UtcNow,
+                    StandingDetails = new StandingDetails
+                    {
+                        IsActive = firstRecord.Standing.IsActive,
+                        Placement = firstRecord.Standing.Placement,
+                        GamerTag = playerData.PlayerQuery.GamerTag,
+                        EventId = tempNode.Id,
+                        EventName = tempNode.Name,
+                        TournamentId = tempNode.PreviousTournament.Id,
+                        TournamentName = tempNode.PreviousTournament.Name
+                    },
+                    TournamentLinks = new Links
+                    {
+                        EntrantId = firstRecord.Id,
+                        StandingId = firstRecord.Standing.Id,
+                        PlayerId = firstRecord?.Participants?.FirstOrDefault()?.Player?.Id ?? 0
+                    }
+                };
+                mappedResult.Add(newStanding);
             }
-            // Process any remaining entries in the final batch
-            if (currentBatch.Count > 0)
-            {
-                batchTasks.Add(IntakePlayerStandingData(currentBatch));
-            }
-
-            // Await all batch tasks to complete
-            var results = await Task.WhenAll(batchTasks);
-            return results.Sum();
+            return mappedResult;
         }
-        private async Task<int> ProcessNewPlayers(int tournamentLink, int volumeLimit = 100)
+        private async Task<int> ProcessNewPlayerStandings(PlayerGraphQLResult tournamentData, int volumeLimit = 100)
         {
-            List<Task<int>> batchTasks = new List<Task<int>>();
-            List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
-
-            // Process each player in the registry
-            Console.WriteLine("Querying Standings Data");
-            List<PlayerStandingResult> newStanding = await _queryService.QueryStartggPlayerStandings(tournamentLink);
-            if (newStanding.Count == 0) { return 0; }
-
-            newStanding.TournamentLinks.PlayerId = newPlayer.Key;
-            currentBatch.Add(newStanding);
-            Console.WriteLine("Player Standing Data added");
-
-            // Check if the current batch has reached the batch size
-            if (currentBatch.Count >= volumeLimit)
+            var mappedStandings = MapStandingsData(tournamentData);
+            var result = await IntakePlayerStandingData(mappedStandings);
+            return result;
+        }
+        private List<PlayerStandingResult> MapStandingsData(PlayerGraphQLResult? data)
+        {
+            List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
+            if (data == null) return mappedResult;
+            foreach (var tempNode in data.Data.Entrants.Nodes)
             {
-                Console.WriteLine("Intaking Standings Batch");
-                // Process the current batch asynchronously
-                batchTasks.Add(IntakePlayerStandingData(new List<PlayerStandingResult>(currentBatch)));
-                currentBatch.Clear();
-                Console.WriteLine($"Batch cleared: {currentBatch.Count}");
-            }
+                if (tempNode.Standing == null) continue;
 
-            // Process any remaining entries in the final batch
-            if (currentBatch.Count > 0)
-            {
-                batchTasks.Add(IntakePlayerStandingData(currentBatch));
+                var newStandings = new PlayerStandingResult
+                {
+                    Response = "Open",
+                    EntrantsNum = data.Data.NumEntrants,
+                    LastUpdated = DateTime.UtcNow,
+                    UrlSlug = data.Data.Slug,
+                    StandingDetails = new StandingDetails
+                    {
+                        IsActive = tempNode.Standing.IsActive,
+                        Placement = tempNode.Standing.Placement,
+                        GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
+                        EventId = data.Data.Id,
+                        EventName = data.Data.Name,
+                        TournamentId = data.Data.Tournament.Id,
+                        TournamentName = data.Data.Name
+                    },
+                    TournamentLinks = new Links
+                    {
+                        EntrantId = tempNode.Id,
+                        StandingId = tempNode.Standing.Id,
+                        PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
+                    }
+                };
+                mappedResult.Add(newStandings);
             }
-
-            // Await all batch tasks to complete
-            var results = await Task.WhenAll(batchTasks);
-            return results.Sum();
+            return mappedResult;
         }
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
+            if (currentStandings == null || currentStandings.Count == 0) return 0;
             try
             {
                 var totalSuccess = 0;
@@ -203,8 +215,13 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         foreach (var data in currentStandings)
                         {
+                            if (data.TournamentLinks == null || data.TournamentLinks.PlayerId == 0)
+                            {
+                                Console.WriteLine("Standing Data is missing Player Startgg link. Can't link to player");
+                                continue;
+                            }
                             int exists = await VerifyPlayer(data.TournamentLinks.PlayerId);
-                            if (exists == 0) { continue; }
+                            if (exists == 0) { Console.WriteLine("Player does not exist. Sending request to intake player"); continue; }
 
                             var createInsertCommand = @"
                             INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active, last_updated)
@@ -220,8 +237,8 @@ namespace SengokuProvider.Library.Services.Players
                             {
                                 cmd.Transaction = transaction;
                                 cmd.Parameters.AddWithValue("@EntrantInput", data.TournamentLinks.EntrantId);
-                                cmd.Parameters.AddWithValue("@PlayerId", data.TournamentLinks.PlayerId);
-                                cmd.Parameters.AddWithValue("@TournamentLink", data.StandingDetails.TournamentId);
+                                cmd.Parameters.AddWithValue("@PlayerId", exists);
+                                cmd.Parameters.AddWithValue("@TournamentLink", data?.StandingDetails?.TournamentId);
                                 cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
                                 cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
                                 cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
@@ -230,7 +247,7 @@ namespace SengokuProvider.Library.Services.Players
                                 int result = await cmd.ExecuteNonQueryAsync();
                                 if (result > 0)
                                 {
-                                    await SendOnboardMessage(data.TournamentLinks.PlayerId, data.StandingDetails.GamerTag);
+                                    _playerRegistry.TryRemove(exists, out _);
                                     result += totalSuccess;
                                     Console.WriteLine("Player removed from registry");
                                 }
@@ -262,11 +279,11 @@ namespace SengokuProvider.Library.Services.Players
             {
                 var newCommand = new OnboardReceivedData
                 {
-                    Command = new OnboardLegendsByPlayerCommand
+                    Command = new OnboardPlayerDataCommand
                     {
                         PlayerId = playerId,
                         GamerTag = playerName,
-                        Topic = CommandRegistry.OnboardLegendsByPlayerData,
+                        Topic = CommandRegistry.OnboardPlayerData,
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };
@@ -293,7 +310,7 @@ namespace SengokuProvider.Library.Services.Players
                 {
                     await conn.OpenAsync();
 
-                    using (var cmd = new NpgsqlCommand(@"SELECT id FROM players WHERE id = @Input", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT id FROM players WHERE startgg_link = @Input", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", playerId);
 

@@ -1,8 +1,6 @@
-﻿using Newtonsoft.Json;
-
-namespace SengokuProvider.Library.Models.Players
+﻿namespace SengokuProvider.Library.Models.Players
 {
-    public class StandingGraphQLResult : CommonPlayerSchema
+    public class StandingGraphQLResult
     {
     }
 }
