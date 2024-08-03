@@ -72,6 +72,9 @@ namespace SengokuProvider.Worker.Handlers
                         int result = await IntakeNewPlayers(currentMessage);
                         Console.WriteLine($"{result}");
                         break;
+                    case CommandRegistry.QueryPlayerStandingsCommand:
+                        List<PlayerStandingResult> playerResults = await QueryPlayerStandings(currentMessage);
+                        break;
                 }
                 await args.CompleteMessageAsync(args.Message);
             }
@@ -81,6 +84,18 @@ namespace SengokuProvider.Worker.Handlers
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace.ToString());
                 throw;
             }
+        }
+
+        private async Task<List<PlayerStandingResult>> QueryPlayerStandings(PlayerReceivedData currentMessage)
+        {
+            List<PlayerStandingResult> result = new List<PlayerStandingResult>();
+            if(currentMessage == null) { return result; }
+            var currentQuery = _playerFactory.CreateQueryHandler();
+            if(currentMessage.Command is QueryPlayerStandingsCommand command)
+            {
+                result = await currentQuery.GetPlayerStandingResults(command);
+            }
+            return result;
         }
 
         private async Task<int> OnboardNewPlayer(PlayerReceivedData currentMessage)

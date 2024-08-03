@@ -12,6 +12,7 @@
         UpdatePlayer = 201,
         OnboardPlayerData = 202,
         IntakePlayersByTournament = 203,
+        QueryPlayerStandingsCommand = 204,
         //Legend Commands
         UpdateLegend = 301,
         OnboardLegendsByPlayerData = 302,
