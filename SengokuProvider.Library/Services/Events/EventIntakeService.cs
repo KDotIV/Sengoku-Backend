@@ -246,7 +246,7 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 totalSuccess += result;
                                 Console.WriteLine($"Current Success: {totalSuccess}");
-                                if (await SendTournamentPlayerIntakeMessage(tournament.Id)) { Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Player Intake Message Sent to ServiceBus"); }
+                                if (await SendTournamentLinkEventMessage(tournament.EventId)) { Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Intake Message Sent"); }
                             }
                         }
                     }

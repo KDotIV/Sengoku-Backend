@@ -5,13 +5,13 @@ namespace SengokuProvider.Library.Models.Players
     public class PlayerGraphQLResult
     {
         [JsonProperty("event")]
-        public required Event Data { get; set; }
+        public required EventLink Data { get; set; }
     }
 
-    public class Event : BaseNode
+    public class EventLink : BaseNode
     {
         [JsonProperty("tournament")]
-        public required Tournament Tournament { get; set; }
+        public required TournamentLink TournamentLink { get; set; }
 
         [JsonProperty("entrants")]
         public required EntrantList Entrants { get; set; }
@@ -39,7 +39,7 @@ namespace SengokuProvider.Library.Models.Players
 
     public class Standing : BaseStanding { }
 
-    public class Tournament : BaseTournament { }
+    public class TournamentLink : BaseTournament { }
 
     public class Player
     {
