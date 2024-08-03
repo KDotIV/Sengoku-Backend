@@ -7,6 +7,7 @@ namespace SengokuProvider.Library.Models.Players
         [JsonProperty("event")]
         public required Event Data { get; set; }
     }
+
     public class Event
     {
         [JsonProperty("id")]
@@ -15,14 +16,25 @@ namespace SengokuProvider.Library.Models.Players
         [JsonProperty("name")]
         public required string Name { get; set; }
 
+        [JsonProperty("numEntrants")]
+        public int NumEntrants { get; set; }
+
+        [JsonProperty("slug")]
+        public string? Slug { get; set; }
+
+        [JsonProperty("tournament")]
+        public required Tournament Tournament { get; set; }
+
         [JsonProperty("entrants")]
         public required EntrantList Entrants { get; set; }
     }
+
     public class EntrantList
     {
         [JsonProperty("nodes")]
         public required List<EntrantNode> Nodes { get; set; }
     }
+
     public class EntrantNode
     {
         [JsonProperty("id")]
@@ -38,12 +50,12 @@ namespace SengokuProvider.Library.Models.Players
     public class Participant
     {
         [JsonProperty("id")]
-        public required int Id { get; set; }
-        public required string GamerTag { get; set; }
+        public int Id { get; set; }
 
-        [JsonProperty("player")]
-        public required Player Player { get; set; }
+        [JsonProperty("gamerTag")]
+        public required string GamerTag { get; set; }
     }
+
     public class Standing
     {
         [JsonProperty("id")]
@@ -51,34 +63,10 @@ namespace SengokuProvider.Library.Models.Players
 
         [JsonProperty("placement")]
         public int Placement { get; set; }
+
         [JsonProperty("isFinal")]
         public bool IsActive { get; set; }
-
-        [JsonProperty("container")]
-        public Container? Container { get; set; }
     }
-
-    public class Container
-    {
-        [JsonProperty("__typename")]
-        public string? Typename { get; set; }
-
-        [JsonProperty("id")]
-        public int Id { get; set; }
-
-        [JsonProperty("name")]
-        public string? Name { get; set; }
-
-        [JsonProperty("startAt")]
-        public long StartAt { get; set; }
-
-        [JsonProperty("numEntrants")]
-        public int NumEntrants { get; set; }
-
-        [JsonProperty("tournament")]
-        public Tournament? Tournament { get; set; }
-    }
-
     public class Tournament
     {
         [JsonProperty("id")]
@@ -87,4 +75,20 @@ namespace SengokuProvider.Library.Models.Players
         [JsonProperty("name")]
         public string? Name { get; set; }
     }
+
+    public class Player
+    {
+        [JsonProperty("id")]
+        public int Id { get; set; }
+
+        [JsonProperty("gamerTag")]
+        public required string GamerTag { get; set; }
+    }
+
+    public class User
+    {
+        [JsonProperty("id")]
+        public int Id { get; set; }
+    }
+
 }

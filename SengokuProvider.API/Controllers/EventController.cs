@@ -78,8 +78,8 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
-        [HttpPost("IntakeEventsByTournamentId")]
-        public async Task<IActionResult> IntakeEventsByTournamentId([FromBody] IntakeEventsByTournamentIdCommand command)
+        [HttpPost("LinkTournamentByEventIdCommand")]
+        public async Task<IActionResult> LinkTournamentByEventIdCommand([FromBody] LinkTournamentByEventIdCommand command)
         {
             if (command == null)
             {
@@ -96,7 +96,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _eventIntakeService.SendTournamentIntakeEventMessage(command.TournamentId);
+                var result = await _eventIntakeService.SendTournamentLinkEventMessage(command.EventLinkId);
                 return new OkObjectResult($"Tournaments Inserted: {result}");
             }
             catch (Exception ex)

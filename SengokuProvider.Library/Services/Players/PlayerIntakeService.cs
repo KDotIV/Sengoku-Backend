@@ -39,14 +39,14 @@ namespace SengokuProvider.Library.Services.Players
             _playerRegistry = new ConcurrentDictionary<int, string>();
             _eventCache = new HashSet<int>();
         }
-        public async Task<bool> SendPlayerIntakeMessage(string eventSlug, int perPage = 50, int pageNum = 1)
+        public async Task<bool> SendPlayerIntakeMessage(int tournamentLink)
         {
             if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
             {
                 Console.WriteLine("Service Bus Settings Cannot be empty or null");
                 return false;
             }
-            if (string.IsNullOrEmpty(eventSlug))
+            if (tournamentLink == 0)
             {
                 Console.WriteLine("Event Url cannot be null or empty");
                 return false;
@@ -59,9 +59,7 @@ namespace SengokuProvider.Library.Services.Players
                     Command = new IntakePlayersByTournamentCommand
                     {
                         Topic = CommandRegistry.IntakePlayersByTournament,
-                        EventSlug = eventSlug,
-                        PerPage = perPage,
-                        PageNum = pageNum
+                        TournamentLink = tournamentLink,
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };
@@ -83,7 +81,7 @@ namespace SengokuProvider.Library.Services.Players
         {
             try
             {
-                PlayerGraphQLResult? newPlayerData = await _queryService.GetPlayerDataFromStartgg(command);
+                PlayerGraphQLResult? newPlayerData = await _queryService.QueryPlayerDataFromStartgg(command);
                 if (newPlayerData == null) { return 0; }
 
                 _eventCache.Add(newPlayerData.Data.Id);
@@ -93,7 +91,7 @@ namespace SengokuProvider.Library.Services.Players
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
 
                 Console.WriteLine("Starting Standings Processing");
-                var standingsSuccess = await ProcessNewPlayers();
+                var standingsSuccess = await ProcessNewPlayers(command.TournamentLink);
 
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
 
@@ -131,9 +129,9 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var node in eventData)
             {
                 Console.WriteLine("Querying Standings Data");
-                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = node.Id, GamerTag = command.GamerTag, PerPage = 200 });
+                PastEventPlayerData newStanding = await _queryService.QueryStartggPreviousEventData(new OnboardPlayerDataCommand { PlayerId = node.Id, GamerTag = command.GamerTag });
 
-                if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
+                if (newStanding?.PlayerQuery?.User?.PreviousEvents?.Nodes?.Count == 0) { continue; }
 
                 newStanding.TournamentLinks.PlayerId = command.PlayerId;
                 currentBatch.Add(newStanding);
@@ -159,32 +157,28 @@ namespace SengokuProvider.Library.Services.Players
             var results = await Task.WhenAll(batchTasks);
             return results.Sum();
         }
-
-        private async Task<int> ProcessNewPlayers(int volumeLimit = 100)
+        private async Task<int> ProcessNewPlayers(int tournamentLink, int volumeLimit = 100)
         {
             List<Task<int>> batchTasks = new List<Task<int>>();
             List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
 
             // Process each player in the registry
-            foreach (var newPlayer in _playerRegistry)
+            Console.WriteLine("Querying Standings Data");
+            List<PlayerStandingResult> newStanding = await _queryService.QueryStartggPlayerStandings(tournamentLink);
+            if (newStanding.Count == 0) { return 0; }
+
+            newStanding.TournamentLinks.PlayerId = newPlayer.Key;
+            currentBatch.Add(newStanding);
+            Console.WriteLine("Player Standing Data added");
+
+            // Check if the current batch has reached the batch size
+            if (currentBatch.Count >= volumeLimit)
             {
-                Console.WriteLine("Querying Standings Data");
-                PlayerStandingResult? newStanding = await _queryService.QueryStartggPlayerStandings(new GetPlayerStandingsCommand { EventId = _currentEventId, GamerTag = newPlayer.Value, PerPage = 200 });
-                if (newStanding == null || newStanding.Response.Contains("Failed")) { continue; }
-
-                newStanding.TournamentLinks.PlayerId = newPlayer.Key;
-                currentBatch.Add(newStanding);
-                Console.WriteLine("Player Standing Data added");
-
-                // Check if the current batch has reached the batch size
-                if (currentBatch.Count >= volumeLimit)
-                {
-                    Console.WriteLine("Intaking Standings Batch");
-                    // Process the current batch asynchronously
-                    batchTasks.Add(IntakePlayerStandingData(new List<PlayerStandingResult>(currentBatch)));
-                    currentBatch.Clear();
-                    Console.WriteLine($"Batch cleared: {currentBatch.Count}");
-                }
+                Console.WriteLine("Intaking Standings Batch");
+                // Process the current batch asynchronously
+                batchTasks.Add(IntakePlayerStandingData(new List<PlayerStandingResult>(currentBatch)));
+                currentBatch.Clear();
+                Console.WriteLine($"Batch cleared: {currentBatch.Count}");
             }
 
             // Process any remaining entries in the final batch
@@ -333,6 +327,7 @@ namespace SengokuProvider.Library.Services.Players
                 if (firstRecord == null) continue;
                 if (!_playersCache.TryGetValue(firstRecord.Player.Id, out int databaseId))
                 {
+                    if (firstRecord.User == null) continue;
                     databaseId = await CheckDuplicatePlayer(firstRecord);
                     if (databaseId == 0)
                     {
@@ -342,6 +337,7 @@ namespace SengokuProvider.Library.Services.Players
                             PlayerName = firstRecord.Player.GamerTag,
                             PlayerLinkID = firstRecord.Player.Id,
                             LastUpdate = DateTime.UtcNow,
+                            UserLink = firstRecord.User.Id
                         };
                         players.Add(newPlayerData);
                         databaseId = newPlayerData.Id;
@@ -364,8 +360,8 @@ namespace SengokuProvider.Library.Services.Players
                         foreach (var player in players)
                         {
                             var createInsertCommand = @"
-                            INSERT INTO players (id, player_name, startgg_link, last_updated)
-                            VALUES (@IdInput, @PlayerName, @PlayerLinkId, @LastUpdated)
+                            INSERT INTO players (id, player_name, startgg_link, last_updated, user_link)
+                            VALUES (@IdInput, @PlayerName, @PlayerLinkId, @LastUpdated, @UserLink)
                             ON CONFLICT (id) DO UPDATE SET
                                 player_name = EXCLUDED.player_name,
                                 startgg_link = EXCLUDED.startgg_link;";
@@ -376,7 +372,7 @@ namespace SengokuProvider.Library.Services.Players
                                 cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
                                 cmd.Parameters.AddWithValue("@PlayerLinkId", player.PlayerLinkID);
                                 cmd.Parameters.AddWithValue("@LastUpdated", player.LastUpdate);
-
+                                cmd.Parameters.AddWithValue("@UserLink", player.UserLink);
                                 int result = await cmd.ExecuteNonQueryAsync();
                                 if (result > 0) { Console.WriteLine("Player Inserted"); totalSuccess += result; }
                             }

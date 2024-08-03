@@ -17,10 +17,10 @@ namespace SengokuProvider.Library.Models.Players
         public string? GamerTag { get; set; }
 
         [JsonProperty("user")]
-        public User? User { get; set; }
+        public PastEventUser? User { get; set; }
     }
 
-    public class User
+    public class PastEventUser
     {
         [JsonProperty("id")]
         public int Id { get; set; }

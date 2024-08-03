@@ -54,14 +54,14 @@ namespace SengokuProvider.Library.Models.Events
             else return false;
         }
     }
-    public class IntakeEventsByTournamentIdCommand : ICommand
+    public class LinkTournamentByEventIdCommand : ICommand
     {
-        public required int TournamentId { get; set; }
+        public required int EventLinkId { get; set; }
         public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
         public bool Validate()
         {
-            if (TournamentId > 0) return true;
+            if (EventLinkId > 0) return true;
             else return false;
         }
     }

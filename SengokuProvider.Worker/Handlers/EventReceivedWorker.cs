@@ -64,28 +64,6 @@ namespace SengokuProvider.Worker.Handlers
             var linksToProcess = await _integrityHandler.BeginIntegrityTournamentLinks();
             if (linksToProcess.Count == 0) { Console.WriteLine("No Links to Process"); return; }
             Console.WriteLine($"Links to Process: {linksToProcess.Count}");
-            foreach (var link in linksToProcess)
-            {
-                try
-                {
-                    Console.WriteLine($"Attempting to Update Link {link}");
-
-                    var result = await _intakeHandler.SendTournamentIntakeEventMessage(link);
-                    if (result)
-                    {
-                        var verify = await _integrityHandler.VerifyTournamentLinkChange(link);
-
-                        if (verify)
-                        {
-                            Console.WriteLine($"Tournament_Link: {link} updated");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error while Processing TournamentLink {ex.Message} - {ex.StackTrace}");
-                }
-            }
         }
         private Task Errorhandler(ProcessErrorEventArgs args)
         {
@@ -110,7 +88,7 @@ namespace SengokuProvider.Worker.Handlers
                         List<int> locationResult = await IntakeLocationEvents(currentMessage);
                         Console.WriteLine($"Successfully Added: {locationResult.Count} Events");
                         break;
-                    case CommandRegistry.IntakeEventsByTournament:
+                    case CommandRegistry.LinkTournamentByEvent:
                         int tournamentResult = await IntakeEventByTournamentId(currentMessage);
                         if (tournamentResult == 0) { Console.WriteLine($"Failed to Intake Tournament"); }
                         Console.WriteLine($"Successfully Added Tournament Data");
@@ -129,7 +107,7 @@ namespace SengokuProvider.Worker.Handlers
         private async Task<int> IntakeEventByTournamentId(EventReceivedData currentMessage)
         {
             if (currentMessage == null) { return 0; }
-            if (currentMessage.Command is IntakeEventsByTournamentIdCommand intakeCommand)
+            if (currentMessage.Command is LinkTournamentByEventIdCommand intakeCommand)
             {
                 var currentIntakeHandler = _eventFactory.CreateIntakeHandler();
                 return await currentIntakeHandler.IntakeTournamentIdData(intakeCommand);

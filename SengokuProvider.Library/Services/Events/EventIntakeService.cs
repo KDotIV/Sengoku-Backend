@@ -69,12 +69,12 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<int> IntakeTournamentIdData(IntakeEventsByTournamentIdCommand command)
+        public async Task<int> IntakeTournamentIdData(LinkTournamentByEventIdCommand command)
         {
-            EventGraphQLResult? newEventData = await QueryStartggEventByTournamentId(command.TournamentId);
+            EventGraphQLResult? newEventData = await QueryStartggTournamentDataByEventLink(command.EventLinkId);
             if (newEventData == null) { return 0; }
 
-            var processedEvent = await ProcessEventData(newEventData);
+            _ = await ProcessEventData(newEventData);
             return await ProcessTournamentData(newEventData);
         }
         public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
@@ -91,7 +91,7 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<bool> SendTournamentIntakeEventMessage(int eventId)
+        public async Task<bool> SendTournamentLinkEventMessage(int eventLinkId)
         {
             if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null)
             {
@@ -102,10 +102,10 @@ namespace SengokuProvider.Library.Services.Events
             {
                 var newCommand = new EventReceivedData
                 {
-                    Command = new IntakeEventsByTournamentIdCommand
+                    Command = new LinkTournamentByEventIdCommand
                     {
-                        TournamentId = eventId,
-                        Topic = CommandRegistry.IntakeEventsByTournament,
+                        EventLinkId = eventLinkId,
+                        Topic = CommandRegistry.LinkTournamentByEvent,
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };
@@ -160,7 +160,7 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        private async Task<bool> SendPlayerOnboardMessage(string urlSlug, int perPage = 50, int pageNum = 5)
+        private async Task<bool> SendTournamentPlayerIntakeMessage(int tournamentLink)
         {
             if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
             {
@@ -174,9 +174,7 @@ namespace SengokuProvider.Library.Services.Events
                     Command = new IntakePlayersByTournamentCommand
                     {
                         Topic = CommandRegistry.IntakePlayersByTournament,
-                        EventSlug = urlSlug,
-                        PerPage = perPage,
-                        PageNum = pageNum
+                        TournamentLink = tournamentLink,
                     },
                     MessagePriority = MessagePriority.SystemIntake
                 };
@@ -200,7 +198,7 @@ namespace SengokuProvider.Library.Services.Events
             var totalSuccess = 0;
             try
             {
-                var currentBatch = await BuildTournamentData(newEventData);
+                var currentBatch = BuildTournamentData(newEventData);
                 if (currentBatch == null || currentBatch.Count == 0) { return 0; }
                 totalSuccess = await InsertNewTournamentData(totalSuccess, currentBatch);
 
@@ -246,7 +244,7 @@ namespace SengokuProvider.Library.Services.Events
                             if (result > 0)
                             {
                                 totalSuccess += result;
-                                if (await SendPlayerOnboardMessage(tournament.UrlSlug)) { Console.WriteLine("Player Onbaord Message Sent to ServiceBus"); }
+                                if (await SendTournamentPlayerIntakeMessage(tournament.Id)) { Console.WriteLine("Player Intake Message Sent to ServiceBus"); }
                             }
                         }
                     }
@@ -256,7 +254,7 @@ namespace SengokuProvider.Library.Services.Events
 
             return totalSuccess;
         }
-        private async Task<List<TournamentData>?> BuildTournamentData(EventGraphQLResult newEventData)
+        private List<TournamentData>? BuildTournamentData(EventGraphQLResult newEventData)
         {
             if (newEventData == null) { return null; }
             var tournamentBatch = new List<TournamentData>();
@@ -276,13 +274,6 @@ namespace SengokuProvider.Library.Services.Events
                         GameId = tournament.Videogame.Id,
                         LastUpdated = DateTime.UtcNow
                     };
-
-                    if (!await VerifyTournamentLink(currentEvent.Id))
-                    {
-                        await SendTournamentIntakeEventMessage(currentEvent.Id);
-                        Console.WriteLine(($"ID: {currentEvent.Id} does not exist in database. Attempting to Find Events/Tournaments"));
-                        continue;
-                    }
                     tournamentBatch.Add(newTournamentData);
                 }
             }
@@ -599,7 +590,7 @@ namespace SengokuProvider.Library.Services.Events
         #endregion
 
         #region Query Commands
-        private async Task<EventGraphQLResult?> QueryStartggEventByTournamentId(int tournamentId)
+        private async Task<EventGraphQLResult?> QueryStartggTournamentDataByEventLink(int eventLinkId)
         {
             var tempQuery = @"query TournamentQuery($tournamentId: ID) {
                       tournaments(query: {
@@ -617,7 +608,7 @@ namespace SengokuProvider.Library.Services.Events
                 Query = tempQuery,
                 Variables = new
                 {
-                    tournamentId = tournamentId
+                    eventLinkId
                 }
             };
 
@@ -734,8 +725,7 @@ namespace SengokuProvider.Library.Services.Events
             filter: {
                 addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                     }}) {
-                    nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt,
-                    events { id, slug, videogame { id }}}
+                    nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, events { id, slug, videogame { id }}}
                     pageInfo { total totalPages page perPage sortBy filter }}}";
 
             var allNodes = new List<EventNode>();
@@ -900,7 +890,7 @@ namespace SengokuProvider.Library.Services.Events
         {
             return await _queryService.QueryRegion(regionQuery);
         }
-        private async Task<bool> VerifyTournamentLink(int id)
+        private async Task<bool> VerifyTournamentLink(int tournamentLinkId)
         {
             try
             {
@@ -909,7 +899,7 @@ namespace SengokuProvider.Library.Services.Events
                     await conn.OpenAsync();
 
                     var newQuery = @"SELECT link_id FROM events WHERE link_id = @Input;";
-                    var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = id });
+                    var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = tournamentLinkId });
 
                     if (result <= 0) return false;
                 }

@@ -26,28 +26,28 @@ namespace SengokuProvider.Library.Services.Players
             _client.HttpClient.DefaultRequestHeaders.Clear();
             _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
-        public async Task<PlayerGraphQLResult?> GetPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
+        public async Task<PlayerGraphQLResult?> QueryPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
         {
             return await QueryStartggPlayerData(queryCommand);
         }
-        public async Task<PlayerStandingResult?> QueryStartggPlayerStandings(GetPlayerStandingsCommand command)
+        public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
         {
             try
             {
-                var data = await QueryStartggStandings(command);
+                var data = await QueryStartggEventStandings(tournamentLink);
 
-                var newStandingResult = MapStandingsData(data);
+                var newStandingResults = MapStandingsData(data);
 
-                if (newStandingResult == null) { Console.WriteLine("No Data found for this Player"); throw new ArgumentNullException("No Data found for this Player"); }
+                if (newStandingResults.Count == 0) { Console.WriteLine("No Data found for this Tournament"); }
 
-                return newStandingResult;
+                return newStandingResults;
             }
             catch (Exception ex)
             {
-                return new PlayerStandingResult { Response = $"Failed: {ex.Message} - {ex.StackTrace}", LastUpdated = DateTime.UtcNow };
+                throw new ArgumentNullException($"Error found while Querying for Player Standings data {ex.Message} - {ex.StackTrace}");
             }
         }
-        public async Task<List<PlayerStandingResult>> GetPlayerStandingResults(QueryPlayerStandingsCommand command)
+        public async Task<List<PlayerStandingResult>> GetPlayerStandingResults(GetPlayerStandingsCommand command)
         {
             List<PlayerStandingResult> playerStandingResults = new List<PlayerStandingResult>();
             try
@@ -117,48 +117,60 @@ namespace SengokuProvider.Library.Services.Players
             };
         }
 
-        private PlayerStandingResult? MapStandingsData(StandingGraphQLResult? data)
+        private List<PlayerStandingResult> MapStandingsData(StandingGraphQLResult? data)
         {
-            if (data == null) return null;
-            var tempNode = data.Data.Entrants.Nodes.FirstOrDefault();
-            if (tempNode == null || tempNode.Standing == null) return null;
-
-            var mappedResult = new PlayerStandingResult
+            List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
+            if (data == null) return mappedResult;
+            foreach (var tempNode in data.Data.Entrants.Nodes)
             {
-                Response = "Open",
-                EntrantsNum = tempNode.Standing.Container.NumEntrants,
-                LastUpdated = DateTime.UtcNow,
-                StandingDetails = new StandingDetails
-                {
-                    IsActive = tempNode.Standing.IsActive,
-                    Placement = tempNode.Standing.Placement,
-                    GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
-                    EventId = tempNode.Standing.Container.Tournament.Id,
-                    EventName = tempNode.Standing.Container.Tournament.Name,
-                    TournamentId = tempNode.Standing.Container.Tournament.Id,
-                    TournamentName = tempNode.Standing.Container.Name
-                },
-                TournamentLinks = new Links
-                {
-                    EntrantId = tempNode.Id,
-                    StandingId = tempNode.Standing.Id
-                }
-            };
+                if (tempNode.Standing == null) continue;
 
+                var newStandings = new PlayerStandingResult
+                {
+                    Response = "Open",
+                    EntrantsNum = data.Data.NumEntrants,
+                    LastUpdated = DateTime.UtcNow,
+                    UrlSlug = data.Data.Slug,
+                    StandingDetails = new StandingDetails
+                    {
+                        IsActive = tempNode.Standing.IsActive,
+                        Placement = tempNode.Standing.Placement,
+                        GamerTag = tempNode.Participants.FirstOrDefault().GamerTag,
+                        EventId = data.Data.Id,
+                        EventName = data.Data.Name,
+                        TournamentId = data.Data.Tournament.Id,
+                        TournamentName = data.Data.Name
+                    },
+                    TournamentLinks = new Links
+                    {
+                        EntrantId = tempNode.Id,
+                        StandingId = tempNode.Standing.Id
+                    }
+                };
+                mappedResult.Add(newStandings);
+            }
             return mappedResult;
         }
-        private async Task<PlayerGraphQLResult?> QueryStartggPlayerData(IntakePlayersByTournamentCommand command)
+        private async Task<PlayerGraphQLResult?> QueryStartggPlayerData(IntakePlayersByTournamentCommand command, int perPage = 40)
         {
-            var tempQuery = @"query EventEntrants($perPage: Int!, $eventSlug: String!, $pageNum: Int) {
-                    event(slug: $eventSlug) {
+            //TODO: REMAP THIS QUERY TO THE COMMONPLAYERSCHEMA MODEL
+            var tempQuery = @"query EventEntrants($perPage: Int!, $eventId: ID!) {
+                    event(id: $eventId) {
                         id
                         name
-                        entrants(query: {perPage: $perPage, page: $pageNum, filter: {}}) {
-                            nodes { id participants { id player { id gamerTag}}
-                                standing { id placement }}
+                        tournament { id, name }
+                        entrants(query: {perPage: $perPage, filter: {}}) {
+                            nodes { id, participants { 
+                                            id, player { 
+                                                id, gamerTag },
+                                                user {
+                                                   id }} 
+                                        standing { id, placement }}
                             pageInfo { total totalPages page perPage sortBy filter}}}}";
 
             var allNodes = new List<EntrantNode>();
+            int currentTournamentId = 0;
+            string currentTournamentName = "";
             int currentPage = 1;
             bool hasNextPage = true;
             string currentEventName = "";
@@ -171,8 +183,8 @@ namespace SengokuProvider.Library.Services.Players
                     Query = tempQuery,
                     Variables = new
                     {
-                        perPage = command.PerPage,
-                        eventSlug = command.EventSlug,
+                        perPage,
+                        eventId = command.TournamentLink,
                         pageNum = currentPage
                     }
                 };
@@ -248,35 +260,33 @@ namespace SengokuProvider.Library.Services.Players
                     Entrants = new EntrantList
                     {
                         Nodes = allNodes
-                    }
+                    },
+                    Tournament = new Tournament
+                    {
+                        Id = currentTournamentId,
+                        Name = currentTournamentName
+                    },
+
                 }
             };
 
             return result;
         }
-        private async Task<StandingGraphQLResult?> QueryStartggStandings(GetPlayerStandingsCommand queryCommand)
+        private async Task<StandingGraphQLResult?> QueryStartggEventStandings(int tournamentLink)
         {
-            var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!, $gamerTag: String!) {
-                      event(id: $eventId) {
-                        id
-                        name
-                        entrants(query: {
-                          perPage: $perPage
-                          filter: { name: $gamerTag }}) {
-                          nodes {id participants { id gamerTag } standing { id placement container {
-                                __typename
-                                ... on Tournament { id name countryCode startAt endAt events { id name }}
-                                ... on Event { id name startAt numEntrants tournament { id name }}
-                                ... on Set { id event { id name } startAt completedAt games { id }}
-                              }}}}}}";
+            var tempQuery = @"query EventEntrants($eventId: ID!) {
+                                event(id: $eventId) { id name numEntrants slug tournament {
+                                  id name } entrants(query: {}) {
+                                      nodes { id participants {
+                                          id player { id gamerTag }} standing { id placement isFinal }}
+                                    pageInfo { total totalPages page perPage sortBy filter }}}}";
+
             var request = new GraphQLHttpRequest
             {
                 Query = tempQuery,
                 Variables = new
                 {
-                    queryCommand.PerPage,
-                    queryCommand.EventId,
-                    queryCommand.GamerTag
+                    tournamentLink
                 }
             };
 

@@ -4,7 +4,7 @@
     {
         //Event Commands
         UpdateEvent = 101,
-        IntakeEventsByTournament = 102,
+        LinkTournamentByEvent = 102,
         IntakeEventsByLocation = 103,
         IntakeEventsByGames = 104,
         GetTournamentByLocation = 105,
