@@ -216,6 +216,7 @@ namespace SengokuProvider.Library.Services.Events
         }
         private async Task<int> InsertNewTournamentData(int totalSuccess, List<TournamentData> currentBatch)
         {
+            Console.WriteLine($"Current Tournament Intake Batch:{currentBatch.Count}");
             using (var conn = new NpgsqlConnection(_connectionString))
             {
                 await conn.OpenAsync();
@@ -244,7 +245,8 @@ namespace SengokuProvider.Library.Services.Events
                             if (result > 0)
                             {
                                 totalSuccess += result;
-                                if (await SendTournamentPlayerIntakeMessage(tournament.Id)) { Console.WriteLine("Player Intake Message Sent to ServiceBus"); }
+                                Console.WriteLine($"Current Success: {totalSuccess}");
+                                if (await SendTournamentPlayerIntakeMessage(tournament.Id)) { Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Player Intake Message Sent to ServiceBus"); }
                             }
                         }
                     }
@@ -769,10 +771,10 @@ namespace SengokuProvider.Library.Services.Events
                             allNodes.AddRange(eventData.Events.Nodes);
                         }
 
-                        var pageInfo = response.Data["tournaments"]["pageInfo"];
-                        int totalPages = pageInfo["totalPages"].ToObject<int>();
-                        currentPage = pageInfo["page"].ToObject<int>() + 1;
-
+                        var pageInfo = eventData.Events.PageInfo;
+                        int totalPages = pageInfo.TotalPages;
+                        currentPage = pageInfo.Page + 1;
+                        Console.WriteLine($"On Location Events Page: {currentPage}");
                         hasNextPage = currentPage < totalPages;
                         success = true;
                     }

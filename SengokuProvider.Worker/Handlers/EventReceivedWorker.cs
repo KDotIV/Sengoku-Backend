@@ -70,12 +70,35 @@ namespace SengokuProvider.Worker.Handlers
             _log.LogError($"Error Processing Message: {args.ErrorSource}: {args.FullyQualifiedNamespace} {args.EntityPath} {args.Exception}");
             return Task.CompletedTask;
         }
+        private async Task RenewMessageLockUntilComplete(ProcessMessageEventArgs args, CancellationToken cancellationToken)
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken); // Renew lock every 30 seconds
+                    await args.RenewMessageLockAsync(args.Message, cancellationToken);
+                    Console.WriteLine("Message Lock was renewed");
+                }
+                catch (TaskCanceledException)
+                {
+                    // Task was cancelled, no action needed
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError($"Error renewing message lock: {ex.Message}", ex);
+                }
+            }
+        }
         private async Task MessageHandler(ProcessMessageEventArgs args)
         {
             _log.LogWarning("Received Message...");
 
             var currentMessage = await ParseMessage(args.Message);
             if (currentMessage == null) { return; }
+
+            CancellationTokenSource cts = new CancellationTokenSource();
+            var lockRenewalTask = RenewMessageLockUntilComplete(args, cts.Token);
 
             try
             {
@@ -95,11 +118,13 @@ namespace SengokuProvider.Worker.Handlers
                         break;
                 }
                 await args.CompleteMessageAsync(args.Message);
+                cts.Cancel();
             }
             catch (Exception ex)
             {
                 _log.LogError(ex.Message, ex);
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace.ToString());
+                cts.Cancel();
                 throw;
             }
         }

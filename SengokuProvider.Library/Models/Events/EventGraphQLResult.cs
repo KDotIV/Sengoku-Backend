@@ -12,6 +12,8 @@ namespace SengokuProvider.Library.Models.Events
     {
         [JsonProperty("nodes")]
         public required List<EventNode> Nodes { get; set; }
+        [JsonProperty("pageInfo")]
+        public PageInfo? PageInfo { get; set; }
     }
 
     public class EventNode
@@ -66,5 +68,25 @@ namespace SengokuProvider.Library.Models.Events
     {
         [JsonProperty("id")]
         public int Id { get; set; }
+    }
+    public class PageInfo
+    {
+        [JsonProperty("total")]
+        public int Total { get; set; }
+
+        [JsonProperty("totalPages")]
+        public int TotalPages { get; set; }
+
+        [JsonProperty("page")]
+        public int Page { get; set; }
+
+        [JsonProperty("perPage")]
+        public int PerPage { get; set; }
+
+        [JsonProperty("sortBy")]
+        public string? SortBy { get; set; }
+
+        [JsonProperty("filter")]
+        public string? Filter { get; set; }
     }
 }

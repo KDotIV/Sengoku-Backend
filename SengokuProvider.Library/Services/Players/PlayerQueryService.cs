@@ -159,6 +159,7 @@ namespace SengokuProvider.Library.Services.Players
                         id
                         name
                         tournament { id, name }
+                        slug
                         entrants(query: {perPage: $perPage, filter: {}}) {
                             nodes { id, participants { 
                                             id, player { 
@@ -229,11 +230,12 @@ namespace SengokuProvider.Library.Services.Players
                         currentEntrantsNum = playerData.Data.NumEntrants;
                         currentTournamentLinkSlug = playerData.Data.Slug;
 
-                        var pageInfo = response.Data["event"]["entrants"]["pageInfo"];
-                        int totalPages = pageInfo["totalPages"].ToObject<int>();
-                        currentPage = pageInfo["page"].ToObject<int>() + 1;
+                        var pageInfo = playerData.Data.Entrants.PageInfo;
+                        int totalPages = pageInfo.TotalPages;
+                        currentPage = pageInfo.Page + 1;
+                        Console.WriteLine($"On Player Standings Page: {currentPage}");
 
-                        hasNextPage = currentPage <= totalPages;
+                        hasNextPage = currentPage < totalPages;
                         success = true;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
@@ -415,7 +417,7 @@ namespace SengokuProvider.Library.Services.Players
                         int totalPages = pageInfo["totalPages"].ToObject<int>();
                         currentPage = pageInfo["page"].ToObject<int>() + 1;
 
-                        hasNextPage = currentPage <= totalPages;
+                        hasNextPage = currentPage < totalPages;
                         success = true;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
