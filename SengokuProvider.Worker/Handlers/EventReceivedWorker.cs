@@ -116,6 +116,8 @@ namespace SengokuProvider.Worker.Handlers
                         if (tournamentResult == 0) { Console.WriteLine($"Failed to Intake Tournament"); }
                         Console.WriteLine($"Successfully Added Tournament Data");
                         break;
+                        //case CommandRegistry.ExportTournamentLocationResults:
+
                 }
                 await args.CompleteMessageAsync(args.Message);
                 cts.Cancel();
@@ -139,7 +141,6 @@ namespace SengokuProvider.Worker.Handlers
             }
             return 0;
         }
-
         private async Task<List<int>> IntakeLocationEvents(EventReceivedData? currentMessage)
         {
             List<int> successList = new List<int>();

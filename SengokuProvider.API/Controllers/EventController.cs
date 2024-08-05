@@ -124,7 +124,7 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _eventQueryService.QueryEventsByLocation(parsedRequest);
-                if(result.Count == 0) { return new OkObjectResult($"There are no tournaments under that region id"); }
+                if (result.Count == 0) { return new OkObjectResult($"There are no tournaments under that region id"); }
                 var resultJson = JsonConvert.SerializeObject(result);
                 return new OkObjectResult($"{resultJson}");
             }
@@ -132,6 +132,34 @@ namespace SengokuProvider.API.Controllers
             {
                 _log.LogError(ex, "Error Querying Tournament Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("QueryRelatedRegionsById")]
+        public async Task<IActionResult> QueryRelatedRegionsById([FromBody] GetRelatedRegionsCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                var result = await _eventQueryService.QueryRelatedRegionsById(command.RegionId);
+                if (result.Count == 0) { return new OkObjectResult($"There are no related regions under that region id"); }
+                var resultJson = JsonConvert.SerializeObject(result);
+                return new OkObjectResult($"( Related Regions: {result.Count}) {resultJson}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Regional Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+
             }
         }
     }

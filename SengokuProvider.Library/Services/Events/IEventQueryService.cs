@@ -10,5 +10,6 @@ namespace SengokuProvider.Library.Services.Events
         public Task<EventGraphQLResult?> QueryStartggEventByEventId(int eventId);
         public Task<AddressData> GetAddressById(int addressId);
         public Task<RegionData?> QueryRegion(GetRegionCommand command);
+        public Task<List<int>> QueryRelatedRegionsById(int regionId);
     }
 }
