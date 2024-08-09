@@ -31,7 +31,7 @@ namespace SengokuProvider.Worker.Handlers
 
             await _processor.StartProcessingAsync();
 
-            //await GroomEventData();
+            await GroomEventData();
             return;
         }
 

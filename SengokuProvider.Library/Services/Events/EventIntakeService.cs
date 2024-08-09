@@ -275,7 +275,7 @@ namespace SengokuProvider.Library.Services.Events
                         UrlSlug = tournament.UrlSlug,
                         EventId = currentEvent.Id,
                         GameId = tournament.Videogame.Id,
-                        EntrantsNum = tournament.NumEntrants,
+                        EntrantsNum = tournament.NumEntrants ?? 0,
                         LastUpdated = DateTime.UtcNow
                     };
                     tournamentBatch.Add(newTournamentData);

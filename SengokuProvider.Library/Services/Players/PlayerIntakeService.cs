@@ -137,7 +137,7 @@ namespace SengokuProvider.Library.Services.Players
                 var newStanding = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = tempNode.NumEntrants,
+                    EntrantsNum = tempNode.NumEntrants ?? 0,
                     UrlSlug = tempNode.Slug,
                     LastUpdated = DateTime.UtcNow,
                     StandingDetails = new StandingDetails
@@ -182,7 +182,7 @@ namespace SengokuProvider.Library.Services.Players
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.EventLink.NumEntrants,
+                    EntrantsNum = data.EventLink.NumEntrants ?? 0,
                     LastUpdated = DateTime.UtcNow,
                     UrlSlug = data.EventLink.Slug,
                     StandingDetails = new StandingDetails

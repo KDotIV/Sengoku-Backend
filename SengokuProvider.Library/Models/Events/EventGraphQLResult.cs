@@ -63,7 +63,7 @@ namespace SengokuProvider.Library.Models.Events
         [JsonProperty("slug")]
         public string? UrlSlug { get; set; }
         [JsonProperty("numEntrants")]
-        public int NumEntrants { get; set; }
+        public int? NumEntrants { get; set; }
     }
 
     public class Videogame

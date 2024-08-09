@@ -128,7 +128,7 @@ namespace SengokuProvider.Library.Services.Players
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.EventLink.NumEntrants,
+                    EntrantsNum = data.EventLink.NumEntrants ?? 0,
                     LastUpdated = DateTime.UtcNow,
                     UrlSlug = data.EventLink.Slug,
                     StandingDetails = new StandingDetails
@@ -237,7 +237,7 @@ namespace SengokuProvider.Library.Services.Players
                         currentEventLinkId = playerData.EventLink.Id;
                         currentTournamentLinkName = playerData.EventLink.TournamentLink.Name;
                         currentTournamentLinkId = playerData.EventLink.TournamentLink.Id;
-                        currentEntrantsNum = playerData.EventLink.NumEntrants;
+                        currentEntrantsNum = playerData.EventLink.NumEntrants ?? 0;
                         currentTournamentLinkSlug = playerData.EventLink.Slug;
 
                         var pageInfo = playerData.EventLink.Entrants.PageInfo;

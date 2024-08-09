@@ -9,7 +9,7 @@ namespace SengokuProvider.Library.Models.Players
         [JsonProperty("name")]
         public string? Name { get; set; }
         [JsonProperty("numEntrants")]
-        public int NumEntrants { get; set; }
+        public int? NumEntrants { get; set; }
         [JsonProperty("slug")]
         public required string Slug { get; set; }
     }
