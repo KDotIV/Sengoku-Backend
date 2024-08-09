@@ -162,7 +162,9 @@ namespace SengokuProvider.Library.Services.Players
                         slug
                         numEntrants
                         entrants(query: {perPage: $perPage, filter: {}}) {
-                            nodes { id, participants { 
+                            nodes { id, paginatedSets(sortType: ROUND) {
+                                            nodes { round, displayScore, winnerId }},
+                                        participants { 
                                             id, player { 
                                                 id, gamerTag },
                                                 user {

@@ -171,9 +171,13 @@ namespace SengokuProvider.Library.Services.Players
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
+            const int participationPoints = 5;
+            const int winnerBonus = 50;
+
             foreach (var tempNode in data.Data.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
+                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode);
 
                 var newStandings = new PlayerStandingResult
                 {
@@ -189,7 +193,8 @@ namespace SengokuProvider.Library.Services.Players
                         EventId = data.Data.TournamentLink.Id,
                         EventName = data.Data.TournamentLink.Name,
                         TournamentId = data.Data.Id,
-                        TournamentName = data.Data.Name
+                        TournamentName = data.Data.Name,
+                        LeaguePoints = totalPoints
                     },
                     TournamentLinks = new Links
                     {
@@ -202,6 +207,52 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
+
+        private static int CalculateLeaguePoints(int participationPoints, int winnerBonus, EntrantNode tempNode)
+        {
+            int totalPoints = participationPoints;
+
+            foreach (var set in tempNode.SetList.Nodes)
+            {
+                if (set.WinnerEntrantId != tempNode.Id) continue;
+
+                if (set.Round > 0)
+                {
+                    // Winners' bracket points
+                    totalPoints += set.Round switch
+                    {
+                        1 => 5,
+                        2 => 10,
+                        3 => 15,
+                        4 => 20,
+                        5 => 30,
+                        _ => 0
+                    };
+                }
+                else
+                {
+                    // Losers' bracket points
+                    totalPoints += Math.Abs(set.Round) switch
+                    {
+                        -1 => 3,
+                        -2 => 5,
+                        -3 => 8,
+                        -4 => 10,
+                        -5 => 15,
+                        -6 => 10, // Assuming Round -6 is Losers' Finals
+                        _ => 0
+                    };
+                }
+            }
+
+            if (tempNode.Standing.Placement == 1)
+            {
+                totalPoints += winnerBonus;
+            }
+
+            return totalPoints;
+        }
+
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;
@@ -224,14 +275,15 @@ namespace SengokuProvider.Library.Services.Players
                             if (exists == 0) { Console.WriteLine("Player does not exist. Sending request to intake player"); continue; }
 
                             var createInsertCommand = @"
-                            INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active, last_updated)
-                            VALUES (@EntrantInput, @PlayerId, @TournamentLink, @PlacementInput, @NumEntrants, @IsActive, @LastUpdated)
+                            INSERT INTO standings (entrant_id, player_id, tournament_link, placement, entrants_num, active, gained_points, last_updated)
+                            VALUES (@EntrantInput, @PlayerId, @TournamentLink, @PlacementInput, @NumEntrants, @IsActive, @NewPoints, @LastUpdated)
                             ON CONFLICT (entrant_id) DO UPDATE SET
                                 player_id = EXCLUDED.player_id,
                                 tournament_link = EXCLUDED.tournament_link,
                                 placement = EXCLUDED.placement,
                                 entrants_num = EXCLUDED.entrants_num,
-                                active = EXCLUDED.active;";
+                                active = EXCLUDED.active,
+                                gained_points = EXCLUDED.gained_points;";
 
                             using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
                             {
@@ -242,6 +294,7 @@ namespace SengokuProvider.Library.Services.Players
                                 cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
                                 cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
                                 cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
+                                cmd.Parameters.AddWithValue("@NewPoints", data.StandingDetails.LeaguePoints);
                                 cmd.Parameters.AddWithValue("@LastUpdated", data.LastUpdated);
 
                                 int result = await cmd.ExecuteNonQueryAsync();

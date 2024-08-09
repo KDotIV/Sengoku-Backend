@@ -33,14 +33,26 @@ namespace SengokuProvider.Library.Models.Players
 
         [JsonProperty("standing")]
         public required Standing Standing { get; set; }
+        [JsonProperty("paginatedSets")]
+        public required SetList SetList { get; set; }
     }
-
     public class Participant : BaseParticipant { }
 
     public class Standing : BaseStanding { }
 
     public class TournamentLink : BaseTournament { }
-
+    public class SetList
+    {
+        [JsonProperty("nodes")]
+        public required List<Set> Nodes { get; set; }
+    }
+    public class Set
+    {
+        [JsonProperty("round")]
+        public int Round { get; set; }
+        [JsonProperty("winnerId")]
+        public int WinnerEntrantId { get; set; }
+    }
     public class Player
     {
         [JsonProperty("id")]

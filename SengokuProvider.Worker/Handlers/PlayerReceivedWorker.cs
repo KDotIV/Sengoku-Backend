@@ -39,7 +39,6 @@ namespace SengokuProvider.Worker.Handlers
             //await GroomLegendData();
             return;
         }
-
         private async Task GroomLegendData()
         {
             Console.WriteLine("Player Grooming Started...");
