@@ -30,7 +30,7 @@ namespace SengokuProvider.Worker.Handlers
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += Errorhandler;
 
-            await _processor.StartProcessingAsync(stoppingToken);
+            //await _processor.StartProcessingAsync(stoppingToken);
 
             if (_log.IsEnabled(LogLevel.Information))
             {

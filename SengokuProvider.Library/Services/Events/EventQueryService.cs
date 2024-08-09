@@ -72,7 +72,8 @@ namespace SengokuProvider.Library.Services.Events
             {
                 if (!command.Validate())
                 {
-                    throw new ArgumentException($"Invalid command parameters for Parameter: {command.QueryParameter.Item1} - Value: {command.QueryParameter.Item2}");
+                    Console.WriteLine($"Parameters cannot be null: {command.QueryParameter.Item1} - Value: {command.QueryParameter.Item2}");
+                    return new RegionData() { Name = "", Latitude = 0.0, Longitude = 0.0, Province = "" };
                 }
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {

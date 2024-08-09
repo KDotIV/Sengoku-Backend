@@ -202,6 +202,11 @@ namespace SengokuProvider.Library.Services.Events
                 if (currentBatch == null || currentBatch.Count == 0) { return 0; }
                 totalSuccess = await InsertNewTournamentData(totalSuccess, currentBatch);
 
+                Console.WriteLine($"Sending Tournament Links for Player Intake");
+                foreach (var tournamentLink in currentBatch)
+                {
+                    await SendTournamentPlayerIntakeMessage(tournamentLink.Id);
+                }
                 return totalSuccess;
             }
             catch (NpgsqlException ex)
@@ -217,14 +222,16 @@ namespace SengokuProvider.Library.Services.Events
         private async Task<int> InsertNewTournamentData(int totalSuccess, List<TournamentData> currentBatch)
         {
             Console.WriteLine($"Current Tournament Intake Batch:{currentBatch.Count}");
-            using (var conn = new NpgsqlConnection(_connectionString))
+            try
             {
-                await conn.OpenAsync();
-                using (var transaction = await conn.BeginTransactionAsync())
+                using (var conn = new NpgsqlConnection(_connectionString))
                 {
-                    foreach (var tournament in currentBatch)
+                    await conn.OpenAsync();
+                    using (var transaction = await conn.BeginTransactionAsync())
                     {
-                        var createInsertCommand = @"
+                        foreach (var tournament in currentBatch)
+                        {
+                            var createInsertCommand = @"
                             INSERT INTO tournament_links (id, url_slug, game_id, event_id, entrants_num, last_updated)
                             VALUES (@Input, @UrlSlug, @Game, @EventId, @EntrantsNum, @LastUpdated)
                             ON CONFLICT (id) DO UPDATE SET
@@ -232,29 +239,37 @@ namespace SengokuProvider.Library.Services.Events
                                 game_id = EXCLUDED.game_id,
                                 event_id = EXCLUDED.event_id,
                                 last_updated = EXCLUDED.last_updated;";
-                        using (var command = new NpgsqlCommand(createInsertCommand, conn))
-                        {
-                            command.Transaction = transaction;
-                            command.Parameters.AddWithValue(@"Input", tournament.Id);
-                            command.Parameters.AddWithValue(@"UrlSlug", tournament.UrlSlug);
-                            command.Parameters.AddWithValue(@"Game", tournament.GameId);
-                            command.Parameters.AddWithValue(@"EventId", tournament.EventId);
-                            command.Parameters.AddWithValue(@"EntrantsNum", tournament.EntrantsNum);
-                            command.Parameters.AddWithValue(@"LastUpdated", tournament.LastUpdated);
-
-                            var result = await command.ExecuteNonQueryAsync();
-                            if (result > 0)
+                            using (var command = new NpgsqlCommand(createInsertCommand, conn))
                             {
-                                totalSuccess += result;
-                                Console.WriteLine($"Current Success: {totalSuccess}");
-                                if (await SendTournamentPlayerIntakeMessage(tournament.Id)) { Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Player Intake Message Sent"); }
+                                command.Transaction = transaction;
+                                command.Parameters.AddWithValue(@"Input", tournament.Id);
+                                command.Parameters.AddWithValue(@"UrlSlug", tournament.UrlSlug);
+                                command.Parameters.AddWithValue(@"Game", tournament.GameId);
+                                command.Parameters.AddWithValue(@"EventId", tournament.EventId);
+                                command.Parameters.AddWithValue(@"EntrantsNum", tournament.EntrantsNum);
+                                command.Parameters.AddWithValue(@"LastUpdated", tournament.LastUpdated);
+
+                                var result = await command.ExecuteNonQueryAsync();
+                                if (result > 0)
+                                {
+                                    totalSuccess += result;
+                                    Console.WriteLine($"Current Success: {totalSuccess}");
+                                    Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Added");
+                                }
                             }
                         }
+                        await transaction.CommitAsync();
                     }
-                    await transaction.CommitAsync();
                 }
             }
-
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
             return totalSuccess;
         }
         private List<TournamentData>? BuildTournamentData(EventGraphQLResult newEventData)
