@@ -225,8 +225,8 @@ namespace SengokuProvider.Library.Services.Events
                     foreach (var tournament in currentBatch)
                     {
                         var createInsertCommand = @"
-                            INSERT INTO tournament_links (id, url_slug, game_id, event_id, last_updated)
-                            VALUES (@Input, @UrlSlug, @Game, @EventId, @LastUpdated)
+                            INSERT INTO tournament_links (id, url_slug, game_id, event_id, entrants_num, last_updated)
+                            VALUES (@Input, @UrlSlug, @Game, @EventId, @EntrantsNum, @LastUpdated)
                             ON CONFLICT (id) DO UPDATE SET
                                 url_slug = EXCLUDED.url_slug,
                                 game_id = EXCLUDED.game_id,
@@ -239,6 +239,7 @@ namespace SengokuProvider.Library.Services.Events
                             command.Parameters.AddWithValue(@"UrlSlug", tournament.UrlSlug);
                             command.Parameters.AddWithValue(@"Game", tournament.GameId);
                             command.Parameters.AddWithValue(@"EventId", tournament.EventId);
+                            command.Parameters.AddWithValue(@"EntrantsNum", tournament.EntrantsNum);
                             command.Parameters.AddWithValue(@"LastUpdated", tournament.LastUpdated);
 
                             var result = await command.ExecuteNonQueryAsync();
@@ -274,6 +275,7 @@ namespace SengokuProvider.Library.Services.Events
                         UrlSlug = tournament.UrlSlug,
                         EventId = currentEvent.Id,
                         GameId = tournament.Videogame.Id,
+                        EntrantsNum = tournament.NumEntrants,
                         LastUpdated = DateTime.UtcNow
                     };
                     tournamentBatch.Add(newTournamentData);
@@ -727,7 +729,7 @@ namespace SengokuProvider.Library.Services.Events
             filter: {
                 addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                     }}) {
-                    nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, events { id, slug, videogame { id }}}
+                    nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
                     pageInfo { total totalPages page perPage sortBy filter }}}";
 
             var allNodes = new List<EventNode>();

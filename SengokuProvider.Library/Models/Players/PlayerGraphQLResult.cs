@@ -5,7 +5,7 @@ namespace SengokuProvider.Library.Models.Players
     public class PlayerGraphQLResult
     {
         [JsonProperty("event")]
-        public required EventLink Data { get; set; }
+        public required EventLink EventLink { get; set; }
     }
 
     public class EventLink : BaseNode

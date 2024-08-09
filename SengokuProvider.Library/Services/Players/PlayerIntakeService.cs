@@ -84,8 +84,8 @@ namespace SengokuProvider.Library.Services.Players
                 PlayerGraphQLResult? newPlayerData = await _queryService.QueryPlayerDataFromStartgg(command);
                 if (newPlayerData == null) { return 0; }
 
-                _eventCache.Add(newPlayerData.Data.Id);
-                _currentEventId = newPlayerData.Data.Id;
+                _eventCache.Add(newPlayerData.EventLink.Id);
+                _currentEventId = newPlayerData.EventLink.Id;
                 int playerSuccess = await ProcessPlayerData(newPlayerData);
 
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
@@ -174,7 +174,7 @@ namespace SengokuProvider.Library.Services.Players
             const int participationPoints = 5;
             const int winnerBonus = 50;
 
-            foreach (var tempNode in data.Data.Entrants.Nodes)
+            foreach (var tempNode in data.EventLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
                 int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode);
@@ -182,18 +182,18 @@ namespace SengokuProvider.Library.Services.Players
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.Data.NumEntrants,
+                    EntrantsNum = data.EventLink.NumEntrants,
                     LastUpdated = DateTime.UtcNow,
-                    UrlSlug = data.Data.Slug,
+                    UrlSlug = data.EventLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
                         Placement = tempNode.Standing.Placement,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
-                        EventId = data.Data.TournamentLink.Id,
-                        EventName = data.Data.TournamentLink.Name,
-                        TournamentId = data.Data.Id,
-                        TournamentName = data.Data.Name,
+                        EventId = data.EventLink.Id,
+                        EventName = data.EventLink.Name,
+                        TournamentId = data.EventLink.TournamentLink.Id,
+                        TournamentName = data.EventLink.TournamentLink.Name,
                         LeaguePoints = totalPoints
                     },
                     TournamentLinks = new Links
@@ -390,8 +390,8 @@ namespace SengokuProvider.Library.Services.Players
         private async Task<int> ProcessPlayerData(PlayerGraphQLResult queryData)
         {
             var players = new List<PlayerData>();
-            if (queryData.Data == null) throw new ApplicationException("Player Query Data was null from Start.gg");
-            foreach (var node in queryData.Data.Entrants.Nodes)
+            if (queryData.EventLink == null) throw new ApplicationException("Player Query Data was null from Start.gg");
+            foreach (var node in queryData.EventLink.Entrants.Nodes)
             {
                 var firstRecord = node.Participants.FirstOrDefault();
                 if (firstRecord == null) continue;

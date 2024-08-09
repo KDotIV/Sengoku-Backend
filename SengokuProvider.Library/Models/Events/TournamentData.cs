@@ -10,6 +10,7 @@
         public string[]? ViewershipUrls { get; set; }
         public int[]? PlayerIDs { get; set; }
         public required int EventId { get; set; }
+        public int EntrantsNum { get; set; }
         public required DateTime LastUpdated { get; set; }
     }
 }

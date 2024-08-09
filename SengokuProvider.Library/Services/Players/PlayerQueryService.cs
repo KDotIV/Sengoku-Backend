@@ -121,25 +121,25 @@ namespace SengokuProvider.Library.Services.Players
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
-            foreach (var tempNode in data.Data.Entrants.Nodes)
+            foreach (var tempNode in data.EventLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.Data.NumEntrants,
+                    EntrantsNum = data.EventLink.NumEntrants,
                     LastUpdated = DateTime.UtcNow,
-                    UrlSlug = data.Data.Slug,
+                    UrlSlug = data.EventLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
                         Placement = tempNode.Standing.Placement,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
-                        EventId = data.Data.TournamentLink.Id,
-                        EventName = data.Data.TournamentLink.Name,
-                        TournamentId = data.Data.Id,
-                        TournamentName = data.Data.Name
+                        EventId = data.EventLink.TournamentLink.Id,
+                        EventName = data.EventLink.TournamentLink.Name,
+                        TournamentId = data.EventLink.Id,
+                        TournamentName = data.EventLink.Name
                     },
                     TournamentLinks = new Links
                     {
@@ -228,19 +228,19 @@ namespace SengokuProvider.Library.Services.Players
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
 
-                        if (playerData?.Data?.Entrants?.Nodes != null)
+                        if (playerData?.EventLink?.Entrants?.Nodes != null)
                         {
-                            allNodes.AddRange(playerData.Data.Entrants.Nodes);
+                            allNodes.AddRange(playerData.EventLink.Entrants.Nodes);
                         }
 
-                        currentEventLinkName = playerData.Data.Name;
-                        currentEventLinkId = playerData.Data.Id;
-                        currentTournamentLinkName = playerData.Data.TournamentLink.Name;
-                        currentTournamentLinkId = playerData.Data.TournamentLink.Id;
-                        currentEntrantsNum = playerData.Data.NumEntrants;
-                        currentTournamentLinkSlug = playerData.Data.Slug;
+                        currentEventLinkName = playerData.EventLink.Name;
+                        currentEventLinkId = playerData.EventLink.Id;
+                        currentTournamentLinkName = playerData.EventLink.TournamentLink.Name;
+                        currentTournamentLinkId = playerData.EventLink.TournamentLink.Id;
+                        currentEntrantsNum = playerData.EventLink.NumEntrants;
+                        currentTournamentLinkSlug = playerData.EventLink.Slug;
 
-                        var pageInfo = playerData.Data.Entrants.PageInfo;
+                        var pageInfo = playerData.EventLink.Entrants.PageInfo;
                         totalPages = pageInfo.TotalPages;
                         Console.WriteLine($"On Player Standings Page: {pageInfo.Page}/{totalPages}");
 
@@ -276,7 +276,7 @@ namespace SengokuProvider.Library.Services.Players
             // Return the aggregated result
             var result = new PlayerGraphQLResult
             {
-                Data = new EventLink
+                EventLink = new EventLink
                 {
                     Id = currentTournamentLinkId,
                     Name = currentTournamentLinkName,
