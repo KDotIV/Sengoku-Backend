@@ -172,6 +172,13 @@ namespace SengokuProvider.Library.Services.Players
                                         standing { id, placement }}
                             pageInfo { total totalPages page perPage sortBy filter}}}}";
 
+            var jsonSerializerSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Include,
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
+            };
+
             var allNodes = new List<EntrantNode>();
             int currentEventLinkId = 0;
             string currentEventLinkName = "";
@@ -219,7 +226,7 @@ namespace SengokuProvider.Library.Services.Players
                         }
 
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                        var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson);
+                        var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
 
                         if (playerData?.Data?.Entrants?.Nodes != null)
                         {
