@@ -432,9 +432,11 @@ namespace SengokuProvider.Library.Services.Players
                             var createInsertCommand = @"
                             INSERT INTO players (id, player_name, startgg_link, last_updated, user_link)
                             VALUES (@IdInput, @PlayerName, @PlayerLinkId, @LastUpdated, @UserLink)
-                            ON CONFLICT (id) DO UPDATE SET
+                            ON CONFLICT (startgg_link) DO UPDATE SET
                                 player_name = EXCLUDED.player_name,
-                                startgg_link = EXCLUDED.startgg_link;";
+                                startgg_link = EXCLUDED.startgg_link,
+                                last_updated = EXCLUDED.last_updated,
+                                user_link = EXCLUDED.user_link;";
                             using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
                             {
                                 cmd.Transaction = transaction;

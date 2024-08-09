@@ -315,6 +315,12 @@ namespace SengokuProvider.Library.Services.Players
                 }
             };
 
+            var jsonSerializerSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Include,
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
+            };
             bool success = false;
             int retryCount = 0;
             const int maxRetries = 3;
@@ -339,7 +345,7 @@ namespace SengokuProvider.Library.Services.Players
                     }
 
                     var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var standingsData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson);
+                    var standingsData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
                     success = true;
                     return standingsData;
                 }
