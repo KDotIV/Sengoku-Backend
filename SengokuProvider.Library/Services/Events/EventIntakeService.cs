@@ -365,8 +365,8 @@ namespace SengokuProvider.Library.Services.Events
                             if (newEvent == null) continue;
                             await EnsureLinkIdExists(newEvent.LinkID, conn);
 
-                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open,online_tournament,last_updated) 
-                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen, @IsOnline, @Updated)
+                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open,online_tournament, url_slug, last_updated) 
+                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen, @IsOnline, @Slug, @Updated)
                             ON CONFLICT (link_id) DO UPDATE SET
                                 event_name = EXCLUDED.event_name,
                                 event_description = EXCLUDED.event_description,
@@ -376,7 +376,8 @@ namespace SengokuProvider.Library.Services.Events
                                 end_time = EXCLUDED.end_time,
                                 closing_registration_date = EXCLUDED.closing_registration_date,
                                 registration_open = EXCLUDED.registration_open,
-                                online_tournament = EXCLUDED.online_tournament;";
+                                online_tournament = EXCLUDED.online_tournament,
+                                url_slug = EXCLUDED.url_slug;";
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
                             {
                                 command.Parameters.AddWithValue("@Event_Name", newEvent.EventName ?? string.Empty);
@@ -389,6 +390,7 @@ namespace SengokuProvider.Library.Services.Events
                                 command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration);
                                 command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen);
                                 command.Parameters.AddWithValue(@"IsOnline", newEvent.IsOnline);
+                                command.Parameters.AddWithValue(@"Slug", newEvent.UrlSlug ?? string.Empty);
                                 command.Parameters.AddWithValue(@"Updated", newEvent.LastUpdate);
                                 var result = await command.ExecuteNonQueryAsync();
                                 if (result > 0) totalSuccess++;
@@ -468,7 +470,8 @@ namespace SengokuProvider.Library.Services.Events
                         ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
                         IsRegistrationOpen = node.IsRegistrationOpen,
                         IsOnline = node.IsOnline,
-                        LastUpdate = DateTime.UtcNow
+                        LastUpdate = DateTime.UtcNow,
+                        UrlSlug = node.Slug
                     };
                     events.Add(eventData);
                 }
