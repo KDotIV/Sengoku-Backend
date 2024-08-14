@@ -2,6 +2,13 @@
 
 namespace SengokuProvider.Library.Models.Common
 {
+    public struct DiscordWebhookConfig
+    {
+        public static readonly string BaseWebhookUrl = $"https://discord.com/api/webhooks/1271932550666780856/6oqeVHjc0G9NMBNI3z3yjPQ2-F9PechD2Bdm5OqpHs0HyOx_6BxowYaTkPgJk_3uIgI5";
+        public static readonly long Tekken8ThreadId = 1273004220831891517;
+        public static readonly long StreetFighter6ThreadId = 1273004373890568314;
+        public static readonly long GuiltyGearStriveThreadId = 1273004304764108810;
+    }
     public struct BearerConstants
     {
         public static readonly string[] BearerArray = ["2a7b93add38208847a394e01bd3e4575", "2b0160ef106be1c250e4db077b743429", "10cf2895837a1e6e9ea826fd997180e0",

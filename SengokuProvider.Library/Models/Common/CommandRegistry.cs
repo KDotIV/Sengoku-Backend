@@ -17,5 +17,6 @@
         UpdateLegend = 301,
         OnboardLegendsByPlayerData = 302,
         IntakeLegendsByTournament = 303,
+        OnboardTournamentToLeague = 304,
     }
 }

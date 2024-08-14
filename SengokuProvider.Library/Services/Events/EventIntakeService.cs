@@ -287,10 +287,10 @@ namespace SengokuProvider.Library.Services.Events
                     TournamentData newTournamentData = new TournamentData
                     {
                         Id = tournament.Id,
-                        UrlSlug = tournament.UrlSlug,
+                        UrlSlug = tournament.UrlSlug ?? "",
                         EventId = currentEvent.Id,
-                        GameId = tournament.Videogame.Id,
-                        EntrantsNum = tournament.NumEntrants ?? 0,
+                        GameId = tournament?.Videogame?.Id ?? 0,
+                        EntrantsNum = tournament?.NumEntrants ?? 0,
                         LastUpdated = DateTime.UtcNow
                     };
                     tournamentBatch.Add(newTournamentData);

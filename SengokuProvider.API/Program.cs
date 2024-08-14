@@ -3,6 +3,7 @@ using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Library.Services.Comms;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Players;
@@ -43,6 +44,7 @@ builder.Services.AddScoped<IUserService, UserService>(provider =>
     var intakeValidator = provider.GetRequiredService<IntakeValidator>();
     return new UserService(connectionString, intakeValidator);
 });
+builder.Services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>();
 builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 {
     var configuration = provider.GetService<IConfiguration>();
@@ -79,6 +81,13 @@ builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var throttler = provider.GetService<RequestThrottler>();
     return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler);
+});
+builder.Services.AddScoped<ILegendIntakeService, LegendIntakeService>(provider =>
+{
+    var queryService = provider.GetService<ILegendQueryService>();
+    var config = provider.GetService<IConfiguration>();
+    var serviceBus = provider.GetService<IAzureBusApiService>();
+    return new LegendIntakeService(connectionString, config, queryService, serviceBus);
 });
 
 builder.Services.AddControllers();

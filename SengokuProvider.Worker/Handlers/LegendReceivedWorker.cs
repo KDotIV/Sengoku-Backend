@@ -2,6 +2,7 @@
 using Azure.Messaging.ServiceBus;
 using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
@@ -78,7 +79,13 @@ namespace SengokuProvider.Worker.Handlers
                         int result = await OnboardNewPlayer(currentMessage);
                         if (result == 0) { Console.WriteLine($"Failed to Onboard"); }
                         else { Console.WriteLine($"Successfully Added: Legend ID: {result}"); }
-
+                        break;
+                    case CommandRegistry.OnboardTournamentToLeague:
+                        TournamentOnboardResult response = await OnboardTournamentToLeague(currentMessage);
+                        if (response.Success)
+                        {
+                            Console.WriteLine($"Successfully Added Tournament to League: {response.Response}");
+                        }
                         break;
                 }
                 await args.CompleteMessageAsync(args.Message);
@@ -89,6 +96,20 @@ namespace SengokuProvider.Worker.Handlers
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace.ToString());
                 throw;
             }
+        }
+
+        private async Task<TournamentOnboardResult> OnboardTournamentToLeague(OnboardReceivedData currentMessage)
+        {
+            if (currentMessage == null) { return new TournamentOnboardResult { Success = false, Response = "Onboard ServiceBus Message cannot be null" }; }
+
+            var currentIntake = _legendFactory.CreateIntakeHandler();
+            if (currentMessage.Command is OnboardTournamentToLeagueCommand onboardCommand)
+            {
+                TournamentOnboardResult result = await currentIntake.AddTournamentToLeague(onboardCommand.TournamentId, onboardCommand.LeagueId);
+
+                return result;
+            }
+            return new TournamentOnboardResult { Success = false, Response = "Unexpected Error Occured" };
         }
 
         private async Task<int> OnboardNewPlayer(OnboardReceivedData currentMessage)
