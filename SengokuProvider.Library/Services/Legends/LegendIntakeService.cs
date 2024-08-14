@@ -87,6 +87,45 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return newOnboardResult;
         }
+        public async Task<PlayerOnboardResult> AddPlayerToLeague(int playerId, int leagueId)
+        {
+            var newOnboardResult = new PlayerOnboardResult { Success = false, Response = "Open" };
+
+            if (playerId < 0 || leagueId < 0) { newOnboardResult.Response = "PlayerId or LeagueId cannot be invalid ids"; }
+
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO player_leagues (player_id, league_id, last_updated) VALUES (@PlayerInput, @LeagueInput, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@PlayerInput", playerId);
+                        cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
+                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                        var result = await cmd.ExecuteNonQueryAsync();
+                        if (result > 0)
+                        {
+                            newOnboardResult.Response = "Successfully Inserted Tournament to League";
+                            newOnboardResult.Success = true;
+                            return newOnboardResult;
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                newOnboardResult.Response = ex.Message;
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                newOnboardResult.Response = ex.Message;
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+            return newOnboardResult;
+        }
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {
             if (newLegend == null) { throw new ArgumentNullException(nameof(newLegend)); }

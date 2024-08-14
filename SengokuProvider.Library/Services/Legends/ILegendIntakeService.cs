@@ -5,6 +5,7 @@ namespace SengokuProvider.Library.Services.Legends
 {
     public interface ILegendIntakeService
     {
+        public Task<PlayerOnboardResult> AddPlayerToLeague(int playerId, int leagueId);
         public Task<TournamentOnboardResult> AddTournamentToLeague(int tournamentId, int leagueId);
         public Task<LegendData?> GenerateNewLegends(int playerId, string playerName);
         public Task<int> InsertNewLegendData(LegendData newLegend);

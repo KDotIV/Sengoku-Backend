@@ -137,7 +137,7 @@ namespace SengokuProvider.Library.Services.Players
                 var newStanding = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = tempNode.NumEntrants ?? 0,
+                    EntrantsNum = tempNode.NumEntrants,
                     UrlSlug = tempNode.Slug,
                     LastUpdated = DateTime.UtcNow,
                     StandingDetails = new StandingDetails
@@ -177,12 +177,12 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.EventLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode);
+                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode, data.EventLink.NumEntrants);
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.EventLink.NumEntrants ?? 0,
+                    EntrantsNum = data.EventLink.NumEntrants,
                     LastUpdated = DateTime.UtcNow,
                     UrlSlug = data.EventLink.Slug,
                     StandingDetails = new StandingDetails
@@ -208,9 +208,11 @@ namespace SengokuProvider.Library.Services.Players
             return mappedResult;
         }
 
-        private static int CalculateLeaguePoints(int participationPoints, int winnerBonus, EntrantNode tempNode)
+        private static int CalculateLeaguePoints(int participationPoints, int winnerBonus, EntrantNode tempNode, int totalEntrants)
         {
             int totalPoints = participationPoints;
+            int maxWinnersRounds = (int)Math.Ceiling(Math.Log2(totalEntrants));
+            int maxLosersRounds = maxWinnersRounds - 1;
 
             foreach (var set in tempNode.SetList.Nodes)
             {
@@ -218,30 +220,17 @@ namespace SengokuProvider.Library.Services.Players
 
                 if (set.Round > 0)
                 {
-                    // Winners' bracket points
-                    totalPoints += set.Round switch
-                    {
-                        1 => 5,
-                        2 => 10,
-                        3 => 15,
-                        4 => 20,
-                        5 => 30,
-                        _ => 0
-                    };
+                    // Winners' bracket points, dynamically calculated based on round
+                    double roundFactor = (double)set.Round / maxWinnersRounds;
+                    int roundPoints = (int)(roundFactor * 100);
+                    totalPoints += roundPoints;
                 }
                 else
                 {
-                    // Losers' bracket points
-                    totalPoints += Math.Abs(set.Round) switch
-                    {
-                        -1 => 3,
-                        -2 => 5,
-                        -3 => 8,
-                        -4 => 10,
-                        -5 => 15,
-                        -6 => 10, // Assuming Round -6 is Losers' Finals
-                        _ => 0
-                    };
+                    // Losers' bracket points, dynamically calculated based on round
+                    double roundFactor = (double)Math.Abs(set.Round) / maxLosersRounds;
+                    int roundPoints = (int)(roundFactor * 50);
+                    totalPoints += roundPoints;
                 }
             }
 
@@ -252,7 +241,6 @@ namespace SengokuProvider.Library.Services.Players
 
             return totalPoints;
         }
-
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;

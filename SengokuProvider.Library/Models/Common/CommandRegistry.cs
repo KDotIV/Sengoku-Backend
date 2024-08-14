@@ -18,5 +18,6 @@
         OnboardLegendsByPlayerData = 302,
         IntakeLegendsByTournament = 303,
         OnboardTournamentToLeague = 304,
+        OnboardPlayerToLeague = 305,
     }
 }
