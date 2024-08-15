@@ -208,7 +208,7 @@ namespace SengokuProvider.Library.Services.Players
             return mappedResult;
         }
 
-        private static int CalculateLeaguePoints(int participationPoints, int winnerBonus, EntrantNode tempNode, int totalEntrants)
+        private int CalculateLeaguePoints(int participationPoints, int winnerBonus, EntrantNode tempNode, int totalEntrants)
         {
             int totalPoints = participationPoints;
             int maxWinnersRounds = (int)Math.Ceiling(Math.Log2(totalEntrants));
