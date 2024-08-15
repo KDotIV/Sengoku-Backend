@@ -97,7 +97,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _legendIntakeService.AddPlayerToLeague(command.PlayerId, command.LeagueId);
+                var result = await _legendIntakeService.AddPlayerToLeague(command.PlayerIds, command.LeagueId);
                 return new OkObjectResult(result);
             }
             catch (Exception ex)
