@@ -82,7 +82,7 @@ namespace SengokuProvider.Worker.Handlers
                         break;
                     case CommandRegistry.OnboardTournamentToLeague:
                         TournamentOnboardResult response = await OnboardTournamentToLeague(currentMessage);
-                        if (response.Success)
+                        if (response.Successful.Count > 0)
                         {
                             Console.WriteLine($"Successfully Added Tournament to League: {response.Response}");
                         }
@@ -100,16 +100,16 @@ namespace SengokuProvider.Worker.Handlers
 
         private async Task<TournamentOnboardResult> OnboardTournamentToLeague(OnboardReceivedData currentMessage)
         {
-            if (currentMessage == null) { return new TournamentOnboardResult { Success = false, Response = "Onboard ServiceBus Message cannot be null" }; }
+            if (currentMessage == null) { return new TournamentOnboardResult { Response = "Onboard ServiceBus Message cannot be null" }; }
 
             var currentIntake = _legendFactory.CreateIntakeHandler();
             if (currentMessage.Command is OnboardTournamentToLeagueCommand onboardCommand)
             {
-                TournamentOnboardResult result = await currentIntake.AddTournamentToLeague(onboardCommand.TournamentId, onboardCommand.LeagueId);
+                TournamentOnboardResult result = await currentIntake.AddTournamentToLeague(onboardCommand.TournamentIds, onboardCommand.LeagueId);
 
                 return result;
             }
-            return new TournamentOnboardResult { Success = false, Response = "Unexpected Error Occured" };
+            return new TournamentOnboardResult { Response = "Unexpected Error Occured" };
         }
 
         private async Task<int> OnboardNewPlayer(OnboardReceivedData currentMessage)

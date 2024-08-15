@@ -48,32 +48,40 @@ namespace SengokuProvider.Library.Services.Legends
 
             return null;
         }
-        public async Task<TournamentOnboardResult> AddTournamentToLeague(int tournamentId, int leagueId)
+        public async Task<TournamentOnboardResult> AddTournamentToLeague(int[] tournamentIds, int leagueId)
         {
-            var newOnboardResult = new TournamentOnboardResult { Success = false, Response = "Open" };
+            var newOnboardResult = new TournamentOnboardResult { Response = "Open" };
 
-            if (tournamentId < 0 || leagueId < 0) { newOnboardResult.Response = "TournamentId or LeagueId cannot be invalid ids"; }
+            if (leagueId < 0) { newOnboardResult.Response = "LeagueId cannot be invalid ids"; }
 
             try
             {
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"INSERT INTO tournament_leagues (tournament_id, league_id, last_updated) VALUES (@TournamentInput, @LeagueInput, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                    using (var transaction = await conn.BeginTransactionAsync())
                     {
-                        cmd.Parameters.AddWithValue("@TournamentInput", tournamentId);
-                        cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
-                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-
-                        var result = await cmd.ExecuteNonQueryAsync();
-                        if (result > 0)
+                        foreach (var tournamentId in tournamentIds)
                         {
-                            newOnboardResult.Response = "Successfully Inserted Tournament to League";
-                            newOnboardResult.Success = true;
-                            return newOnboardResult;
+                            using (var cmd = new NpgsqlCommand(@"INSERT INTO tournament_leagues (tournament_id, league_id, last_updated) VALUES (@TournamentInput, @LeagueInput, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                            {
+                                cmd.Parameters.AddWithValue("@TournamentInput", tournamentId);
+                                cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
+                                cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                                var result = await cmd.ExecuteNonQueryAsync();
+                                if (result > 0)
+                                {
+                                    newOnboardResult.Response = "Successfully Inserted Tournament to League";
+                                    newOnboardResult.Successful.Add(tournamentId);
+                                }
+                                else { newOnboardResult.Failures.Add(tournamentId); }
+                            }
                         }
+                        await transaction.CommitAsync();
                     }
                 }
+                return newOnboardResult;
             }
             catch (NpgsqlException ex)
             {
@@ -85,7 +93,6 @@ namespace SengokuProvider.Library.Services.Legends
                 newOnboardResult.Response = ex.Message;
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
-            return newOnboardResult;
         }
         public async Task<PlayerOnboardResult> AddPlayerToLeague(int playerId, int leagueId)
         {

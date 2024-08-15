@@ -70,7 +70,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _legendIntakeService.AddTournamentToLeague(command.TournamentId, command.LeagueId);
+                var result = await _legendIntakeService.AddTournamentToLeague(command.TournamentIds, command.LeagueId);
                 return new OkObjectResult(result);
             }
             catch (Exception ex)
