@@ -229,7 +229,7 @@ namespace SengokuProvider.Library.Services.Players
                 {
                     // Losers' bracket points, dynamically calculated based on round
                     double roundFactor = (double)Math.Abs(set.Round) / maxLosersRounds;
-                    int roundPoints = (int)(roundFactor * 50);
+                    int roundPoints = (int)(roundFactor * 25);
                     totalPoints += roundPoints;
                 }
             }

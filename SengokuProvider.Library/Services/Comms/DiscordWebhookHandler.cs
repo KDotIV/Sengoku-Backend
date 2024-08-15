@@ -22,16 +22,39 @@ namespace SengokuProvider.Library.Services.Comms
                 // Add JSON payload to the form
                 form.Add(new StringContent(JsonConvert.SerializeObject(payload)), "payload_json");
 
-                // Add the CSV file to the form
-                /*var fileStream = new FileStream("", FileMode.Open, FileAccess.Read);
-                var fileContent = new StreamContent(fileStream);
-                fileContent.Headers.ContentType = MediaTypeHeaderValue.Parse("text/csv");
-                form.Add(fileContent, "file", "events.csv");*/
-
                 // Send the request
                 var response = await _httpClient.PostAsync($"{DiscordWebhookConfig.BaseWebhookUrl}?thread_id={threadId}", form);
                 response.EnsureSuccessStatusCode();
             }
+        }
+        public async Task<bool> SendLeaderboardUpdateMessage(string messageContent, string[] roleIds, object? attachments = default)
+        {
+            try
+            {
+                using (var form = new MultipartFormDataContent())
+                {
+                    var payload = new
+                    {
+                        content = $"{messageContent}",
+                        allowed_mentions = new
+                        {
+                            parse = new[] { "roles" },
+                        }
+                    };
+                    // Add JSON payload to the form
+                    form.Add(new StringContent(JsonConvert.SerializeObject(payload)), "payload_json");
+
+                    // Send the request
+                    var response = await _httpClient.PostAsync($"{DiscordWebhookConfig.BaseWebhookUrl}", form);
+                    response.EnsureSuccessStatusCode();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"{ex.Message.ToString()} - {ex.StackTrace}");
+            }
+            return false;
         }
     }
 }
