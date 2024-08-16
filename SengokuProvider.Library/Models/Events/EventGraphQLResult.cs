@@ -25,16 +25,16 @@ namespace SengokuProvider.Library.Models.Events
         public required string Name { get; set; }
 
         [JsonProperty("addrState")]
-        public required string AddrState { get; set; }
+        public string AddrState { get; set; } = string.Empty;
 
         [JsonProperty("lat")]
-        public double Lat { get; set; } = double.MinValue;
+        public double? Lat { get; set; } = null;
 
         [JsonProperty("lng")]
-        public double Lng { get; set; } = double.MinValue;
+        public double? Lng { get; set; } = null;
 
         [JsonProperty("venueAddress")]
-        public string VenueAddress { get; set; } = string.Empty;
+        public string? VenueAddress { get; set; } = string.Empty;
 
         [JsonProperty("startAt")]
         public long StartAt { get; set; }

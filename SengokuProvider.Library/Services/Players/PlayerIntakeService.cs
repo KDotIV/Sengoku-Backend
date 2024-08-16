@@ -155,8 +155,8 @@ namespace SengokuProvider.Library.Services.Players
                         IsActive = firstRecord.Standing.IsActive,
                         Placement = firstRecord.Standing.Placement,
                         GamerTag = playerData.PlayerQuery.GamerTag,
-                        EventId = tempNode.Id,
-                        EventName = tempNode.Name,
+                        EventId = tempNode.EventLink.Id,
+                        EventName = tempNode.EventLink.Name,
                         TournamentId = tempNode.Id,
                         TournamentName = tempNode.Name
                     },

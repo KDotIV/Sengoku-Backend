@@ -626,7 +626,7 @@ namespace SengokuProvider.Library.Services.Events
                 Query = tempQuery,
                 Variables = new
                 {
-                    eventLinkId
+                    tournamentId = eventLinkId
                 }
             };
 

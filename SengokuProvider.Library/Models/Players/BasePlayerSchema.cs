@@ -122,8 +122,6 @@ namespace SengokuProvider.Library.Models.Players
         [JsonProperty("slug")]
         public string Slug { get; set; } = string.Empty;
 
-        [JsonProperty("numEntrants")]
-        public int NumEntrants { get; set; } = new int();
     }
 
     public class BaseParticipant
