@@ -142,6 +142,8 @@ namespace SengokuProvider.Library.Services.Players
                 if (tempNode == null || tempNode.Entrants.Nodes.Count == 0 || tempNode.NumEntrants == 0) continue;
 
                 var firstRecord = tempNode.Entrants.Nodes.First();
+                if (firstRecord.Standing == null) continue;
+
                 int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, firstRecord, tempNode.NumEntrants);
 
                 var newStanding = new PlayerStandingResult
@@ -242,7 +244,6 @@ namespace SengokuProvider.Library.Services.Players
                     totalPoints += roundPoints;
                 }
             }
-
             if (tempNode.Standing.Placement == 1)
             {
                 totalPoints += winnerBonus;
