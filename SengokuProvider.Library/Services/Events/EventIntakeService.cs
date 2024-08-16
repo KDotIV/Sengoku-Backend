@@ -418,30 +418,11 @@ namespace SengokuProvider.Library.Services.Events
             var addresses = new List<AddressData>();
             var events = new List<EventData>();
 
-            foreach (var node in queryData.Events.Nodes)
+            for (int i = 0; i < queryData.Events.Nodes.Count; i++)
             {
-                if (!_addressCache.TryGetValue(node.VenueAddress, out int addressId))
-                {
-                    if (!addressMap.ContainsKey(node.VenueAddress))
-                    {
-                        addressId = await CheckDuplicateAddress(node.VenueAddress);
-                        if (addressId == 0)
-                        {
-                            var addressData = new AddressData
-                            {
-                                Address = node.VenueAddress,
-                                Latitude = node.Lat,
-                                Longitude = node.Lng
-                            };
-                            addresses.Add(addressData);
-                        }
-                        addressMap[node.VenueAddress] = addressId; // Cache or re-cache the id
-                    }
-                }
-                else
-                {
-                    addressMap[node.VenueAddress] = addressId;
-                }
+                var newAddress = await HandleNewAddress(addressMap, queryData.Events.Nodes[i]);
+                addresses.Add(newAddress);
+                queryData.Events.Nodes[i].VenueAddress = newAddress.Address;
             }
 
             // Insert all new addresses and cache the generated IDs
@@ -466,7 +447,7 @@ namespace SengokuProvider.Library.Services.Events
                         EventName = node.Name,
                         EventDescription = "Sample description",
                         Region = regionId,
-                        AddressID = addressMap[node.VenueAddress],  // Use the confirmed address ID from the map
+                        AddressID = addressMap[node.VenueAddress], // Use the confirmed address ID from the map
                         StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
                         EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
                         ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
@@ -483,6 +464,39 @@ namespace SengokuProvider.Library.Services.Events
             int eventSuccesses = await InsertNewEventsData(events);
 
             return Tuple.Create(addressSuccesses, eventSuccesses);
+        }
+
+        private async Task<AddressData> HandleNewAddress(Dictionary<string, int> addressMap, EventNode node)
+        {
+            var addressData = new AddressData();
+            if (string.IsNullOrEmpty(node.VenueAddress))
+            {
+                addressData.Address = "online";
+                addressData.Latitude = 0.0;
+                addressData.Longitude = 0.0;
+
+                addressMap["online"] = 0;
+                return addressData;
+            }
+            if (!_addressCache.TryGetValue(node.VenueAddress, out int addressId))
+            {
+                if (!addressMap.ContainsKey(node.VenueAddress))
+                {
+                    addressId = await CheckDuplicateAddress(node.VenueAddress);
+                    if (addressId == 0)
+                    {
+                        addressData.Address = node.VenueAddress;
+                        addressData.Latitude = node.Lat;
+                        addressData.Longitude = node.Lng;
+                    }
+                    addressMap[node.VenueAddress] = addressId; // Cache or re-cache the id
+                }
+            }
+            else
+            {
+                addressMap[node.VenueAddress] = addressId;
+            }
+            return addressData;
         }
         private async Task<int> GetRegionId(string? city)
         {

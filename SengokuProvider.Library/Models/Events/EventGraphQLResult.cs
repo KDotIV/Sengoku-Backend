@@ -34,7 +34,7 @@ namespace SengokuProvider.Library.Models.Events
         public double? Lng { get; set; } = null;
 
         [JsonProperty("venueAddress")]
-        public string? VenueAddress { get; set; } = string.Empty;
+        public string? VenueAddress { get; set; } = "default";
 
         [JsonProperty("startAt")]
         public long StartAt { get; set; }
