@@ -218,7 +218,43 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        public async Task<List<AddressEventResult>> QueryEventsByLocation(GetTournamentsByLocationCommand command, int pageNumber)
+        public async Task<TournamentData> GetTournamentLinkById(int tournamentLinkId)
+        {
+            try
+            {
+                var tournamentResult = new TournamentData { Id = 0, UrlSlug = string.Empty, EventId = 0, LastUpdated = DateTime.MinValue };
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"Select * From tournament_links WHERE id = @Input", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", tournamentLinkId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                tournamentResult.Id = reader.GetInt32(reader.GetOrdinal("id"));
+                                tournamentResult.UrlSlug = reader.GetString(reader.GetOrdinal("url_slug"));
+                                tournamentResult.GameId = reader.GetInt32(reader.GetOrdinal("game_id"));
+                                tournamentResult.EventId = reader.GetInt32(reader.GetOrdinal("event_id"));
+                                tournamentResult.EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num"));
+                                tournamentResult.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
+                            }
+                        }
+                    }
+                }
+                return tournamentResult;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        public async Task<List<AddressEventResult>> GetEventsByLocation(GetTournamentsByLocationCommand command, int pageNumber)
         {
             if (command == null || command.RegionId == 0) throw new ArgumentNullException(nameof(command));
             try

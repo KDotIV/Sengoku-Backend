@@ -117,7 +117,6 @@ namespace SengokuProvider.Worker.Handlers
                         Console.WriteLine($"Successfully Added Tournament Data");
                         break;
                         //case CommandRegistry.ExportTournamentLocationResults:
-
                 }
                 await args.CompleteMessageAsync(args.Message);
                 cts.Cancel();

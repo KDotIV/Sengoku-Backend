@@ -116,30 +116,29 @@ namespace SengokuProvider.Library.Services.Players
                 LastUpdated = reader.IsDBNull(reader.GetOrdinal("last_updated")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("last_updated")),
             };
         }
-
         private List<PlayerStandingResult> MapStandingsData(PlayerGraphQLResult? data)
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
-            foreach (var tempNode in data.EventLink.Entrants.Nodes)
+            foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.EventLink.NumEntrants,
+                    EntrantsNum = data.TournamentLink.NumEntrants,
                     LastUpdated = DateTime.UtcNow,
-                    UrlSlug = data.EventLink.Slug,
+                    UrlSlug = data.TournamentLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
                         Placement = tempNode.Standing.Placement,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
-                        EventId = data.EventLink.TournamentLink.Id,
-                        EventName = data.EventLink.TournamentLink.Name,
-                        TournamentId = data.EventLink.Id,
-                        TournamentName = data.EventLink.Name
+                        EventId = data.TournamentLink.EventLink.Id,
+                        EventName = data.TournamentLink.EventLink.Name,
+                        TournamentId = data.TournamentLink.Id,
+                        TournamentName = data.TournamentLink.Name
                     },
                     TournamentLinks = new Links
                     {
@@ -152,7 +151,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-        private async Task<PlayerGraphQLResult?> QueryStartggPlayerData(IntakePlayersByTournamentCommand command, int perPage = 40)
+        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(IntakePlayersByTournamentCommand command, int perPage = 40)
         {
             var tempQuery = @"query EventEntrants($perPage: Int!, $eventId: ID!) {
                     event(id: $eventId) {
@@ -169,7 +168,7 @@ namespace SengokuProvider.Library.Services.Players
                                                 id, gamerTag },
                                                 user {
                                                    id }} 
-                                        standing { id, placement }}
+                                        standing { id, placement, isFinal }}
                             pageInfo { total totalPages page perPage sortBy filter}}}}";
 
             var jsonSerializerSettings = new JsonSerializerSettings
@@ -179,18 +178,18 @@ namespace SengokuProvider.Library.Services.Players
                 DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
             };
 
-            var allNodes = new List<EntrantNode>();
-            int currentEventLinkId = 0;
-            string currentEventLinkName = "";
+            var allNodes = new List<CommonEntrantNode>();
+            string currentEventLinkName = string.Empty;
             int currentPage = 1;
-            int totalPages = int.MaxValue; // Initialize to a large number
-            string currentTournamentLinkName = "";
+            int totalPages = int.MaxValue;
+            string currentTournamentLinkName = string.Empty;
             int currentTournamentLinkId = 0;
             int currentEntrantsNum = 0;
-            string currentTournamentLinkSlug = "";
+            string currentTournamentLinkSlug = string.Empty;
 
             for (; currentPage <= totalPages; currentPage++)
             {
+                Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                 var request = new GraphQLHttpRequest
                 {
                     Query = tempQuery,
@@ -228,22 +227,24 @@ namespace SengokuProvider.Library.Services.Players
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
 
-                        if (playerData?.EventLink?.Entrants?.Nodes != null)
+                        if (playerData?.TournamentLink?.Entrants?.Nodes != null)
                         {
-                            allNodes.AddRange(playerData.EventLink.Entrants.Nodes);
+                            allNodes.AddRange(playerData.TournamentLink.Entrants.Nodes);
+                            Console.WriteLine("Tournament Node Added");
                         }
 
-                        currentEventLinkName = playerData.EventLink.Name;
-                        currentEventLinkId = playerData.EventLink.Id;
-                        currentTournamentLinkName = playerData.EventLink.TournamentLink.Name;
-                        currentTournamentLinkId = playerData.EventLink.TournamentLink.Id;
-                        currentEntrantsNum = playerData.EventLink.NumEntrants;
-                        currentTournamentLinkSlug = playerData.EventLink.Slug;
+                        currentEventLinkName = playerData.TournamentLink.EventLink.Name;
+                        currentTournamentLinkName = playerData.TournamentLink?.Name ?? string.Empty;
+                        currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
+                        currentEntrantsNum = playerData.TournamentLink.NumEntrants;
+                        currentTournamentLinkSlug = playerData.TournamentLink.Slug;
 
-                        var pageInfo = playerData.EventLink.Entrants.PageInfo;
-                        totalPages = pageInfo.TotalPages;
-                        Console.WriteLine($"On Player Standings Page: {pageInfo.Page}/{totalPages}");
-
+                        // Update pagination info for the next iteration
+                        var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;
+                        if (pageInfo != null)
+                        {
+                            totalPages = pageInfo.TotalPages;
+                        }
                         success = true;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
@@ -262,36 +263,28 @@ namespace SengokuProvider.Library.Services.Players
                     catch (Exception ex)
                     {
                         Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                        return null;
                     }
-                }
-
-                if (!success)
-                {
-                    Console.WriteLine("Failed to process page, stopping further processing.");
-                    break;
                 }
             }
 
             // Return the aggregated result
             var result = new PlayerGraphQLResult
             {
-                EventLink = new EventLink
+                TournamentLink = new CommonEventNode
                 {
-                    Id = currentTournamentLinkId,
+                    Id = command.TournamentLink,
                     Name = currentTournamentLinkName,
-                    NumEntrants = currentEntrantsNum,
                     Slug = currentTournamentLinkSlug,
-                    Entrants = new EntrantList
+                    NumEntrants = currentEntrantsNum,
+                    Entrants = new CommonEntrantList
                     {
                         Nodes = allNodes
                     },
-                    TournamentLink = new TournamentLink
+                    EventLink = new CommonTournament
                     {
-                        Id = currentEventLinkId,
-                        Name = currentEventLinkName
-                    },
-
+                        Id = currentTournamentLinkId,
+                        Name = currentTournamentLinkName
+                    }
                 }
             };
 
@@ -370,33 +363,36 @@ namespace SengokuProvider.Library.Services.Players
             }
             throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
         }
-        public async Task<PastEventPlayerData?> QueryStartggPreviousEventData(OnboardPlayerDataCommand queryCommand)
+        public async Task<PastEventPlayerData> QueryStartggPreviousEventData(int playerId, string gamerTag, int perPage = 10)
         {
             var tempQuery = @"query UserPreviousEventsQuery($playerId: ID!, $perPage: Int!, $playerName: String!) {
-                                player(id: $playerId) { id, gamerTag
+                                  player(id: $playerId) {id, gamerTag
                                     user { id
-                                        events(query: {filter: {minEntrantCount: 10, location: {countryCode: ""US""}}}) {
-                                            nodes { id, name, numEntrants, slug, tournament { id, name }
-                                                entrants(query: {perPage: $perPage, filter: {name: $playerName}}) {
-                                                    nodes { id 
-                                                        participants { id player { id gamerTag } }
-                                                        standing { id placement isFinal }}}}}}}}";
+                                      events(query: {perPage: $perPage, filter: {location: {countryCode: ""US""}}}) {
+                                        nodes { id name numEntrants slug
+                                          tournament { id name }
+                                          entrants(query: { filter: {name: $playerName}}) {
+                                            nodes { id
+                                              paginatedSets(sortType: ROUND) {
+                                                nodes { round displayScore winnerId }}
+                                              participants { id player { id gamerTag }}
+                                              standing { id placement isFinal }}}}
+                                        pageInfo { total totalPages page perPage}}}}}";
 
-            var allNodes = new List<PreviousEventNode>();
-            bool hasNextPage = true;
+            var allNodes = new List<CommonEventNode>();
             int currentPage = 1;
-            int currentUserLinkId = 0;
+            int totalPages = int.MaxValue; // Initialize to a large number
 
-            while (hasNextPage)
+            for (; currentPage <= totalPages; currentPage++)
             {
                 var request = new GraphQLHttpRequest
                 {
                     Query = tempQuery,
                     Variables = new
                     {
-                        playerId = queryCommand.PlayerId,
-                        perPage = queryCommand.PerPage,
-                        playerName = queryCommand.GamerTag,
+                        playerId,
+                        perPage,
+                        playerName = gamerTag,
                         pageNum = currentPage
                     }
                 };
@@ -427,17 +423,20 @@ namespace SengokuProvider.Library.Services.Players
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
 
-                        if (playerData?.PlayerQuery?.User?.PreviousEvents?.Nodes != null)
+                        if (playerData?.PlayerQuery?.User?.Events?.Nodes != null)
                         {
-                            allNodes.AddRange(playerData.PlayerQuery.User.PreviousEvents.Nodes);
+                            allNodes.AddRange(playerData.PlayerQuery.User.Events.Nodes);
+                            Console.WriteLine("Tournament Node Added");
                         }
-                        currentUserLinkId = playerData.PlayerQuery.User.Id;
 
-                        var pageInfo = response.Data["player"]["user"]["events"]["pageInfo"];
-                        int totalPages = pageInfo["totalPages"].ToObject<int>();
-                        currentPage = pageInfo["page"].ToObject<int>() + 1;
+                        // Update pagination info for the next iteration
+                        var pageInfo = playerData?.PlayerQuery?.User?.Events?.PageInfo;
+                        if (pageInfo != null)
+                        {
+                            totalPages = pageInfo.TotalPages;
+                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
+                        }
 
-                        hasNextPage = currentPage < totalPages;
                         success = true;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
@@ -456,21 +455,20 @@ namespace SengokuProvider.Library.Services.Players
                     catch (Exception ex)
                     {
                         Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                        return null;
                     }
                 }
             }
 
+            // Construct the final result using the paginated results
             var result = new PastEventPlayerData
             {
-                PlayerQuery = new PlayerQuery
+                PlayerQuery = new CommonPlayer
                 {
-                    Id = queryCommand.PlayerId,
-                    GamerTag = queryCommand.GamerTag,
-                    User = new PastEventUser
+                    Id = playerId,
+                    GamerTag = gamerTag,
+                    User = new CommonUser
                     {
-                        Id = currentUserLinkId,
-                        PreviousEvents = new PreviousEvents
+                        Events = new CommonEvents
                         {
                             Nodes = allNodes
                         }

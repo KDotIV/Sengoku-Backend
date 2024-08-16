@@ -72,8 +72,9 @@ builder.Services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =
     var configuration = provider.GetService<IConfiguration>();
     var playerQueryService = provider.GetService<IPlayerQueryService>();
     var legendQueryService = provider.GetService<ILegendQueryService>();
+    var eventQueryService = provider.GetService<IEventQueryService>();
     var serviceBus = provider.GetService<IAzureBusApiService>();
-    return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, serviceBus);
+    return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, eventQueryService, serviceBus);
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {

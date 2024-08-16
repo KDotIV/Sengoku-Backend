@@ -3,10 +3,12 @@ using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Worker.Handlers;
 using System.Collections.Concurrent;
@@ -17,6 +19,7 @@ namespace SengokuProvider.Library.Services.Players
     {
         private readonly IPlayerQueryService _queryService;
         private readonly ILegendQueryService _legendQueryService;
+        private readonly IEventQueryService _eventQueryService;
         private readonly IAzureBusApiService _azureBusApiService;
         private readonly IConfiguration _config;
 
@@ -28,12 +31,13 @@ namespace SengokuProvider.Library.Services.Players
         private static Random _rand = new Random();
 
         public PlayerIntakeService(string connectionString, IConfiguration configuration, IPlayerQueryService playerQueryService,
-            ILegendQueryService legendQueryService, IAzureBusApiService serviceBus)
+            ILegendQueryService legendQueryService, IEventQueryService eventQueryService, IAzureBusApiService serviceBus)
         {
             _connectionString = connectionString;
             _config = configuration;
             _queryService = playerQueryService;
             _legendQueryService = legendQueryService;
+            _eventQueryService = eventQueryService;
             _azureBusApiService = serviceBus;
             _playersCache = new ConcurrentDictionary<int, int>();
             _playerRegistry = new ConcurrentDictionary<int, string>();
@@ -84,8 +88,8 @@ namespace SengokuProvider.Library.Services.Players
                 PlayerGraphQLResult? newPlayerData = await _queryService.QueryPlayerDataFromStartgg(command);
                 if (newPlayerData == null) { return 0; }
 
-                _eventCache.Add(newPlayerData.EventLink.Id);
-                _currentEventId = newPlayerData.EventLink.Id;
+                _eventCache.Add(newPlayerData.TournamentLink.EventLink.Id);
+                _currentEventId = newPlayerData.TournamentLink.EventLink.Id;
                 int playerSuccess = await ProcessPlayerData(newPlayerData);
 
                 Console.WriteLine($"Players Inserted from Registry: {_playerRegistry.Count}");
@@ -108,9 +112,9 @@ namespace SengokuProvider.Library.Services.Players
             List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
             try
             {
-                PastEventPlayerData? queryResult = await _queryService.QueryStartggPreviousEventData(command);
+                PastEventPlayerData queryResult = await _queryService.QueryStartggPreviousEventData(command.PlayerId, command.GamerTag, command.PerPage);
 
-                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User == null || queryResult.PlayerQuery.User.PreviousEvents == null || queryResult?.PlayerQuery?.User?.PreviousEvents?.Nodes?.Count == 0) { return 0; }
+                if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User == null || queryResult.PlayerQuery.User.Events == null || queryResult?.PlayerQuery?.User?.Events?.Nodes?.Count == 0) { return 0; }
 
                 var mappedResult = MapPreviousTournamentData(queryResult);
                 var standingsSuccess = await IntakePlayerStandingData(mappedResult);
@@ -124,16 +128,22 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
-
         private List<PlayerStandingResult> MapPreviousTournamentData(PastEventPlayerData? playerData)
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
-            if (playerData == null || playerData?.PlayerQuery?.User?.PreviousEvents == null ||
-                playerData?.PlayerQuery?.User?.PreviousEvents?.Nodes == null || playerData?.PlayerQuery?.User?.PreviousEvents?.Nodes?.Count == 0) { Console.WriteLine("No PastPlayerData to process"); return mappedResult; }
-            foreach (PreviousEventNode tempNode in playerData.PlayerQuery.User.PreviousEvents.Nodes)
+            if (playerData == null || playerData?.PlayerQuery?.User?.Events == null ||
+                playerData?.PlayerQuery?.User?.Events?.Nodes == null || playerData?.PlayerQuery?.User?.Events?.Nodes?.Count == 0) { Console.WriteLine("No PastPlayerData to process"); return mappedResult; }
+
+            const int participationPoints = 5;
+            const int winnerBonus = 50;
+
+            foreach (CommonEventNode tempNode in playerData.PlayerQuery.User.Events.Nodes)
             {
-                if (tempNode == null) continue;
-                var firstRecord = tempNode?.Entrants?.Nodes?.FirstOrDefault();
+                if (tempNode == null || tempNode.Entrants.Nodes.Count == 0 || tempNode.NumEntrants == 0) continue;
+
+                var firstRecord = tempNode.Entrants.Nodes.First();
+                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, firstRecord, tempNode.NumEntrants);
+
                 var newStanding = new PlayerStandingResult
                 {
                     Response = "Open",
@@ -147,8 +157,8 @@ namespace SengokuProvider.Library.Services.Players
                         GamerTag = playerData.PlayerQuery.GamerTag,
                         EventId = tempNode.Id,
                         EventName = tempNode.Name,
-                        TournamentId = tempNode.PreviousTournament.Id,
-                        TournamentName = tempNode.PreviousTournament.Name
+                        TournamentId = tempNode.Id,
+                        TournamentName = tempNode.Name
                     },
                     TournamentLinks = new Links
                     {
@@ -174,26 +184,26 @@ namespace SengokuProvider.Library.Services.Players
             const int participationPoints = 5;
             const int winnerBonus = 50;
 
-            foreach (var tempNode in data.EventLink.Entrants.Nodes)
+            foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode, data.EventLink.NumEntrants);
+                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode, data.TournamentLink.NumEntrants);
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.EventLink.NumEntrants,
+                    EntrantsNum = data.TournamentLink.NumEntrants,
                     LastUpdated = DateTime.UtcNow,
-                    UrlSlug = data.EventLink.Slug,
+                    UrlSlug = data.TournamentLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
                         Placement = tempNode.Standing.Placement,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
-                        EventId = data.EventLink.Id,
-                        EventName = data.EventLink.Name,
-                        TournamentId = data.EventLink.TournamentLink.Id,
-                        TournamentName = data.EventLink.TournamentLink.Name,
+                        EventId = data.TournamentLink.EventLink.Id,
+                        EventName = data.TournamentLink.EventLink.Name,
+                        TournamentId = data.TournamentLink.Id,
+                        TournamentName = data.TournamentLink.Name,
                         LeaguePoints = totalPoints
                     },
                     TournamentLinks = new Links
@@ -207,8 +217,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-
-        private int CalculateLeaguePoints(int participationPoints, int winnerBonus, EntrantNode tempNode, int totalEntrants)
+        private int CalculateLeaguePoints(int participationPoints, int winnerBonus, CommonEntrantNode tempNode, int totalEntrants)
         {
             int totalPoints = participationPoints;
             int maxWinnersRounds = (int)Math.Ceiling(Math.Log2(totalEntrants));
@@ -254,6 +263,14 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         foreach (var data in currentStandings)
                         {
+                            var checkTournamentLink = await _eventQueryService.GetTournamentLinkById(data.StandingDetails.TournamentId);
+                            if (checkTournamentLink.Id == 0)
+                            {
+                                Console.WriteLine($"TournamentLink does not exist for this Standing Data. Sending TournamentLink: {data.StandingDetails.TournamentId} to EventQueue");
+                                await SendTournamentLinkEventMessage(data.StandingDetails.EventId);
+                                continue;
+                            }
+
                             if (data.TournamentLinks == null || data.TournamentLinks.PlayerId == 0)
                             {
                                 Console.WriteLine("Standing Data is missing Player Startgg link. Can't link to player");
@@ -278,7 +295,7 @@ namespace SengokuProvider.Library.Services.Players
                                 cmd.Transaction = transaction;
                                 cmd.Parameters.AddWithValue("@EntrantInput", data.TournamentLinks.EntrantId);
                                 cmd.Parameters.AddWithValue("@PlayerId", exists);
-                                cmd.Parameters.AddWithValue("@TournamentLink", data?.StandingDetails?.TournamentId);
+                                cmd.Parameters.AddWithValue("@TournamentLink", data.StandingDetails.TournamentId);
                                 cmd.Parameters.AddWithValue("@PlacementInput", data.StandingDetails.Placement);
                                 cmd.Parameters.AddWithValue("@NumEntrants", data.EntrantsNum);
                                 cmd.Parameters.AddWithValue("@IsActive", data.StandingDetails.IsActive);
@@ -343,6 +360,39 @@ namespace SengokuProvider.Library.Services.Players
                 Console.WriteLine($"Unexpected Error Sending Onboarding Message {ex.Message} {ex.StackTrace}");
             }
         }
+        private async Task<bool> SendTournamentLinkEventMessage(int eventLinkId)
+        {
+            if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null)
+            {
+                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                return false;
+            }
+            try
+            {
+                var newCommand = new EventReceivedData
+                {
+                    Command = new LinkTournamentByEventIdCommand
+                    {
+                        EventLinkId = eventLinkId,
+                        Topic = CommandRegistry.LinkTournamentByEvent,
+                    },
+                    MessagePriority = MessagePriority.SystemIntake
+                };
+                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:eventreceivedqueue"], messageJson);
+
+                if (!result)
+                {
+                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
         private async Task<int> VerifyPlayer(int playerId)
         {
             try
@@ -378,8 +428,8 @@ namespace SengokuProvider.Library.Services.Players
         private async Task<int> ProcessPlayerData(PlayerGraphQLResult queryData)
         {
             var players = new List<PlayerData>();
-            if (queryData.EventLink == null) throw new ApplicationException("Player Query Data was null from Start.gg");
-            foreach (var node in queryData.EventLink.Entrants.Nodes)
+            if (queryData.TournamentLink == null) throw new ApplicationException("Player Query Data was null from Start.gg");
+            foreach (var node in queryData.TournamentLink.Entrants.Nodes)
             {
                 var firstRecord = node.Participants.FirstOrDefault();
                 if (firstRecord == null) continue;
@@ -467,7 +517,7 @@ namespace SengokuProvider.Library.Services.Players
                 }
             }
         }
-        private async Task<int> CheckDuplicatePlayer(Participant participantRecord)
+        private async Task<int> CheckDuplicatePlayer(CommonParticipant participantRecord)
         {
             try
             {

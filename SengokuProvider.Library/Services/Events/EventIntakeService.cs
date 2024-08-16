@@ -74,7 +74,9 @@ namespace SengokuProvider.Library.Services.Events
             EventGraphQLResult? newEventData = await QueryStartggTournamentDataByEventLink(command.EventLinkId);
             if (newEventData == null) { return 0; }
 
-            _ = await ProcessEventData(newEventData);
+            var eventsResult = await ProcessEventData(newEventData);
+            Console.WriteLine($"Addresses Inserted: {eventsResult.Item1} - Events Inserted: {eventsResult.Item2}");
+
             return await ProcessTournamentData(newEventData);
         }
         public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
@@ -614,16 +616,10 @@ namespace SengokuProvider.Library.Services.Events
         #region Query Commands
         private async Task<EventGraphQLResult?> QueryStartggTournamentDataByEventLink(int eventLinkId)
         {
-            var tempQuery = @"query TournamentQuery($tournamentId: ID) {
-                      tournaments(query: {
-                        filter: {
-                          id: $tournamentId
-                        }
-                      }) {
-                        nodes {id, name, addrState, lat, lng, venueAddress, startAt, endAt, slug, events {
-                            id,
-                            slug,
-                            videogame { id }}}}}";
+            var tempQuery = @"query TournamentQuery($tournamentId: ID) { 
+                                tournaments(query: {filter: {id: $tournamentId}}) { 
+                                    nodes { id, name, addrState, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug, 
+                                        events { id, slug, numEntrants, videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -748,13 +744,13 @@ namespace SengokuProvider.Library.Services.Events
                 addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                     }}) {
                     nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
-                    pageInfo { total totalPages page perPage sortBy filter }}}";
+                    pageInfo { total totalPages page perPage }}}";
 
             var allNodes = new List<EventNode>();
             int currentPage = 1;
-            bool hasNextPage = true;
+            int totalPages = int.MaxValue;
 
-            while (hasNextPage)
+            for (; currentPage <= totalPages; currentPage++)
             {
                 var request = new GraphQLHttpRequest
                 {
@@ -792,10 +788,8 @@ namespace SengokuProvider.Library.Services.Events
                         }
 
                         var pageInfo = eventData.Events.PageInfo;
-                        int totalPages = pageInfo.TotalPages;
-                        currentPage = pageInfo.Page + 1;
+                        totalPages = pageInfo.TotalPages;
                         Console.WriteLine($"On Location Events Page: {currentPage}");
-                        hasNextPage = currentPage < totalPages;
                         success = true;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)

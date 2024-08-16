@@ -28,13 +28,13 @@ namespace SengokuProvider.Library.Models.Events
         public required string AddrState { get; set; }
 
         [JsonProperty("lat")]
-        public double Lat { get; set; }
+        public double Lat { get; set; } = double.MinValue;
 
         [JsonProperty("lng")]
-        public double Lng { get; set; }
+        public double Lng { get; set; } = double.MinValue;
 
         [JsonProperty("venueAddress")]
-        public required string VenueAddress { get; set; }
+        public string VenueAddress { get; set; } = string.Empty;
 
         [JsonProperty("startAt")]
         public long StartAt { get; set; }
@@ -52,7 +52,7 @@ namespace SengokuProvider.Library.Models.Events
         [JsonProperty("isOnline")]
         public bool IsOnline { get; set; }
         [JsonProperty("city")]
-        public string? City { get; set; }
+        public string City { get; set; } = string.Empty;
     }
     public class TournamentDetails
     {

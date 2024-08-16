@@ -54,14 +54,14 @@ namespace SengokuProvider.Library.Services.Legends
 
             if (leagueId < 0) { newOnboardResult.Response = "LeagueId cannot be invalid ids"; }
 
-            try
+            using (var conn = new NpgsqlConnection(_connectionString))
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                await conn.OpenAsync();
+                using (var transaction = await conn.BeginTransactionAsync())
                 {
-                    await conn.OpenAsync();
-                    using (var transaction = await conn.BeginTransactionAsync())
+                    foreach (var tournamentId in tournamentIds)
                     {
-                        foreach (var tournamentId in tournamentIds)
+                        try
                         {
                             using (var cmd = new NpgsqlCommand(@"INSERT INTO tournament_leagues (tournament_id, league_id, last_updated) VALUES (@TournamentInput, @LeagueInput, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
                             {
@@ -75,24 +75,25 @@ namespace SengokuProvider.Library.Services.Legends
                                     newOnboardResult.Response = "Successfully Inserted Tournament to League";
                                     newOnboardResult.Successful.Add(tournamentId);
                                 }
-                                else { newOnboardResult.Failures.Add(tournamentId); }
                             }
                         }
-                        await transaction.CommitAsync();
+                        catch (NpgsqlException ex)
+                        {
+                            newOnboardResult.Response = ex.Message;
+                            newOnboardResult.Failures.Add(tournamentId);
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            newOnboardResult.Response = ex.Message;
+                            newOnboardResult.Failures.Add(tournamentId);
+                            continue;
+                        }
                     }
+                    await transaction.CommitAsync();
                 }
-                return newOnboardResult;
             }
-            catch (NpgsqlException ex)
-            {
-                newOnboardResult.Response = ex.Message;
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                newOnboardResult.Response = ex.Message;
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
+            return newOnboardResult;
         }
         public async Task<PlayerOnboardResult> AddPlayerToLeague(int[] playerIds, int leagueId)
         {
@@ -100,14 +101,14 @@ namespace SengokuProvider.Library.Services.Legends
 
             if (leagueId < 0) { newOnboardResult.Response = "PlayerId or LeagueId cannot be invalid ids"; }
 
-            try
+            using (var conn = new NpgsqlConnection(_connectionString))
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                await conn.OpenAsync();
+                using (var transaction = await conn.BeginTransactionAsync())
                 {
-                    await conn.OpenAsync();
-                    using (var transaction = await conn.BeginTransactionAsync())
+                    foreach (var playerId in playerIds)
                     {
-                        foreach (var playerId in playerIds)
+                        try
                         {
                             using (var cmd = new NpgsqlCommand(@"INSERT INTO player_leagues (player_id, league_id, last_updated) VALUES (@PlayerInput, @LeagueInput, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
                             {
@@ -124,20 +125,19 @@ namespace SengokuProvider.Library.Services.Legends
                                 else { newOnboardResult.Failures.Add(playerId); }
                             }
                         }
-                        await transaction.CommitAsync();
+                        catch (NpgsqlException ex)
+                        {
+                            newOnboardResult.Response = ex.Message;
+                            throw new ApplicationException("Database error occurred: ", ex);
+                        }
+                        catch (Exception ex)
+                        {
+                            newOnboardResult.Response = ex.Message;
+                            throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                        }
                     }
+                    await transaction.CommitAsync();
                 }
-                return newOnboardResult;
-            }
-            catch (NpgsqlException ex)
-            {
-                newOnboardResult.Response = ex.Message;
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                newOnboardResult.Response = ex.Message;
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
             return newOnboardResult;
         }

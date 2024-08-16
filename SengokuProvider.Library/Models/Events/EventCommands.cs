@@ -76,6 +76,18 @@ namespace SengokuProvider.Library.Models.Events
             else return false;
         }
     }
+    public class GetTournamentById : ICommand
+    {
+        public required int TournamentLinkId { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (TournamentLinkId > 0) { return true; }
+            else return false;
+        }
+    }
     public class UpdateEventCommand : ICommand
     {
         public int EventId { get; set; }

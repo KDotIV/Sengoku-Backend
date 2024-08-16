@@ -2,7 +2,7 @@
 {
     public class PlayerStandingResult
     {
-        public StandingDetails? StandingDetails { get; set; }
+        public StandingDetails StandingDetails { get; set; } = new StandingDetails();
         public int LeaugeId { get; set; }
         public Links? TournamentLinks { get; set; }
         public int EntrantsNum { get; set; }

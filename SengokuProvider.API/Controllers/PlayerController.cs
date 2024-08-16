@@ -52,6 +52,26 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
+        [HttpPost("OnboardPreviousTournamentDataByPlayer")]
+        public async Task<IActionResult> OnboardPreviousTournamentDataByPlayer([FromBody] OnboardPlayerDataCommand command)
+        {
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                var result = await _playerIntakeService.OnboardPreviousTournamentData(command);
+                return new OkObjectResult($"Total Successful Tournament Data Inserted: {result}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
         [HttpGet("QueryPlayerStandings")]
         public async Task<IActionResult> QueryPlayerStandingsByPlayer([FromBody] GetPlayerStandingsCommand command)
         {

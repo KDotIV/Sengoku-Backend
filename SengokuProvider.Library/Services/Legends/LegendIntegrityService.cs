@@ -19,10 +19,6 @@ namespace SengokuProvider.Library.Services.Legends
         {
             return await GetLegendsToUpdate();
         }
-        public async Task CalculatePlayerPowerRanking()
-        {
-
-        }
         private async Task<List<OnboardLegendsByPlayerCommand>> GetLegendsToUpdate()
         {
             return await GetPlayersByLastUpdated();
