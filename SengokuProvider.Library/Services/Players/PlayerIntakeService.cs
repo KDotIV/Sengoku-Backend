@@ -237,6 +237,8 @@ namespace SengokuProvider.Library.Services.Players
             int maxWinnersRounds = (int)Math.Ceiling(Math.Log2(totalEntrants));
             int maxLosersRounds = maxWinnersRounds - 1;
 
+            bool wasInWinnersBracket = true;
+
             foreach (var set in tempNode.SetList.Nodes)
             {
                 if (set.WinnerEntrantId != tempNode.Id) continue;
@@ -244,24 +246,33 @@ namespace SengokuProvider.Library.Services.Players
 
                 if (set.Round > 0)
                 {
-                    // Winners' bracket points, dynamically calculated based on round
+                    // Winners' bracket points, with higher value for staying in winners
                     double roundFactor = (double)set.Round / maxWinnersRounds;
-                    int roundPoints = (int)(roundFactor * 100);
+                    int roundPoints = (int)(roundFactor * 150);
                     totalPoints += roundPoints;
                 }
                 else
                 {
-                    // Losers' bracket points, dynamically calculated based on round
+                    if (wasInWinnersBracket)
+                    {
+                        // Apply a penalty for being sent to losers' bracket
+                        totalPoints -= 50;
+                        wasInWinnersBracket = false;
+                    }
+
+                    // Losers' bracket points, with reduced value
                     double roundFactor = (double)Math.Abs(set.Round) / maxLosersRounds;
-                    int roundPoints = (int)(roundFactor * 25);
+                    int roundPoints = (int)(roundFactor * 50);
                     totalPoints += roundPoints;
                 }
             }
-            if (tempNode.Standing.Placement == 1)
+
+            if (tempNode?.Standing?.Placement == 1)
             {
                 totalPoints += winnerBonus;
             }
 
+            if (totalPoints < 5) { totalPoints = 5; }
             return totalPoints;
         }
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
