@@ -441,13 +441,15 @@ namespace SengokuProvider.Library.Services.Events
                 if (!await CheckDuplicateEvents(node.Id))
                 {
                     int regionId = await GetRegionId(node.City);
+                    int addressId = addressMap.TryGetValue(node.VenueAddress ?? string.Empty, out var id) ? id : 0; // Use the confirmed address ID from the map or give default if online event
+
                     var eventData = new EventData
                     {
                         LinkID = node.Id,
                         EventName = node.Name,
                         EventDescription = "Sample description",
                         Region = regionId,
-                        AddressID = addressMap[node.VenueAddress], // Use the confirmed address ID from the map
+                        AddressID = addressId,
                         StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
                         EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
                         ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
@@ -465,7 +467,6 @@ namespace SengokuProvider.Library.Services.Events
 
             return Tuple.Create(addressSuccesses, eventSuccesses);
         }
-
         private async Task<AddressData> HandleNewAddress(Dictionary<string, int> addressMap, EventNode node)
         {
             var addressData = new AddressData();

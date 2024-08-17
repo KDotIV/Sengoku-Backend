@@ -123,17 +123,18 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
+                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.TournamentLink.NumEntrants,
+                    EntrantsNum = numEntrants,
                     LastUpdated = DateTime.UtcNow,
                     UrlSlug = data.TournamentLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
-                        Placement = tempNode.Standing.Placement,
+                        Placement = tempNode.Standing.Placement ?? 0,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
                         EventId = data.TournamentLink.EventLink.Id,
                         EventName = data.TournamentLink.EventLink.Name,
@@ -189,7 +190,6 @@ namespace SengokuProvider.Library.Services.Players
 
             for (; currentPage <= totalPages; currentPage++)
             {
-                Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                 var request = new GraphQLHttpRequest
                 {
                     Query = tempQuery,
@@ -236,14 +236,15 @@ namespace SengokuProvider.Library.Services.Players
                         currentEventLinkName = playerData.TournamentLink.EventLink.Name;
                         currentTournamentLinkName = playerData.TournamentLink?.Name ?? string.Empty;
                         currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
-                        currentEntrantsNum = playerData.TournamentLink.NumEntrants;
+                        currentEntrantsNum = playerData.TournamentLink?.NumEntrants ?? 0;
                         currentTournamentLinkSlug = playerData.TournamentLink.Slug;
 
                         // Update pagination info for the next iteration
                         var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;
                         if (pageInfo != null)
                         {
-                            totalPages = pageInfo.TotalPages;
+                            totalPages = pageInfo.TotalPages ?? 1;
+                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                         }
                         success = true;
                     }
@@ -433,7 +434,7 @@ namespace SengokuProvider.Library.Services.Players
                         var pageInfo = playerData?.PlayerQuery?.User?.Events?.PageInfo;
                         if (pageInfo != null)
                         {
-                            totalPages = pageInfo.TotalPages;
+                            totalPages = pageInfo.TotalPages ?? 1;
                             Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                         }
 
