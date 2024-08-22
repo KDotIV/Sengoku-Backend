@@ -26,6 +26,14 @@ namespace SengokuProvider.Library.Services.Players
             _client.HttpClient.DefaultRequestHeaders.Clear();
             _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
+        public async Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int tournamentId)
+        {
+            if (tournamentId == 0 || tournamentId < 0) { List<PlayerData> badResult = new List<PlayerData>(); Console.WriteLine("TournamentId cannot be invalid"); return badResult; }
+
+            var result = await QueryPlayerDataByTournamentId(tournamentId);
+
+            return result;
+        }
         public async Task<PlayerGraphQLResult?> QueryPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
         {
             return await QueryStartggPlayerData(queryCommand);
@@ -477,6 +485,55 @@ namespace SengokuProvider.Library.Services.Players
                 }
             };
             return result;
+        }
+        private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int tournamentLink)
+        {
+            List<PlayerData> playerResult = new List<PlayerData>();
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"select p.id, p.player_name, p.startgg_link, p.user_link, s.last_updated
+                                                            FROM players as p 
+                                                            JOIN standings as s ON s.player_id = p.id
+                                                            JOIN tournament_links as t ON t.id = s.tournament_link
+                                                            where t.id = @Input
+                                                            ORDER BY player_name ASC;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", tournamentLink);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows)
+                            {
+                                Console.WriteLine("No players found with that TournamentLink Id");
+                                return playerResult;
+                            }
+                            while (await reader.ReadAsync())
+                            {
+                                playerResult.Add(new PlayerData
+                                {
+                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
+                                    UserLink = reader.GetInt32(reader.GetOrdinal("user_link")),
+                                    PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link")),
+                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                });
+                            }
+                        }
+                    }
+                }
+                return playerResult;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
         }
     }
 }
