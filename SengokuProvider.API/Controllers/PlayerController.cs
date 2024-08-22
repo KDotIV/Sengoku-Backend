@@ -23,7 +23,7 @@ namespace SengokuProvider.API.Controllers
             _playerQueryService = queryService;
             _commandProcessor = commandProcessor;
         }
-        [HttpGet("GetPlayerDataByTournamentId")]
+        [HttpGet("GetRegisteredPlayersByTournamentId")]
         public async Task<IActionResult> GetRegisteredPlayersByTournamentId([FromBody] GetRegisteredPlayersByTournamentIdCommand command)
         {
             if (command == null)
