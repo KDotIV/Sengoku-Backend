@@ -4,7 +4,7 @@ namespace SengokuProvider.Library.Models.Common
 {
     public struct DiscordWebhookConfig
     {
-        public static readonly string BaseWebhookUrl = $"https://discord.com/api/webhooks/1271932550666780856/6oqeVHjc0G9NMBNI3z3yjPQ2-F9PechD2Bdm5OqpHs0HyOx_6BxowYaTkPgJk_3uIgI5";
+        public static readonly string BaseWebhookUrl = $"https://discord.com/api/webhooks/1274518441151299728/Qbw_v9ODfHOleRXp86_YvvNohy9H4GnWD8BwDTHA1fWjwDimTOyPv9GqyBa1ZSbUUPSI";
         public static readonly long Tekken8ThreadId = 1273004220831891517;
         public static readonly long StreetFighter6ThreadId = 1273004373890568314;
         public static readonly long GuiltyGearStriveThreadId = 1273004304764108810;

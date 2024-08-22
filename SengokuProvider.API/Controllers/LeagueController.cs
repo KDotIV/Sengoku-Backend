@@ -43,7 +43,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _webhookHandler.SendLeaderboardUpdateMessage(command.MessageContent, command.RoleMentionIds);
+                var result = await _webhookHandler.SendLeaderboardUpdateMessage(command.WebhookUrl, command.MessageContent, command.RoleMentionIds);
                 return new OkObjectResult(result);
             }
             catch (Exception ex)

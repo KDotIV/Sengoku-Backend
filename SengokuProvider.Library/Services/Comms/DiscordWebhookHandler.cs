@@ -27,7 +27,7 @@ namespace SengokuProvider.Library.Services.Comms
                 response.EnsureSuccessStatusCode();
             }
         }
-        public async Task<bool> SendLeaderboardUpdateMessage(string messageContent, string[] roleIds, object? attachments = default)
+        public async Task<bool> SendLeaderboardUpdateMessage(string webhookUrl, string messageContent, string[] roleIds, object? attachments = default)
         {
             try
             {
@@ -45,7 +45,7 @@ namespace SengokuProvider.Library.Services.Comms
                     form.Add(new StringContent(JsonConvert.SerializeObject(payload)), "payload_json");
 
                     // Send the request
-                    var response = await _httpClient.PostAsync($"{DiscordWebhookConfig.BaseWebhookUrl}", form);
+                    var response = await _httpClient.PostAsync($"{webhookUrl}", form);
                     response.EnsureSuccessStatusCode();
                     return true;
                 }
