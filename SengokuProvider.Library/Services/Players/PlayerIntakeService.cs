@@ -131,36 +131,47 @@ namespace SengokuProvider.Library.Services.Players
         private List<PlayerStandingResult> MapPreviousTournamentData(PastEventPlayerData? playerData)
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
-            if (playerData == null || playerData?.PlayerQuery?.User?.Events == null ||
-                playerData?.PlayerQuery?.User?.Events?.Nodes == null || playerData?.PlayerQuery?.User?.Events?.Nodes?.Count == 0) { Console.WriteLine("No PastPlayerData to process"); return mappedResult; }
+
+            if (playerData == null || playerData.PlayerQuery?.User?.Events?.Nodes == null || playerData.PlayerQuery.User.Events.Nodes.Count == 0)
+            {
+                Console.WriteLine("No PastPlayerData to process");
+                return mappedResult;
+            }
 
             const int participationPoints = 5;
             const int winnerBonus = 50;
 
-            foreach (CommonEventNode tempNode in playerData.PlayerQuery.User.Events.Nodes)
+            foreach (var tempNode in playerData.PlayerQuery.User.Events.Nodes)
             {
-                if (tempNode == null || tempNode.Entrants.Nodes.Count == 0 || tempNode.NumEntrants == 0) continue;
+                if (tempNode == null || tempNode.Entrants?.Nodes == null || tempNode.Entrants.Nodes.Count == 0 || tempNode.NumEntrants == 0)
+                {
+                    continue;
+                }
 
                 var firstRecord = tempNode.Entrants.Nodes.First();
-                if (firstRecord.Standing == null) continue;
+                if (firstRecord.Standing == null)
+                {
+                    continue;
+                }
 
-                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, firstRecord, tempNode.NumEntrants);
+                int numEntrants = tempNode.NumEntrants ?? 0;
+                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, firstRecord, numEntrants);
 
                 var newStanding = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = tempNode.NumEntrants,
-                    UrlSlug = tempNode.Slug,
+                    EntrantsNum = numEntrants,
+                    UrlSlug = tempNode.Slug ?? string.Empty,
                     LastUpdated = DateTime.UtcNow,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = firstRecord.Standing.IsActive,
-                        Placement = firstRecord.Standing.Placement,
-                        GamerTag = playerData.PlayerQuery.GamerTag,
-                        EventId = tempNode.EventLink.Id,
-                        EventName = tempNode.EventLink.Name,
+                        Placement = firstRecord.Standing.Placement ?? 0,
+                        GamerTag = playerData.PlayerQuery.GamerTag ?? string.Empty,
+                        EventId = tempNode.EventLink?.Id ?? 0,
+                        EventName = tempNode.EventLink?.Name ?? string.Empty,
                         TournamentId = tempNode.Id,
-                        TournamentName = tempNode.Name
+                        TournamentName = tempNode.Name ?? string.Empty
                     },
                     TournamentLinks = new Links
                     {
@@ -189,19 +200,20 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode, data.TournamentLink.NumEntrants);
+                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
+                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode, numEntrants);
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.TournamentLink.NumEntrants,
+                    EntrantsNum = numEntrants,
                     LastUpdated = DateTime.UtcNow,
                     UrlSlug = data.TournamentLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
-                        Placement = tempNode.Standing.Placement,
-                        GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
+                        Placement = tempNode.Standing.Placement ?? 0,
+                        GamerTag = tempNode.Participants?.FirstOrDefault()?.Player?.GamerTag ?? "",
                         EventId = data.TournamentLink.EventLink.Id,
                         EventName = data.TournamentLink.EventLink.Name,
                         TournamentId = data.TournamentLink.Id,
@@ -225,30 +237,42 @@ namespace SengokuProvider.Library.Services.Players
             int maxWinnersRounds = (int)Math.Ceiling(Math.Log2(totalEntrants));
             int maxLosersRounds = maxWinnersRounds - 1;
 
+            bool wasInWinnersBracket = true;
+
             foreach (var set in tempNode.SetList.Nodes)
             {
                 if (set.WinnerEntrantId != tempNode.Id) continue;
+                if (set?.Round == null) continue;
 
                 if (set.Round > 0)
                 {
-                    // Winners' bracket points, dynamically calculated based on round
+                    // Winners' bracket points, with higher value for staying in winners
                     double roundFactor = (double)set.Round / maxWinnersRounds;
-                    int roundPoints = (int)(roundFactor * 100);
+                    int roundPoints = (int)(roundFactor * 150);
                     totalPoints += roundPoints;
                 }
                 else
                 {
-                    // Losers' bracket points, dynamically calculated based on round
+                    if (wasInWinnersBracket)
+                    {
+                        // Apply a penalty for being sent to losers' bracket
+                        totalPoints -= 50;
+                        wasInWinnersBracket = false;
+                    }
+
+                    // Losers' bracket points, with reduced value
                     double roundFactor = (double)Math.Abs(set.Round) / maxLosersRounds;
-                    int roundPoints = (int)(roundFactor * 25);
+                    int roundPoints = (int)(roundFactor * 50);
                     totalPoints += roundPoints;
                 }
             }
-            if (tempNode.Standing.Placement == 1)
+
+            if (tempNode?.Standing?.Placement == 1)
             {
                 totalPoints += winnerBonus;
             }
 
+            if (totalPoints < 5) { totalPoints = 5; }
             return totalPoints;
         }
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)

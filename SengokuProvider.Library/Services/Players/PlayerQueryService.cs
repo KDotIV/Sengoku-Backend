@@ -26,129 +26,6 @@ namespace SengokuProvider.Library.Services.Players
             _client.HttpClient.DefaultRequestHeaders.Clear();
             _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
-        public async Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int tournamentId)
-        {
-            if (tournamentId == 0 || tournamentId < 0) { List<PlayerData> badResult = new List<PlayerData>(); Console.WriteLine("TournamentId cannot be invalid"); return badResult; }
-
-            var result = await QueryPlayerDataByTournamentId(tournamentId);
-
-            return result;
-        }
-
-        public async Task<PastEventPlayerData> QueryStartggPreviousEventData(int playerId, string gamerTag, int perPage = 10)
-        {
-            var tempQuery = @"query UserPreviousEventsQuery($playerId: ID!, $perPage: Int!, $playerName: String!) {
-                                  player(id: $playerId) {id, gamerTag
-                                    user { id
-                                      events(query: {perPage: $perPage, filter: {location: {countryCode: ""US""}}}) {
-                                        nodes { id name numEntrants slug
-                                          tournament { id name }
-                                          entrants(query: { filter: {name: $playerName}}) {
-                                            nodes { id
-                                              paginatedSets(sortType: ROUND) {
-                                                nodes { round displayScore winnerId }}
-                                              participants { id player { id gamerTag }}
-                                              standing { id placement isFinal }}}}
-                                        pageInfo { total totalPages page perPage}}}}}";
-
-            var allNodes = new List<CommonEventNode>();
-            int currentPage = 1;
-            int totalPages = int.MaxValue; // Initialize to a large number
-
-            for (; currentPage <= totalPages; currentPage++)
-            {
-                var request = new GraphQLHttpRequest
-                {
-                    Query = tempQuery,
-                    Variables = new
-                    {
-                        playerId,
-                        perPage,
-                        playerName = gamerTag,
-                        pageNum = currentPage
-                    }
-                };
-
-                bool success = false;
-                int retryCount = 0;
-                const int maxRetries = 3;
-                const int delay = 3000;
-
-                while (!success && retryCount < maxRetries)
-                {
-                    await _requestThrottler.WaitIfPaused();
-
-                    try
-                    {
-                        var response = await _client.SendQueryAsync<JObject>(request);
-
-                        if (response.Errors != null && response.Errors.Any())
-                        {
-                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                        }
-
-                        if (response.Data == null)
-                        {
-                            throw new ApplicationException("Failed to retrieve standing data");
-                        }
-
-                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                        var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
-
-                        if (playerData?.PlayerQuery?.User?.Events?.Nodes != null)
-                        {
-                            allNodes.AddRange(playerData.PlayerQuery.User.Events.Nodes);
-                            Console.WriteLine("Tournament Node Added");
-                        }
-
-                        // Update pagination info for the next iteration
-                        var pageInfo = playerData?.PlayerQuery?.User?.Events?.PageInfo;
-                        if (pageInfo != null)
-                        {
-                            totalPages = pageInfo.TotalPages;
-                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
-                        }
-
-                        success = true;
-                    }
-                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
-                    {
-                        var errorContent = ex.Content;
-                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                        retryCount++;
-                        if (retryCount >= maxRetries)
-                        {
-                            Console.WriteLine("Max retries reached. Pausing further requests.");
-                            await _requestThrottler.PauseRequests(_client);
-                        }
-                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                        await Task.Delay(delay);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    }
-                }
-            }
-
-            // Construct the final result using the paginated results
-            var result = new PastEventPlayerData
-            {
-                PlayerQuery = new CommonPlayer
-                {
-                    Id = playerId,
-                    GamerTag = gamerTag,
-                    User = new CommonUser
-                    {
-                        Events = new CommonEvents
-                        {
-                            Nodes = allNodes
-                        }
-                    }
-                }
-            };
-            return result;
-        }
         public async Task<PlayerGraphQLResult?> QueryPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
         {
             return await QueryStartggPlayerData(queryCommand);
@@ -246,17 +123,18 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
+                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
 
                 var newStandings = new PlayerStandingResult
                 {
                     Response = "Open",
-                    EntrantsNum = data.TournamentLink.NumEntrants,
+                    EntrantsNum = numEntrants,
                     LastUpdated = DateTime.UtcNow,
                     UrlSlug = data.TournamentLink.Slug,
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
-                        Placement = tempNode.Standing.Placement,
+                        Placement = tempNode.Standing.Placement ?? 0,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
                         EventId = data.TournamentLink.EventLink.Id,
                         EventName = data.TournamentLink.EventLink.Name,
@@ -312,7 +190,6 @@ namespace SengokuProvider.Library.Services.Players
 
             for (; currentPage <= totalPages; currentPage++)
             {
-                Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                 var request = new GraphQLHttpRequest
                 {
                     Query = tempQuery,
@@ -359,14 +236,15 @@ namespace SengokuProvider.Library.Services.Players
                         currentEventLinkName = playerData.TournamentLink.EventLink.Name;
                         currentTournamentLinkName = playerData.TournamentLink?.Name ?? string.Empty;
                         currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
-                        currentEntrantsNum = playerData.TournamentLink.NumEntrants;
+                        currentEntrantsNum = playerData.TournamentLink?.NumEntrants ?? 0;
                         currentTournamentLinkSlug = playerData.TournamentLink.Slug;
 
                         // Update pagination info for the next iteration
                         var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;
                         if (pageInfo != null)
                         {
-                            totalPages = pageInfo.TotalPages;
+                            totalPages = pageInfo.TotalPages ?? 1;
+                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                         }
                         success = true;
                     }
@@ -486,54 +364,119 @@ namespace SengokuProvider.Library.Services.Players
             }
             throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
         }
-        private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int tournamentLink)
+        public async Task<PastEventPlayerData> QueryStartggPreviousEventData(int playerId, string gamerTag, int perPage = 10)
         {
-            List<PlayerData> playerResult = new List<PlayerData>();
-            try
-            {
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"select p.id, p.player_name, p.startgg_link, p.user_link, s.last_updated
-                                                            FROM players as p 
-                                                            JOIN standings as s ON s.player_id = p.id
-                                                            JOIN tournament_links as t ON t.id = s.tournament_link
-                                                            where t.id = @Input
-                                                            ORDER BY player_name ASC;", conn))
-                    {
-                        cmd.Parameters.AddWithValue("@Input", tournamentLink);
+            var tempQuery = @"query UserPreviousEventsQuery($playerId: ID!, $perPage: Int!, $playerName: String!) {
+                                  player(id: $playerId) {id, gamerTag
+                                    user { id
+                                      events(query: {perPage: $perPage, filter: {location: {countryCode: ""US""}}}) {
+                                        nodes { id name numEntrants slug
+                                          tournament { id name }
+                                          entrants(query: { filter: {name: $playerName}}) {
+                                            nodes { id
+                                              paginatedSets(sortType: ROUND) {
+                                                nodes { round displayScore winnerId }}
+                                              participants { id player { id gamerTag }}
+                                              standing { id placement isFinal }}}}
+                                        pageInfo { total totalPages page perPage}}}}}";
 
-                        using (var reader = await cmd.ExecuteReaderAsync())
+            var allNodes = new List<CommonEventNode>();
+            int currentPage = 1;
+            int totalPages = int.MaxValue; // Initialize to a large number
+
+            for (; currentPage <= totalPages; currentPage++)
+            {
+                var request = new GraphQLHttpRequest
+                {
+                    Query = tempQuery,
+                    Variables = new
+                    {
+                        playerId,
+                        perPage,
+                        playerName = gamerTag,
+                        pageNum = currentPage
+                    }
+                };
+
+                bool success = false;
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int delay = 3000;
+
+                while (!success && retryCount < maxRetries)
+                {
+                    await _requestThrottler.WaitIfPaused();
+
+                    try
+                    {
+                        var response = await _client.SendQueryAsync<JObject>(request);
+
+                        if (response.Errors != null && response.Errors.Any())
                         {
-                            if (!reader.HasRows)
-                            {
-                                Console.WriteLine("No players found with that TournamentLink Id");
-                                return playerResult;
-                            }
-                            while (await reader.ReadAsync())
-                            {
-                                playerResult.Add(new PlayerData 
-                                { 
-                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
-                                    UserLink = reader.GetInt32(reader.GetOrdinal("user_link")),
-                                    PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link")),
-                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
-                                });
-                            }
+                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                        }
+
+                        if (response.Data == null)
+                        {
+                            throw new ApplicationException("Failed to retrieve standing data");
+                        }
+
+                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                        var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
+
+                        if (playerData?.PlayerQuery?.User?.Events?.Nodes != null)
+                        {
+                            allNodes.AddRange(playerData.PlayerQuery.User.Events.Nodes);
+                            Console.WriteLine("Tournament Node Added");
+                        }
+
+                        // Update pagination info for the next iteration
+                        var pageInfo = playerData?.PlayerQuery?.User?.Events?.PageInfo;
+                        if (pageInfo != null)
+                        {
+                            totalPages = pageInfo.TotalPages ?? 1;
+                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
+                        }
+
+                        success = true;
+                    }
+                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+                    {
+                        var errorContent = ex.Content;
+                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            Console.WriteLine("Max retries reached. Pausing further requests.");
+                            await _requestThrottler.PauseRequests(_client);
+                        }
+                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                        await Task.Delay(delay);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    }
+                }
+            }
+
+            // Construct the final result using the paginated results
+            var result = new PastEventPlayerData
+            {
+                PlayerQuery = new CommonPlayer
+                {
+                    Id = playerId,
+                    GamerTag = gamerTag,
+                    User = new CommonUser
+                    {
+                        Events = new CommonEvents
+                        {
+                            Nodes = allNodes
                         }
                     }
                 }
-                return playerResult;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
+            };
+            return result;
         }
     }
 }
