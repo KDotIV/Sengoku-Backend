@@ -23,6 +23,39 @@ namespace SengokuProvider.API.Controllers
             _playerQueryService = queryService;
             _commandProcessor = commandProcessor;
         }
+        [HttpGet("GetPlayerDataByTournamentId")]
+        public async Task<IActionResult> GetRegisteredPlayersByTournamentId([FromBody] GetRegisteredPlayersByTournamentIdCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command cannot be empty or null");
+                return new BadRequestObjectResult("Command cannot be null") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                var result = await _playerQueryService.GetRegisteredPlayersByTournamentId(command.TournamentLink);
+                if(result.Count == 0)
+                {
+                    return new ObjectResult($"No PlayerData found") { StatusCode = StatusCodes.Status404NotFound };
+                }
+                var resultJson = JsonConvert.SerializeObject(result);
+                return new OkObjectResult($"{resultJson}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Intaking Player Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+
+            }
+        }
         [HttpPost("IntakePlayersByTournament")]
         public async Task<IActionResult> IntakePlayersByTournament([FromBody] IntakePlayersByTournamentCommand command)
         {
@@ -72,8 +105,8 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("QueryPlayerStandings")]
-        public async Task<IActionResult> QueryPlayerStandingsByPlayer([FromBody] GetPlayerStandingsCommand command)
+        [HttpGet("GetPlayerStandings")]
+        public async Task<IActionResult> GetPlayerStandingsByPlayerId([FromBody] GetPlayerStandingsCommand command)
         {
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
@@ -86,7 +119,7 @@ namespace SengokuProvider.API.Controllers
                 var result = await _playerQueryService.GetPlayerStandingResults(parsedRequest);
                 if (result.Count == 0)
                 {
-                    return new OkObjectResult($"No Standings exist for this Player");
+                    return new ObjectResult($"No Standings exist for this Player") { StatusCode = StatusCodes.Status404NotFound};
                 }
                 var resultJson = JsonConvert.SerializeObject(result);
                 return new OkObjectResult($"{resultJson}");

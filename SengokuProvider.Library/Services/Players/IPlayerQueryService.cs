@@ -8,5 +8,6 @@ namespace SengokuProvider.Library.Services.Players
         public Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink);
         public Task<PastEventPlayerData> QueryStartggPreviousEventData(int playerId, string gamerTag, int perPage);
         public Task<List<PlayerStandingResult>> GetPlayerStandingResults(GetPlayerStandingsCommand command);
+        public Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int tournamentId);
     }
 }

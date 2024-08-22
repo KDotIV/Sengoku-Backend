@@ -2,6 +2,18 @@
 
 namespace SengokuProvider.Library.Models.Players
 {
+    public class GetRegisteredPlayersByTournamentIdCommand : ICommand
+    {
+        public required int TournamentLink { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (TournamentLink > 0) return true;
+            return false;
+        }
+    }
     public class IntakePlayersByTournamentCommand : ICommand
     {
         public required int TournamentLink { get; set; }
