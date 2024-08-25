@@ -155,7 +155,7 @@ namespace SengokuProvider.Library.Services.Players
                 }
 
                 int numEntrants = tempNode.NumEntrants ?? 0;
-                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, firstRecord, numEntrants);
+                int totalPoints = CalculateLeaguePoints(firstRecord, numEntrants);
 
                 var newStanding = new PlayerStandingResult
                 {
@@ -194,87 +194,73 @@ namespace SengokuProvider.Library.Services.Players
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
-            const int participationPoints = 5;
-            const int winnerBonus = 50;
 
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
                 int numEntrants = data.TournamentLink.NumEntrants ?? 0;
-                int totalPoints = CalculateLeaguePoints(participationPoints, winnerBonus, tempNode, numEntrants);
-
-                var newStandings = new PlayerStandingResult
+                try
                 {
-                    Response = "Open",
-                    EntrantsNum = numEntrants,
-                    LastUpdated = DateTime.UtcNow,
-                    UrlSlug = data.TournamentLink.Slug,
-                    StandingDetails = new StandingDetails
+                    int totalPoints = CalculateLeaguePoints(tempNode, numEntrants);
+                    var newStandings = new PlayerStandingResult
                     {
-                        IsActive = tempNode.Standing.IsActive,
-                        Placement = tempNode.Standing.Placement ?? 0,
-                        GamerTag = tempNode.Participants?.FirstOrDefault()?.Player?.GamerTag ?? "",
-                        EventId = data.TournamentLink.EventLink.Id,
-                        EventName = data.TournamentLink.EventLink.Name,
-                        TournamentId = data.TournamentLink.Id,
-                        TournamentName = data.TournamentLink.Name,
-                        LeaguePoints = totalPoints
-                    },
-                    TournamentLinks = new Links
-                    {
-                        EntrantId = tempNode.Id,
-                        StandingId = tempNode.Standing.Id,
-                        PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
-                    }
-                };
-                mappedResult.Add(newStandings);
+                        Response = "Open",
+                        EntrantsNum = numEntrants,
+                        LastUpdated = DateTime.UtcNow,
+                        UrlSlug = data.TournamentLink.Slug,
+                        StandingDetails = new StandingDetails
+                        {
+                            IsActive = tempNode.Standing.IsActive,
+                            Placement = tempNode.Standing.Placement ?? 0,
+                            GamerTag = tempNode.Participants?.FirstOrDefault()?.Player?.GamerTag ?? "",
+                            EventId = data.TournamentLink.EventLink.Id,
+                            EventName = data.TournamentLink.EventLink.Name,
+                            TournamentId = data.TournamentLink.Id,
+                            TournamentName = data.TournamentLink.Name,
+                            LeaguePoints = totalPoints
+                        },
+                        TournamentLinks = new Links
+                        {
+                            EntrantId = tempNode.Id,
+                            StandingId = tempNode.Standing.Id,
+                            PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
+                        }
+                    };
+                    mappedResult.Add(newStandings);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error Occured populating Standing Data: {ex.Message}, {ex.StackTrace}");
+                    continue;
+                }
             }
             return mappedResult;
         }
-        private int CalculateLeaguePoints(int participationPoints, int winnerBonus, CommonEntrantNode tempNode, int totalEntrants)
+        private int CalculateLeaguePoints(CommonEntrantNode tempNode, int totalEntrants)
         {
+            int participationPoints = 5;
             int totalPoints = participationPoints;
-            int maxWinnersRounds = (int)Math.Ceiling(Math.Log2(totalEntrants));
-            int maxLosersRounds = maxWinnersRounds - 1;
+            int placement = tempNode.Standing?.Placement ?? int.MaxValue;  // Default to MaxValue if placement is not found
 
-            bool wasInWinnersBracket = true;
-
-            foreach (var set in tempNode.SetList.Nodes)
+            // Apply points based on placement using the enhanced point distribution
+            foreach (var entry in CommonConstants.EnhancedPointDistribution)
             {
-                if (set.WinnerEntrantId != tempNode.Id) continue;
-                if (set?.Round == null) continue;
-
-                if (set.Round > 0)
+                if (placement <= entry.Key)
                 {
-                    // Winners' bracket points, with higher value for staying in winners
-                    double roundFactor = (double)set.Round / maxWinnersRounds;
-                    int roundPoints = (int)(roundFactor * 150);
-                    totalPoints += roundPoints;
-                }
-                else
-                {
-                    if (wasInWinnersBracket)
-                    {
-                        // Apply a penalty for being sent to losers' bracket
-                        totalPoints -= 50;
-                        wasInWinnersBracket = false;
-                    }
-
-                    // Losers' bracket points, with reduced value
-                    double roundFactor = (double)Math.Abs(set.Round) / maxLosersRounds;
-                    int roundPoints = (int)(roundFactor * 50);
-                    totalPoints += roundPoints;
+                    totalPoints += entry.Value;
+                    break;
                 }
             }
 
-            if (tempNode?.Standing?.Placement == 1)
+            // Ensure minimum points for participation
+            if (totalPoints < participationPoints)
             {
-                totalPoints += winnerBonus;
+                totalPoints = participationPoints;
             }
 
-            if (totalPoints < 5) { totalPoints = 5; }
             return totalPoints;
         }
+
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;

@@ -9,6 +9,23 @@ namespace SengokuProvider.Library.Models.Common
         public static readonly long StreetFighter6ThreadId = 1273004373890568314;
         public static readonly long GuiltyGearStriveThreadId = 1273004304764108810;
     }
+    public struct CommonConstants
+    {
+        public static readonly Dictionary<int, int> EnhancedPointDistribution = new Dictionary<int, int>
+        {
+            { 1, 150 },
+            { 2, 100 },
+            { 3, 80 },
+            { 4, 70 },
+            { 5, 60 },
+            { 7, 50 },
+            { 9, 40 },
+            { 13, 30 },
+            { 17, 20 },
+            { 25, 10 },
+            { 33, 10 }
+        };
+    }
     public struct BearerConstants
     {
         public static readonly string[] BearerArray = ["2a7b93add38208847a394e01bd3e4575", "2b0160ef106be1c250e4db077b743429", "10cf2895837a1e6e9ea826fd997180e0",
