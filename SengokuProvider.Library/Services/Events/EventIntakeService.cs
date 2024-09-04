@@ -240,7 +240,8 @@ namespace SengokuProvider.Library.Services.Events
                                 url_slug = EXCLUDED.url_slug,
                                 game_id = EXCLUDED.game_id,
                                 event_id = EXCLUDED.event_id,
-                                last_updated = EXCLUDED.last_updated;";
+                                last_updated = EXCLUDED.last_updated,
+                                entrants_num = EXCLUDED.entrants_num;";
                             using (var command = new NpgsqlCommand(createInsertCommand, conn))
                             {
                                 command.Transaction = transaction;

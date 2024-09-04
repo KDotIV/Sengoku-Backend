@@ -242,7 +242,7 @@ namespace SengokuProvider.Library.Services.Players
             int totalPoints = participationPoints;
             int placement = tempNode.Standing?.Placement ?? int.MaxValue;  // Default to MaxValue if placement is not found
 
-            // Apply points based on placement using the enhanced point distribution
+            // Apply points based on placement
             foreach (var entry in CommonConstants.EnhancedPointDistribution)
             {
                 if (placement <= entry.Key)
