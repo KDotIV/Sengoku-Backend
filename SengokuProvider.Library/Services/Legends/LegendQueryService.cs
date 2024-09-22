@@ -1,5 +1,6 @@
 ﻿using GraphQL.Client.Http;
 using Npgsql;
+using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
 
@@ -14,6 +15,57 @@ namespace SengokuProvider.Library.Services.Legends
         {
             _connectString = connectionString;
             _client = graphQlClient;
+        }
+
+        public async Task<List<LeaderboardData>> GetLeaderboardResultsByLeagueId(int leagueId)
+        {
+            if (leagueId < 1) return new List<LeaderboardData>();
+
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT p.player_name, SUM(s.gained_points) AS total_points,COUNT(DISTINCT s.tournament_link) AS tournament_count
+                                                        FROM players p
+                                                        JOIN player_leagues pl ON p.id = pl.player_id
+                                                        JOIN standings s ON p.id = s.player_id
+                                                        JOIN tournament_links t ON s.tournament_link = t.id
+                                                        JOIN tournament_leagues tl ON t.id = tl.tournament_id
+                                                        JOIN leagues l ON tl.league_id = l.id
+                                                        WHERE l.id = @Input AND pl.league_id = @Input
+                                                        GROUP BY p.player_name, l.name
+                                                        ORDER BY total_points DESC;"))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", leagueId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) new List<LeaderboardData>();
+                            var queryResult = new List<LeaderboardData>();
+
+                            while ( await reader.ReadAsync())
+                            {
+                                var mappedData = new LeaderboardData
+                                {
+                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
+                                    TotalPoints = reader.GetInt32(reader.GetOrdinal("total_points")),
+                                    TournamentCount = reader.GetInt32(reader.GetOrdinal("tournament_count"))
+                                };
+                                queryResult.Add(mappedData);
+                            }
+                            return queryResult;
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
         }
 
         public Task<LegendData> GetLegendByPlayerIds(List<int> playerID)

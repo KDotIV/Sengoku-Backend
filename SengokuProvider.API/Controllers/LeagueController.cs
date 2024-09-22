@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Leagues;
+using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Comms;
 using SengokuProvider.Library.Services.Legends;
@@ -50,7 +51,31 @@ namespace SengokuProvider.API.Controllers
             {
                 _log.LogError(ex, "Error Intaking Tournament Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-
+            }
+        }
+        [HttpGet("GetLeaderboardResultsByLeagueId")]
+        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromBody] GetLeaderboardResultsByLeagueId command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if(!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                List<LeaderboardData> result = await _legendQueryService.GetLeaderboardResultsByLeagueId(command.LeagueId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Intaking Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
         [HttpPost("AddTournamentToLeague")]

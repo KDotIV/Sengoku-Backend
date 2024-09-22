@@ -23,7 +23,9 @@ namespace SengokuProvider.Library.Models.Legends
 
         public bool Validate()
         {
-            throw new NotImplementedException();
+            if(PlayerId > 0 &&
+                !string.IsNullOrEmpty(GamerTag)) return true;
+            return false;
         }
     }
 }
