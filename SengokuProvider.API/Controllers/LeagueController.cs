@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Leagues;
-using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Comms;
 using SengokuProvider.Library.Services.Legends;
@@ -62,7 +61,7 @@ namespace SengokuProvider.API.Controllers
                 return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
             }
             var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if(!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
             {
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);

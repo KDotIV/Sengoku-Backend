@@ -35,7 +35,7 @@ namespace SengokuProvider.Library.Services.Legends
                                                         JOIN leagues l ON tl.league_id = l.id
                                                         WHERE l.id = @Input AND pl.league_id = @Input
                                                         GROUP BY p.player_name, l.name
-                                                        ORDER BY total_points DESC;"))
+                                                        ORDER BY total_points DESC;", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", leagueId);
                         using (var reader = await cmd.ExecuteReaderAsync())
@@ -43,7 +43,7 @@ namespace SengokuProvider.Library.Services.Legends
                             if (!reader.HasRows) new List<LeaderboardData>();
                             var queryResult = new List<LeaderboardData>();
 
-                            while ( await reader.ReadAsync())
+                            while (await reader.ReadAsync())
                             {
                                 var mappedData = new LeaderboardData
                                 {
@@ -67,7 +67,6 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-
         public Task<LegendData> GetLegendByPlayerIds(List<int> playerID)
         {
             throw new NotImplementedException();
