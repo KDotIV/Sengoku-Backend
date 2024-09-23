@@ -53,7 +53,7 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("GetLeaderboardResultsByLeagueId")]
-        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromBody] GetLeaderboardResultsByLeagueId command)
+        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromBody] GetLeaderboardResultsByLeagueCommand command)
         {
             if (command == null)
             {

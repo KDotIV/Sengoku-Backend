@@ -91,14 +91,9 @@ namespace SengokuProvider.Library.Models.Events
     public class UpdateEventCommand : ICommand
     {
         public int EventId { get; set; }
-        public List<Tuple<string, string>> UpdateParameters { get; set; }
+        public required List<Tuple<string, string>> UpdateParameters { get; set; }
         public required CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
-
-        public UpdateEventCommand()
-        {
-            UpdateParameters = new List<Tuple<string, string>>();
-        }
 
         public bool Validate()
         {
@@ -106,6 +101,18 @@ namespace SengokuProvider.Library.Models.Events
                 UpdateParameters != null &&
                 UpdateParameters.Count > 0) return true;
             else return false;
+        }
+    }
+    public class GetCurrentBracketQueueByTournamentCommand : ICommand
+    {
+        public required int TournamentId { get; set; }
+        public string? PoolName { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            throw new NotImplementedException();
         }
     }
 }

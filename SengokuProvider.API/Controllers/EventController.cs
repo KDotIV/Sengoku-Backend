@@ -162,5 +162,30 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
+        [HttpGet("GetCurrentBracketQueue")]
+        public async Task<IActionResult> GetCurrentBracketQueueByTournamentId([FromBody] GetCurrentBracketQueueByTournamentCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                return new OkObjectResult($"( Related Regions: )");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Regional Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+
+            }
+        }
     }
 }

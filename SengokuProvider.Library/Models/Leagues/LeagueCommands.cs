@@ -28,7 +28,7 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
-    public class GetLeaderboardResultsByLeagueId : ICommand
+    public class GetLeaderboardResultsByLeagueCommand : ICommand
     {
         public required int LeagueId { get; set; }
         public CommandRegistry Topic { get; set; }

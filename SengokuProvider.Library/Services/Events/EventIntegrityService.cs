@@ -78,7 +78,7 @@ namespace SengokuProvider.Library.Services.Events
                             if (!reader.HasRows)
                             {
                                 Console.WriteLine("No standings found for the provided player ID.");
-                                return new UpdateEventCommand { Topic = CommandRegistry.UpdateEvent };
+                                return new UpdateEventCommand { Topic = CommandRegistry.UpdateEvent, UpdateParameters = new List<Tuple<string, string>>() };
                             }
                             while (await reader.ReadAsync())
                             {
@@ -111,7 +111,7 @@ namespace SengokuProvider.Library.Services.Events
         }
         private async Task<UpdateEventCommand?> VerifyMissingData(EventData eventToUpdate)
         {
-            var newCommand = new UpdateEventCommand { EventId = eventToUpdate.Id, Topic = CommandRegistry.UpdateEvent };
+            var newCommand = new UpdateEventCommand { EventId = eventToUpdate.Id, Topic = CommandRegistry.UpdateEvent, UpdateParameters = new List<Tuple<string, string>>() };
             var result = await _queryService.QueryStartggEventByEventId(eventToUpdate.LinkID);
 
             if (result == null) return null;
