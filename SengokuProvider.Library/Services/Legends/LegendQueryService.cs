@@ -16,7 +16,50 @@ namespace SengokuProvider.Library.Services.Legends
             _connectString = connectionString;
             _client = graphQlClient;
         }
+        public async Task<List<LeagueByOrgResults>> GetLeaderboardsByOrgId(int OrgId)
+        {
+            if (OrgId < 0) return new List<LeagueByOrgResults>();
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", OrgId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) new List<LeagueByOrgResults>();
+                            var queryResult = new List<LeagueByOrgResults>();
 
+                            while (await reader.ReadAsync())
+                            {
+                                var mappedData = new LeagueByOrgResults
+                                {
+                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                    Name = reader.GetString(reader.GetOrdinal("name")),
+                                    OrgId = reader.GetInt32(reader.GetOrdinal("org_id")),
+                                    StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
+                                    EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
+                                    Game = reader.GetInt32(reader.GetOrdinal("game")),
+                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                };
+                                queryResult.Add(mappedData);
+                            }
+                            return queryResult;
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
         public async Task<List<LeaderboardData>> GetLeaderboardResultsByLeagueId(int leagueId)
         {
             if (leagueId < 1) return new List<LeaderboardData>();

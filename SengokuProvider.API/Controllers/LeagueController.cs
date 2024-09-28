@@ -122,13 +122,65 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _legendIntakeService.AddPlayerToLeague(command.PlayerIds, command.LeagueId);
-                return new OkObjectResult(result);
+                return Ok(result);
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Intaking Tournament Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
 
+            }
+        }
+        [HttpGet("GetLeaderboardsByOrg")]
+        public async Task<IActionResult> GetLeaderboardsByOrgId([FromBody] GetLeaderboardsByOrgCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                var result = await _legendQueryService.GetLeaderboardsByOrgId(command.OrgId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Leaderboard Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpPost("CreateLeagueByOrg")]
+        public async Task<IActionResult> CreateLeagueByOrg([FromBody] CreateLeagueByOrgCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                LeagueByOrgResults result = await _legendIntakeService.CreateLeagueByOrg(command.OrgId, command.LeagueName, command.StartDate, command.EndDate, command.GameId, command.Description);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Leaderboard Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
     }
