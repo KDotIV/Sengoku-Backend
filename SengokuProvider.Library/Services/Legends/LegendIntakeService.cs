@@ -294,5 +294,10 @@ namespace SengokuProvider.Library.Services.Legends
 
             return newParameters;
         }
+
+        public Task<LeagueByOrgResults> CreateLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "")
+        {
+            throw new NotImplementedException();
+        }
     }
 }
