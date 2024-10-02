@@ -25,7 +25,6 @@ namespace SengokuProvider.API.Controllers
         [HttpGet("Pulse")]
         public async Task<IActionResult> Pulse()
         {
-            await _discordWebhook.SendThreadUpdateMessage(636751, "Testing... Testing...", 1273004220831891517);
             return new OkObjectResult("I'm Alive...");
         }
         [HttpPost("CreateTable")]
