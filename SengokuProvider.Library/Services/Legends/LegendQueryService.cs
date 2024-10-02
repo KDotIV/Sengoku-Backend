@@ -36,8 +36,8 @@ namespace SengokuProvider.Library.Services.Legends
                             {
                                 var mappedData = new LeagueByOrgResults
                                 {
-                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                                    Name = reader.GetString(reader.GetOrdinal("name")),
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("id")),
+                                    LeagueName = reader.GetString(reader.GetOrdinal("name")),
                                     OrgId = reader.GetInt32(reader.GetOrdinal("org_id")),
                                     StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
                                     EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
@@ -83,7 +83,7 @@ namespace SengokuProvider.Library.Services.Legends
                         cmd.Parameters.AddWithValue("@Input", leagueId);
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
-                            if (!reader.HasRows) new List<LeaderboardData>();
+                            if (!reader.HasRows) return new List<LeaderboardData>();
                             var queryResult = new List<LeaderboardData>();
 
                             while (await reader.ReadAsync())

@@ -174,7 +174,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                LeagueByOrgResults result = await _legendIntakeService.CreateLeagueByOrg(command.OrgId, command.LeagueName, command.StartDate, command.EndDate, command.GameId, command.Description);
+                LeagueByOrgResults result = await _legendIntakeService.InsertNewLeagueByOrg(command.OrgId, command.LeagueName, command.StartDate, command.EndDate, command.GameId, command.Description);
                 return Ok(result);
             }
             catch (Exception ex)
