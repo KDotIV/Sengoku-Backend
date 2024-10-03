@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
@@ -141,6 +142,16 @@ namespace SengokuProvider.Library.Services.Legends
                 }
             }
             return newOnboardResult;
+        }
+        public async Task<List<TournamentBoardResult>> AddBracketToRunnerBoard(List<int> tournamentIds, int userId)
+        {
+            var currentResult = new List<TournamentBoardResult>();
+            if(userId < 0 || tournamentIds.Count == 0 ) { return currentResult; }
+
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+            }
         }
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {
