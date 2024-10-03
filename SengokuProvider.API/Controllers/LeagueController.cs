@@ -52,7 +52,7 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("GetLeaderboardResultsByLeagueId")]
+        [HttpPost("GetLeaderboardResultsByLeagueId")]
         public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromBody] GetLeaderboardResultsByLeagueCommand command)
         {
             if (command == null)
@@ -131,7 +131,7 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
-        [HttpGet("GetLeaderboardsByOrg")]
+        [HttpPost("GetLeaderboardsByOrg")]
         public async Task<IActionResult> GetLeaderboardsByOrgId([FromBody] GetLeaderboardsByOrgCommand command)
         {
             if (command == null)

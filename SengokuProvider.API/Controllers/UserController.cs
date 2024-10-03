@@ -19,7 +19,7 @@ namespace SengokuProvider.API.Controllers
             _commandProcessor = commandProcessor;
         }
 
-        [HttpGet("GetSearchedUsers")]
+        [HttpPost("GetSearchedUsers")]
         public async Task<IActionResult> GetSearchedUsers()
         {
             return new ObjectResult("Request was not valid");

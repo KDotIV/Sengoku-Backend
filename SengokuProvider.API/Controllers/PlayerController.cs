@@ -23,7 +23,7 @@ namespace SengokuProvider.API.Controllers
             _playerQueryService = queryService;
             _commandProcessor = commandProcessor;
         }
-        [HttpGet("GetRegisteredPlayersByTournamentId")]
+        [HttpPost("GetRegisteredPlayersByTournamentId")]
         public async Task<IActionResult> GetRegisteredPlayersByTournamentId([FromBody] GetRegisteredPlayersByTournamentIdCommand command)
         {
             if (command == null)
@@ -42,7 +42,7 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _playerQueryService.GetRegisteredPlayersByTournamentId(command.TournamentLink);
-                if(result.Count == 0)
+                if (result.Count == 0)
                 {
                     return new ObjectResult($"No PlayerData found") { StatusCode = StatusCodes.Status404NotFound };
                 }
@@ -105,7 +105,7 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("GetPlayerStandings")]
+        [HttpPost("GetPlayerStandings")]
         public async Task<IActionResult> GetPlayerStandingsByPlayerId([FromBody] GetPlayerStandingsCommand command)
         {
             var parsedRequest = await _commandProcessor.ParseRequest(command);
@@ -119,7 +119,7 @@ namespace SengokuProvider.API.Controllers
                 var result = await _playerQueryService.GetPlayerStandingResults(parsedRequest);
                 if (result.Count == 0)
                 {
-                    return new ObjectResult($"No Standings exist for this Player") { StatusCode = StatusCodes.Status404NotFound};
+                    return new ObjectResult($"No Standings exist for this Player") { StatusCode = StatusCodes.Status404NotFound };
                 }
                 var resultJson = JsonConvert.SerializeObject(result);
                 return new OkObjectResult($"{resultJson}");
