@@ -1,5 +1,6 @@
 ﻿using GraphQL.Client.Http;
 using Npgsql;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
@@ -166,6 +167,10 @@ namespace SengokuProvider.Library.Services.Legends
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
+        }
+        public Task<List<TournamentBoardResult>> GetCurrentRunnerBoard(int userId)
+        {
+            throw new NotImplementedException();
         }
         private async Task<LegendData?> QueryLegendsByPlayerLink(int playerLinkId)
         {

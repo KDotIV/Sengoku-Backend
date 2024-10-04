@@ -152,6 +152,7 @@ namespace SengokuProvider.Library.Services.Legends
             {
                 await conn.OpenAsync();
             }
+            throw new NotImplementedException();
         }
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {
