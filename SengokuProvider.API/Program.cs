@@ -24,6 +24,16 @@ builder.Services.AddSingleton<IntakeValidator>();
 builder.Services.AddSingleton<RequestThrottler>();
 builder.Services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowSpecificOrigins", policy =>
+    {
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 //Scopes
 builder.Services.AddScoped<IAzureBusApiService, AzureBusApiService>(provider =>
 {
@@ -101,6 +111,7 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
+app.UseCors("AllowSpecificOrigins");
 app.UseHttpsRedirection();
 
 app.UseAuthorization();

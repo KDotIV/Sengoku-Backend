@@ -83,4 +83,15 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
+    public class GetCurrentRunnerBoardCommand : ICommand
+    {
+        public required int UserId { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            throw new NotImplementedException();
+        }
+    }
 }
