@@ -146,7 +146,7 @@ namespace SengokuProvider.Library.Services.Legends
         public async Task<List<TournamentBoardResult>> AddBracketToRunnerBoard(List<int> tournamentIds, int userId)
         {
             var currentResult = new List<TournamentBoardResult>();
-            if(userId < 0 || tournamentIds.Count == 0 ) { return currentResult; }
+            if (userId < 0 || tournamentIds.Count == 0) { return currentResult; }
 
             using (var conn = new NpgsqlConnection(_connectionString))
             {
