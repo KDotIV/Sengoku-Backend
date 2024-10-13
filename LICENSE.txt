@@ -1,4 +1,4 @@
-FiendPopsicle Open-Source License (FOSL) for Sengoku-API
+NeoKontra Open-Source License (FOSL) for Sengoku-API
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to use, copy, modify, merge, publish, and distribute copies of the Software, subject to the following conditions:
 
 Non-Commercial Use:
@@ -6,7 +6,7 @@ a. The Software itself, referred to as "Sengoku-API", may not be sold as a paid 
 b. The Sengoku-API can be used as a part of a paid service, provided that the Sengoku-API itself is not the primary product being sold.
 c. Users may not claim ownership of the Sengoku-API, apply for patents based on the Sengoku-API, or place the Sengoku-API under a proprietary license.
 d. The Sengoku-API must not be re-licensed under any terms that are not open source.
-e. Users may not misrepresent the origin of the Sengoku-API. If the Sengoku-API is used, an acknowledgment of the original author(s) and the company FiendPopsicle must be included in all copies or substantial portions of the Software.
+e. Users may not misrepresent the origin of the Sengoku-API. If the Sengoku-API is used, an acknowledgment of the original author(s) and the company NeoKontra must be included in all copies or substantial portions of the Software.
 
 Copyleft:
 a. Any modified versions of the Sengoku-API or any derivative works must be distributed under the same terms as this license. This means that the source code of any modifications or derivatives must be made available and remain open source.
@@ -17,14 +17,14 @@ a. The above copyright notice and this permission notice shall be included in al
 b. Users must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
 
 Integrity of the Author's Source Code:
-a. Users may not misrepresent the origin of the Software. If you use the Software, an acknowledgment of the original author(s) and the company FiendPopsicle must be included in all copies or substantial portions of the Software.
+a. Users may not misrepresent the origin of the Software. If you use the Software, an acknowledgment of the original author(s) and the company NeoKontra must be included in all copies or substantial portions of the Software.
 b. Users must retain all notices stating that this is a derivative work, and they must retain the original copyright and permission notices.
 
 Approval for Merging Additional Code:
-Any user that wants to add or merge additional code to the original source code must obtain approval from the original creators, i.e., anyone employed by FiendPopsicle. All such additions or merges must be reviewed and approved to ensure compliance with the original intentions of the software.
+Any user that wants to add or merge additional code to the original source code must obtain approval from the original creators, i.e., anyone employed by NeoKontra. All such additions or merges must be reviewed and approved to ensure compliance with the original intentions of the software.
 
 Prohibition of Malicious Use:
-The Software may not be used for any malicious purposes under any jurisdiction. Using the Software for malicious activities is strictly prohibited and does not represent FiendPopsicle or the intentions of its creators. Any misuse of the Software for harmful purposes is a violation of this license.
+The Software may not be used for any malicious purposes under any jurisdiction. Using the Software for malicious activities is strictly prohibited and does not represent NeoKontra or the intentions of its creators. Any misuse of the Software for harmful purposes is a violation of this license.
 
 Disclaimer of Warranty:
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
