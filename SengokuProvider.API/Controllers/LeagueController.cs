@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Comms;
@@ -180,6 +181,56 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Querying Leaderboard Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpPost("AddBracketToRunnerBoard")]
+        public async Task<IActionResult> AddBracketToRunnerBoard([FromBody] AddBracketToRunnerBoardCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                List<TournamentBoardResult> result = await _legendIntakeService.AddBracketToRunnerBoard(command.TournamentIds, command.UserId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Adding Bracket check IDs");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetCurrentRunnerBoard")]
+        public async Task<IActionResult> GetCurrentRunnerBoard([AsParameters] GetCurrentRunnerBoardCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                List<TournamentBoardResult> result = await _legendQueryService.GetCurrentRunnerBoard(command.UserId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Retrieving RunnerBoard");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }

@@ -1,4 +1,5 @@
-﻿using SengokuProvider.Library.Models.Leagues;
+﻿using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 
 namespace SengokuProvider.Library.Services.Legends
@@ -10,5 +11,6 @@ namespace SengokuProvider.Library.Services.Legends
         public Task<LeagueByOrgResults> InsertNewLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "");
         public Task<LegendData?> GenerateNewLegends(int playerId, string playerName);
         public Task<int> InsertNewLegendData(LegendData newLegend);
+        public Task<List<TournamentBoardResult>> AddBracketToRunnerBoard(List<int> tournamentIds, int userId);
     }
 }
