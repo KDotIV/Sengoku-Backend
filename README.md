@@ -1,6 +1,6 @@
 # Sengoku-API
 
-Sengoku-API is an open-source API developed by NeoKontra. This API provides various functionalities and can be served locally over HTTPS. This README provides setup instructions, configuration details, and other important information to get you started.
+Sengoku-API is an open-source API developed by MERCs. This API provides various functionalities and can be served locally over HTTPS. This README provides setup instructions, configuration details, and other important information to get you started.
 
 ## Table of Contents
 - [Prerequisites](#prerequisites)
@@ -89,4 +89,4 @@ If you would like to contribute to the development of Sengoku-API, please follow
 3. Make your changes and commit them (git commit -m 'Add some feature').
 4. Push to the branch (git push origin feature-branch).
 5. Create a new Pull Request.
-6. Please note that any addition or merge of code to the original source must be approved by the original creators (anyone employed by NeoKontra).
+6. Please note that any addition or merge of code to the original source must be approved by the original creators (anyone employed by MERCs).
