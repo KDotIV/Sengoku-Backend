@@ -143,16 +143,64 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return newOnboardResult;
         }
-        public async Task<List<TournamentBoardResult>> AddBracketToRunnerBoard(List<int> tournamentIds, int userId)
+        public async Task<List<TournamentBoardResult>> AddTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds)
         {
-            var currentResult = new List<TournamentBoardResult>();
-            if (userId < 0 || tournamentIds.Count == 0) { return currentResult; }
+            return await InsertTournamentsToRunnerBoard(userId, orgId, tournamentIds);
+        }
+        public async Task<BoardRunnerResult> CreateNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, string? orgName = default)
+        {
+            var boardResult = new BoardRunnerResult();
 
-            using (var conn = new NpgsqlConnection(_connectionString))
+            return boardResult;
+        }
+        private async Task<List<TournamentBoardResult>> InsertTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds)
+        {
+            var tournamentResults = new List<TournamentBoardResult>();
+
+            return tournamentResults;
+        }
+        private async Task<List<TournamentBoardResult>> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, 
+            string? orgName = default)
+        {
+            var tournamentResults = new List<TournamentBoardResult>();
+            if (userId < 0 || tournamentIds.Count == 0) { return tournamentResults; }
+
+            try
             {
-                await conn.OpenAsync();
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO bracket_boards (user_id, user_name, tournament_links, organization_id, organization_name, last_updated) 
+                                                    VALUES (@UserInput, @UserName, @TournamentLinks, @OrgId, @OrgName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@UserInput", userId);
+                        cmd.Parameters.AddWithValue("@UserName", userName);
+                        cmd.Parameters.AddWithValue("@TournamentLinks", tournamentIds);
+                        cmd.Parameters.AddWithValue("@OrgId", orgId);
+                        cmd.Parameters.AddWithValue("@OrgName", orgName ?? "");
+                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                        var result = await cmd.ExecuteNonQueryAsync();
+                        if (result > 0)
+                        {
+                            var addedTournament = new TournamentBoardResult
+                            {
+
+                            };
+                            tournamentResults.Add(addedTournament);
+                        }
+                        return tournamentResults;
+                    }
+                }
             }
-            throw new NotImplementedException();
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
         }
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {

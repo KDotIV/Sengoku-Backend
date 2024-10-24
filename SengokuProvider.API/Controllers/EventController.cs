@@ -106,8 +106,8 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
-        [HttpPost("QueryEventsByLocation")]
-        public async Task<IActionResult> QueryEventsByLocation([FromBody] GetTournamentsByLocationCommand command)
+        [HttpGet("QueryEventsByLocation")]
+        public async Task<IActionResult> QueryEventsByLocation([AsParameters] GetTournamentsByLocationCommand command)
         {
             if (command == null)
             {
@@ -134,8 +134,8 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpPost("QueryRelatedRegionsById")]
-        public async Task<IActionResult> QueryRelatedRegionsById([FromBody] GetRelatedRegionsCommand command)
+        [HttpGet("QueryRelatedRegionsById")]
+        public async Task<IActionResult> QueryRelatedRegionsById([AsParameters] GetRelatedRegionsCommand command)
         {
             if (command == null)
             {
@@ -162,8 +162,8 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
-        [HttpPost("GetCurrentBracketQueue")]
-        public async Task<IActionResult> GetCurrentBracketQueueByTournamentId([FromBody] GetCurrentBracketQueueByTournamentCommand command)
+        [HttpGet("GetCurrentBracketQueue")]
+        public async Task<IActionResult> GetCurrentBracketQueueByTournamentId([AsParameters] GetCurrentBracketQueueByTournamentCommand command)
         {
             if (command == null)
             {

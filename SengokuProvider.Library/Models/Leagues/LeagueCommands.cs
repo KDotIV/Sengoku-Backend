@@ -71,10 +71,13 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
-    public class AddBracketToRunnerBoardCommand : ICommand
+    public class CreateNewRunnerBoardCommand : ICommand
     {
         public required List<int> TournamentIds { get; set; }
         public required int UserId { get; set; }
+        public required string UserName { get; set; }
+        public int OrgId { get; set; } = 0;
+        public string OrgName { get; set; } = "";
         public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
         public bool Validate()
@@ -83,7 +86,20 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
-    public class GetCurrentRunnerBoardCommand : ICommand
+    public class AddTournamentToRunnerBoardCommand : ICommand
+    {
+        public required List<int> TournamentIds { get; set; }
+        public required int UserId { get; set; }
+        public required int OrgId { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+        public bool Validate()
+        {
+            if (TournamentIds.Count > 0 && UserId > 0) return true;
+            return false;
+        }
+    }
+    public class GetCurrentRunnerBoardByUserCommand : ICommand
     {
         public required int UserId { get; set; }
         public CommandRegistry Topic { get; set; }

@@ -11,6 +11,7 @@ namespace SengokuProvider.Library.Services.Legends
         public Task<LeagueByOrgResults> InsertNewLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "");
         public Task<LegendData?> GenerateNewLegends(int playerId, string playerName);
         public Task<int> InsertNewLegendData(LegendData newLegend);
-        public Task<List<TournamentBoardResult>> AddBracketToRunnerBoard(List<int> tournamentIds, int userId);
+        public Task<BoardRunnerResult> CreateNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, string? orgName = default);
+        public Task<List<TournamentBoardResult>> AddTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds);
     }
 }

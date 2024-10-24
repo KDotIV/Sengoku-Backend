@@ -53,8 +53,8 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpPost("GetLeaderboardResultsByLeagueId")]
-        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromBody] GetLeaderboardResultsByLeagueCommand command)
+        [HttpGet("GetLeaderboardResultsByLeagueId")]
+        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([AsParameters] GetLeaderboardResultsByLeagueCommand command)
         {
             if (command == null)
             {
@@ -129,11 +129,10 @@ namespace SengokuProvider.API.Controllers
             {
                 _log.LogError(ex, "Error Intaking Tournament Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-
             }
         }
-        [HttpPost("GetLeaderboardsByOrg")]
-        public async Task<IActionResult> GetLeaderboardsByOrgId([FromBody] GetLeaderboardsByOrgCommand command)
+        [HttpGet("GetLeaderboardsByOrg")]
+        public async Task<IActionResult> GetLeaderboardsByOrgId([AsParameters] GetLeaderboardsByOrgCommand command)
         {
             if (command == null)
             {
@@ -184,8 +183,8 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpPost("AddBracketToRunnerBoard")]
-        public async Task<IActionResult> AddBracketToRunnerBoard([FromBody] AddBracketToRunnerBoardCommand command)
+        [HttpPost("CreateNewRunnerBoard")]
+        public async Task<IActionResult> CreateNewRunnerBoard([FromBody] CreateNewRunnerBoardCommand command)
         {
             if (command == null)
             {
@@ -200,7 +199,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                List<TournamentBoardResult> result = await _legendIntakeService.AddBracketToRunnerBoard(command.TournamentIds, command.UserId);
+                var result = await _legendIntakeService.CreateNewRunnerBoard(command.TournamentIds, command.UserId, command.UserName, command.OrgId, command.OrgName);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -210,7 +209,7 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("GetCurrentRunnerBoard")]
-        public async Task<IActionResult> GetCurrentRunnerBoard([AsParameters] GetCurrentRunnerBoardCommand command)
+        public async Task<IActionResult> GetCurrentRunnerBoard([AsParameters] GetCurrentRunnerBoardByUserCommand command)
         {
             if (command == null)
             {
@@ -231,6 +230,31 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Retrieving RunnerBoard");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpPut("AddTournamentToRunnerBoard")]
+        public async Task<IActionResult> AddTournamentToRunnerBoard([FromBody] AddTournamentToRunnerBoardCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                var result = await _legendIntakeService.AddTournamentsToRunnerBoard(command.UserId, command.OrgId, command.TournamentIds);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Adding Tournament to RunnerBoard");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
