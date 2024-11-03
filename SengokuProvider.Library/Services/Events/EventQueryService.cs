@@ -18,7 +18,7 @@ namespace SengokuProvider.Library.Services.Events
         private readonly RequestThrottler _requestThrottler;
         public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator, RequestThrottler requestThrottler)
         {
-            _connectionString = connectionString;
+            _connectionString = connectionString;   
             _validator = validator;
             _client = client;
             _requestThrottler = requestThrottler;

@@ -28,7 +28,6 @@ namespace SengokuProvider.Library.Services.Legends
             _legendQueryService = queryService;
             _azureBusApiService = azureServiceBus;
         }
-
         public async Task<LegendData?> GenerateNewLegends(int playerId, string playerName)
         {
             Console.WriteLine("Beginning Onboarding Process...");
@@ -149,7 +148,18 @@ namespace SengokuProvider.Library.Services.Legends
         }
         public async Task<BoardRunnerResult> CreateNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, string? orgName = default)
         {
-            var boardResult = new BoardRunnerResult();
+            var boardResult = new BoardRunnerResult
+            {
+                TournamentList = new List<TournamentBoardResult>(0),
+                UserId = userId,
+                OrgId = orgId,
+                Response = ""
+            };
+            var success = await InsertNewRunnerBoard(tournamentIds, userId, userName, orgId);
+
+            if (!success) return boardResult;
+
+            var tempList = await _legendQueryService.Get
 
             return boardResult;
         }
@@ -159,11 +169,10 @@ namespace SengokuProvider.Library.Services.Legends
 
             return tournamentResults;
         }
-        private async Task<List<TournamentBoardResult>> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, 
+        private async Task<bool> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, 
             string? orgName = default)
         {
-            var tournamentResults = new List<TournamentBoardResult>();
-            if (userId < 0 || tournamentIds.Count == 0) { return tournamentResults; }
+            if (userId < 0 || tournamentIds.Count == 0) { return false; }
 
             try
             {
@@ -171,7 +180,8 @@ namespace SengokuProvider.Library.Services.Legends
                 {
                     await conn.OpenAsync();
                     using (var cmd = new NpgsqlCommand(@"INSERT INTO bracket_boards (user_id, user_name, tournament_links, organization_id, organization_name, last_updated) 
-                                                    VALUES (@UserInput, @UserName, @TournamentLinks, @OrgId, @OrgName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                                                        VALUES (@UserInput, @UserName, @TournamentLinks, @OrgId, @OrgName, @LastUpdated)
+                                                        ON CONFLICT DO NOTHING RETURNING user_id;", conn))
                     {
                         cmd.Parameters.AddWithValue("@UserInput", userId);
                         cmd.Parameters.AddWithValue("@UserName", userName);
@@ -181,16 +191,13 @@ namespace SengokuProvider.Library.Services.Legends
                         cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
 
                         var result = await cmd.ExecuteNonQueryAsync();
+
                         if (result > 0)
                         {
-                            var addedTournament = new TournamentBoardResult
-                            {
-
-                            };
-                            tournamentResults.Add(addedTournament);
+                            return true;
                         }
-                        return tournamentResults;
                     }
+                    return false;
                 }
             }
             catch (NpgsqlException ex)
