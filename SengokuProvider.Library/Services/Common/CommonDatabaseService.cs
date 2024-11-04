@@ -17,6 +17,24 @@ namespace SengokuProvider.Library.Services.Common
         {
             throw new NotImplementedException();
         }
+        public NpgsqlParameter CreateDBIntArrayType(string parameterName, int[] array)
+        {
+            var newParameters = new NpgsqlParameter();
+            newParameters.ParameterName = parameterName;
+            newParameters.Value = array ?? Array.Empty<int>();
+            newParameters.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer;
+
+            return newParameters;
+        }
+        public NpgsqlParameter CreateDBTextArrayType(string parameterName, string[] array)
+        {
+            var newParameters = new NpgsqlParameter();
+            newParameters.ParameterName = parameterName;
+            newParameters.Value = array;
+            newParameters.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text;
+
+            return newParameters;
+        }
 
         public async Task<int> CreateTable(string tableName, Tuple<string, string>[] columnDefinitions)
         {

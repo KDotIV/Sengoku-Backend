@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SengokuProvider.Library.Models.Events
+﻿namespace SengokuProvider.Library.Models.Events
 {
     public class BoardRunnerResult
     {
@@ -12,6 +6,5 @@ namespace SengokuProvider.Library.Models.Events
         public required int UserId { get; set; }
         public required int OrgId { get; set; } = 0;
         public required string Response { get; set; } = string.Empty;
-
     }
 }

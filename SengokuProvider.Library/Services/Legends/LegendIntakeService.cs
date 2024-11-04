@@ -9,7 +9,10 @@ using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Worker.Handlers;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace SengokuProvider.Library.Services.Legends
 {
@@ -17,16 +20,21 @@ namespace SengokuProvider.Library.Services.Legends
     {
         private readonly IConfiguration _configuration;
         private readonly ILegendQueryService _legendQueryService;
+        private readonly IEventQueryService _eventQueryService;
         private readonly IAzureBusApiService _azureBusApiService;
+        private readonly ICommonDatabaseService _commonServices;
         private readonly string _connectionString;
         private readonly int _orgLeagueLimit = 5;
         private static Random _rand = new Random();
-        public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IAzureBusApiService azureServiceBus)
+        public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IEventQueryService eventQueryService,
+            IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
         {
             _configuration = configuration;
             _connectionString = connectionString;
             _legendQueryService = queryService;
+            _eventQueryService = eventQueryService;
             _azureBusApiService = azureServiceBus;
+            _commonServices = commonServices;
         }
         public async Task<LegendData?> GenerateNewLegends(int playerId, string playerName)
         {
@@ -159,8 +167,19 @@ namespace SengokuProvider.Library.Services.Legends
 
             if (!success) return boardResult;
 
-            var tempList = await _legendQueryService.Get
+            var tempList = await _eventQueryService.GetTournamentLinksById(tournamentIds.ToArray());
 
+            foreach (var tournament in tempList)
+            {
+                boardResult.TournamentList.Add(new TournamentBoardResult
+                {
+                    TournamentId = tournament.Id,
+                    TournamentName = CleanUrlSlugName(tournament.UrlSlug),
+                    UrlSlug = tournament.UrlSlug,
+                    EntrantsNum = tournament.EntrantsNum,
+                    LastUpdated = tournament.LastUpdated,
+                });
+            }
             return boardResult;
         }
         private async Task<List<TournamentBoardResult>> InsertTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds)
@@ -169,7 +188,7 @@ namespace SengokuProvider.Library.Services.Legends
 
             return tournamentResults;
         }
-        private async Task<bool> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, 
+        private async Task<bool> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default,
             string? orgName = default)
         {
             if (userId < 0 || tournamentIds.Count == 0) { return false; }
@@ -185,7 +204,8 @@ namespace SengokuProvider.Library.Services.Legends
                     {
                         cmd.Parameters.AddWithValue("@UserInput", userId);
                         cmd.Parameters.AddWithValue("@UserName", userName);
-                        cmd.Parameters.AddWithValue("@TournamentLinks", tournamentIds);
+                        var tournamentArrayParam = _commonServices.CreateDBIntArrayType("TournamentLinks", tournamentIds.ToArray());
+                        cmd.Parameters.Add(tournamentArrayParam);
                         cmd.Parameters.AddWithValue("@OrgId", orgId);
                         cmd.Parameters.AddWithValue("@OrgName", orgName ?? "");
                         cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
@@ -478,6 +498,34 @@ namespace SengokuProvider.Library.Services.Legends
                     if (newId != queryResult || queryResult == 0) return newId;
                 }
             }
+        }
+        private string CleanUrlSlugName(string urlSlug)
+        {
+            if (string.IsNullOrEmpty(urlSlug))
+                return string.Empty;
+
+            //Extract the tournament name part
+            var tournamentMatch = Regex.Match(urlSlug, @"tournament/([^/]+)/event");
+            var tournamentPart = tournamentMatch.Success ? tournamentMatch.Groups[1].Value : string.Empty;
+
+            //Extract the event name part
+            var eventMatch = Regex.Match(urlSlug, @"event/([^/]+)");
+            var eventPart = eventMatch.Success ? eventMatch.Groups[1].Value : string.Empty;
+
+            //Clean and capitalize both parts
+            var cleanedTournamentPart = CleanAndCapitalize(tournamentPart);
+            var cleanedEventPart = CleanAndCapitalize(eventPart);
+
+            // Combine both parts into one result string
+            return $"{cleanedTournamentPart} {cleanedEventPart}".Trim();
+        }
+        private string CleanAndCapitalize(string input)
+        {
+            // Remove special characters except '#', keep A-Z, a-z, 0-9
+            var cleanedInput = Regex.Replace(input, @"[^A-Za-z0-9#\s]", " ");
+
+            var textInfo = CultureInfo.CurrentCulture.TextInfo;
+            return textInfo.ToTitleCase(cleanedInput.ToLower());
         }
     }
 }

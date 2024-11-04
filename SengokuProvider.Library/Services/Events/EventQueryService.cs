@@ -18,7 +18,7 @@ namespace SengokuProvider.Library.Services.Events
         private readonly RequestThrottler _requestThrottler;
         public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator, RequestThrottler requestThrottler)
         {
-            _connectionString = connectionString;   
+            _connectionString = connectionString;
             _validator = validator;
             _client = client;
             _requestThrottler = requestThrottler;
@@ -218,32 +218,35 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        public async Task<TournamentData> GetTournamentLinkById(int tournamentLinkId)
+        public async Task<List<TournamentData>> GetTournamentLinksById(int[] tournamentLinkId)
         {
             try
             {
-                var tournamentResult = new TournamentData { Id = 0, UrlSlug = string.Empty, EventId = 0, LastUpdated = DateTime.MinValue };
+                var tournamentResults = new List<TournamentData>();
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"Select * From tournament_links WHERE id = @Input", conn))
+                    using (var cmd = new NpgsqlCommand(@"Select * From tournament_links WHERE id = ANY(ARRAY@Input)", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", tournamentLinkId);
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                tournamentResult.Id = reader.GetInt32(reader.GetOrdinal("id"));
-                                tournamentResult.UrlSlug = reader.GetString(reader.GetOrdinal("url_slug"));
-                                tournamentResult.GameId = reader.GetInt32(reader.GetOrdinal("game_id"));
-                                tournamentResult.EventId = reader.GetInt32(reader.GetOrdinal("event_id"));
-                                tournamentResult.EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num"));
-                                tournamentResult.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
+                                var newTournamentLink = new TournamentData { Id = 0, UrlSlug = string.Empty, EventId = 0, LastUpdated = DateTime.MinValue };
+                                newTournamentLink.Id = reader.GetInt32(reader.GetOrdinal("id"));
+                                newTournamentLink.UrlSlug = reader.GetString(reader.GetOrdinal("url_slug"));
+                                newTournamentLink.GameId = reader.GetInt32(reader.GetOrdinal("game_id"));
+                                newTournamentLink.EventId = reader.GetInt32(reader.GetOrdinal("event_id"));
+                                newTournamentLink.EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num"));
+                                newTournamentLink.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
+
+                                tournamentResults.Add(newTournamentLink);
                             }
                         }
                     }
                 }
-                return tournamentResult;
+                return tournamentResults;
             }
             catch (NpgsqlException ex)
             {

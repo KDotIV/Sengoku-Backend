@@ -793,7 +793,7 @@ namespace SengokuProvider.Library.Services.Events
                     try
                     {
                         var response = await _client.SendQueryAsync<JObject>(request);
-                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. {response.Errors.ToString()}");
+                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. {response.Errors}");
 
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
