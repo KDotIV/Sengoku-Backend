@@ -152,7 +152,9 @@ namespace SengokuProvider.Library.Services.Legends
         }
         public async Task<List<TournamentBoardResult>> AddTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds)
         {
-            return await InsertTournamentsToRunnerBoard(userId, orgId, tournamentIds);
+            var success = await UpdateTournamentsToRunnerBoard(userId, tournamentIds, orgId);
+
+            return await _legendQueryService.GetCurrentRunnerBoard(userId, orgId);
         }
         public async Task<BoardRunnerResult> CreateNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, string? orgName = default)
         {
@@ -182,11 +184,53 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return boardResult;
         }
-        private async Task<List<TournamentBoardResult>> InsertTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds)
+        private async Task<bool> UpdateTournamentsToRunnerBoard(int userId, List<int> tournamentIds, int orgId = 0)
         {
-            var tournamentResults = new List<TournamentBoardResult>();
+            if (userId <= 0 || orgId < 0) return false;
 
-            return tournamentResults;
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"WITH new_ids AS (
+                                                            SELECT ARRAY[@NewTournaments]::int[] AS new_tournament_ids
+                                                        ),
+                                                        existing_tournament_ids AS (
+                                                            SELECT unnest(tournament_links) AS tournament_id
+                                                            FROM bracket_boards
+                                                            WHERE user_id = @UserInput AND organization_id = @OrgInput
+                                                        ),
+                                                        combined_ids AS (
+                                                            SELECT array_agg(DISTINCT tournament_id) || new_ids.new_tournament_ids AS updated_tournament_links
+                                                            FROM existing_tournament_ids, new_ids
+                                                        )
+
+                                                        UPDATE bracket_boards
+                                                        SET tournament_links = (SELECT updated_tournament_links FROM combined_ids)
+                                                        WHERE user_id = @UserInput AND organization_id = @OrgInput;"))
+                    {
+                        cmd.Parameters.AddWithValue("@NewTournaments", tournamentIds.ToArray());
+                        cmd.Parameters.AddWithValue("@UserInput", userId);
+                        cmd.Parameters.AddWithValue("@OrgInput", orgId);
+
+                        var updated = await cmd.ExecuteNonQueryAsync();
+                        if(updated > 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
         }
         private async Task<bool> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default,
             string? orgName = default)
