@@ -12,5 +12,6 @@ namespace SengokuProvider.Library.Services.Events
         public Task<AddressData> GetAddressById(int addressId);
         public Task<RegionData?> QueryRegion(GetRegionCommand command);
         public Task<List<int>> QueryRelatedRegionsById(int regionId);
+        public Task<List<BracketQueueData>> GetBracketQueueByTournamentId(int tournamentId);
     }
 }

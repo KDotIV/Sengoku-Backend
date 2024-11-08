@@ -1,5 +1,4 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
@@ -107,85 +106,93 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("QueryEventsByLocation")]
-        public async Task<IActionResult> QueryEventsByLocation([AsParameters] GetTournamentsByLocationCommand command)
+        public async Task<IActionResult> QueryEventsByLocation(
+            [FromQuery] int regionId,
+            [FromQuery] int perPage = 50,
+            [FromQuery] string priority = "date")
         {
-            if (command == null)
+            if (regionId <= 0)
             {
-                _log.LogError("Command is null");
-                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+                _log.LogError("Invalid RegionId parameter");
+                return BadRequest("RegionId must be a positive integer.");
             }
+
+            var command = new GetTournamentsByLocationCommand
+            {
+                RegionId = regionId,
+                PerPage = perPage,
+                Priority = priority
+            };
 
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
             {
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
+                return BadRequest(parsedRequest.Response);
             }
+
             try
             {
                 var result = await _eventQueryService.GetEventsByLocation(parsedRequest);
-                if (result.Count == 0) { return new OkObjectResult($"There are no tournaments under that region id"); }
-                var resultJson = JsonConvert.SerializeObject(result);
-                return new OkObjectResult($"{resultJson}");
+                if (result.Count == 0) { return Ok("There are no tournaments under that region id."); }
+
+                return Ok(result);
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Querying Tournament Data.");
-                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+                return StatusCode(StatusCodes.Status500InternalServerError, $"Error message: {ex.Message}");
             }
         }
         [HttpGet("QueryRelatedRegionsById")]
-        public async Task<IActionResult> QueryRelatedRegionsById([AsParameters] GetRelatedRegionsCommand command)
+        public async Task<IActionResult> QueryRelatedRegionsById([FromQuery] int regionId)
         {
-            if (command == null)
+            if (regionId <= 0)
             {
-                _log.LogError("Command is null");
-                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+                _log.LogError("Invalid RegionId parameter");
+                return BadRequest("RegionId must be a positive integer.");
             }
-            var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
-            {
-                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
-            }
+
             try
             {
-                var result = await _eventQueryService.QueryRelatedRegionsById(command.RegionId);
-                if (result.Count == 0) { return new OkObjectResult($"There are no related regions under that region id"); }
-                var resultJson = JsonConvert.SerializeObject(result);
-                return new OkObjectResult($"( Related Regions: {result.Count}) {resultJson}");
+                var result = await _eventQueryService.QueryRelatedRegionsById(regionId);
+                if (result.Count == 0)
+                {
+                    return Ok("There are no related regions under that region id.");
+                }
+
+                return Ok(new { RelatedRegionsCount = result.Count, Regions = result });
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Querying Regional Data.");
-                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-
+                return StatusCode(StatusCodes.Status500InternalServerError, $"Error message: {ex.Message}");
             }
         }
         [HttpGet("GetCurrentBracketQueue")]
-        public async Task<IActionResult> GetCurrentBracketQueueByTournamentId([AsParameters] GetCurrentBracketQueueByTournamentCommand command)
+        public async Task<IActionResult> GetCurrentBracketQueueByTournamentId([FromQuery] int tournamentId)
         {
-            if (command == null)
+            if (tournamentId <= 0)
             {
-                _log.LogError("Command is null");
-                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+                _log.LogError("Invalid TournamentId parameter");
+                return BadRequest("TournamentId must be a positive integer.");
             }
-            var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
-            {
-                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
-            }
+
             try
             {
+                var result = await _eventQueryService.GetBracketQueueByTournamentId(tournamentId);
 
-                return new OkObjectResult($"( Related Regions: )");
+                if (result == null || !result.Any())
+                {
+                    return Ok("There are no entries in the current bracket queue for that tournament ID.");
+                }
+
+                return Ok(result);
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Error Querying Regional Data.");
-                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-
+                _log.LogError(ex, "Error Querying Bracket Queue Data.");
+                return StatusCode(StatusCodes.Status500InternalServerError, $"Error message: {ex.Message}");
             }
         }
     }
