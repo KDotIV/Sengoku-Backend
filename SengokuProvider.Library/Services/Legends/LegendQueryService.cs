@@ -4,6 +4,7 @@ using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
+using SengokuProvider.Library.Services.Common.Interfaces;
 
 namespace SengokuProvider.Library.Services.Legends
 {
@@ -11,11 +12,13 @@ namespace SengokuProvider.Library.Services.Legends
     {
         private readonly string _connectString;
         private readonly GraphQLHttpClient _client;
+        private readonly ICommonDatabaseService _commonServices;
 
-        public LegendQueryService(string connectionString, GraphQLHttpClient graphQlClient)
+        public LegendQueryService(string connectionString, GraphQLHttpClient graphQlClient, ICommonDatabaseService commonServices)
         {
             _connectString = connectionString;
             _client = graphQlClient;
+            _commonServices = commonServices;
         }
         public async Task<List<LeagueByOrgResults>> GetLeaderboardsByOrgId(int OrgId)
         {
@@ -168,9 +171,56 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        public Task<List<TournamentBoardResult>> GetCurrentRunnerBoard(int userId)
+        public async Task<List<TournamentBoardResult>> GetCurrentRunnerBoard(int userId, int orgId = 0)
         {
-            throw new NotImplementedException();
+            var tournamentBoardResult = new List<TournamentBoardResult>();
+            if (userId <= 0 || orgId < 0) return tournamentBoardResult;
+
+            try
+            {
+                using (var query = new NpgsqlCommand(@"WITH selectedTournamentIds AS (
+	                                                    SELECT unnest(tournament_links) AS tournament_id
+	                                                    FROM bracket_boards
+	                                                    WHERE user_id = @UserInput AND organization_id = @OrgInput
+                                                    )
+                                                    SELECT 
+	                                                    tl.id,
+	                                                    tl.url_slug,
+	                                                    tl.entrants_num,
+	                                                    tl.last_updated,
+	                                                    COALESCE(tl.game_id, 0)
+                                                    FROM tournament_links tl
+                                                    JOIN selectedTournamentIds sti ON tl.id = sti.tournament_id;",
+                                                    new NpgsqlConnection(_connectString)))
+                {
+                    query.Parameters.AddWithValue("@UserInput", userId);
+                    query.Parameters.AddWithValue("@OrgInput", orgId);
+                    using (var reader = await query.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            var tournamentBoard = new TournamentBoardResult
+                            { 
+                                TournamentId = reader.GetInt32(reader.GetOrdinal("id")),
+                                TournamentName = _commonServices.CleanUrlSlugName(reader.GetString(reader.GetOrdinal("url_slug"))),
+                                UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
+                                EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                                LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                            };
+                            tournamentBoardResult.Add(tournamentBoard);
+                        }
+                    }
+                }
+                return tournamentBoardResult;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
         }
         private async Task<LegendData?> QueryLegendsByPlayerLink(int playerLinkId)
         {

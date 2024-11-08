@@ -1,6 +1,8 @@
 ﻿using Dapper;
 using Npgsql;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace SengokuProvider.Library.Services.Common
 {
@@ -35,7 +37,34 @@ namespace SengokuProvider.Library.Services.Common
 
             return newParameters;
         }
+        public string CleanUrlSlugName(string urlSlug)
+        {
+            if (string.IsNullOrEmpty(urlSlug))
+                return string.Empty;
 
+            //Extract the tournament name part
+            var tournamentMatch = Regex.Match(urlSlug, @"tournament/([^/]+)/event");
+            var tournamentPart = tournamentMatch.Success ? tournamentMatch.Groups[1].Value : string.Empty;
+
+            //Extract the event name part
+            var eventMatch = Regex.Match(urlSlug, @"event/([^/]+)");
+            var eventPart = eventMatch.Success ? eventMatch.Groups[1].Value : string.Empty;
+
+            //Clean and capitalize both parts
+            var cleanedTournamentPart = CleanAndCapitalize(tournamentPart);
+            var cleanedEventPart = CleanAndCapitalize(eventPart);
+
+            // Combine both parts into one result string
+            return $"{cleanedTournamentPart} {cleanedEventPart}".Trim();
+        }
+        private string CleanAndCapitalize(string input)
+        {
+            // Remove special characters except '#', keep A-Z, a-z, 0-9
+            var cleanedInput = Regex.Replace(input, @"[^A-Za-z0-9#\s]", " ");
+
+            var textInfo = CultureInfo.CurrentCulture.TextInfo;
+            return textInfo.ToTitleCase(cleanedInput.ToLower());
+        }
         public async Task<int> CreateTable(string tableName, Tuple<string, string>[] columnDefinitions)
         {
             if (!IsValidIdentifier(tableName) || columnDefinitions.Any(cn => !IsValidIdentifier(cn.Item1)) || columnDefinitions == null)

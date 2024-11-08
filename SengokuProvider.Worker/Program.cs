@@ -73,7 +73,8 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ILegendQueryService, LegendQueryService>(provider =>
         {
             var client = provider.GetService<GraphQLHttpClient>();
-            return new LegendQueryService(connectionString, client);
+            var commonService = provider.GetService<ICommonDatabaseService>();
+            return new LegendQueryService(connectionString, client, commonService);
         });
         services.AddSingleton<ILegendIntakeService, LegendIntakeService>(provider =>
         {
