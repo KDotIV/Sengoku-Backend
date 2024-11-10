@@ -226,7 +226,7 @@ namespace SengokuProvider.Library.Services.Events
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"Select * From tournament_links WHERE id = ANY(ARRAY@Input)", conn))
+                    using (var cmd = new NpgsqlCommand(@"Select * From tournament_links WHERE id = ANY(@Input)", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", tournamentLinkId);
                         using (var reader = await cmd.ExecuteReaderAsync())
