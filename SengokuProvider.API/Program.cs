@@ -6,6 +6,7 @@ using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Comms;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Services.Orgs;
 using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
 using System.Net.Http.Headers;
@@ -55,6 +56,18 @@ builder.Services.AddScoped<IUserService, UserService>(provider =>
     return new UserService(connectionString, intakeValidator);
 });
 builder.Services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>();
+builder.Services.AddScoped<IOrganizerQueryService, OrganizerQueryService>(provider =>
+{
+    var graphQlClient = provider.GetService<GraphQLHttpClient>();
+    var throttler = provider.GetService<RequestThrottler>();
+    return new OrganizerQueryService(connectionString, graphQlClient, throttler);
+});
+builder.Services.AddScoped<IOrganizerIntakeService, OrganizerIntakeService>(provider =>
+{
+    var graphQlClient = provider.GetService<GraphQLHttpClient>();
+    var throttler = provider.GetService<RequestThrottler>();
+    return new OrganizerIntakeService(connectionString, graphQlClient, throttler);
+});
 builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 {
     var configuration = provider.GetService<IConfiguration>();

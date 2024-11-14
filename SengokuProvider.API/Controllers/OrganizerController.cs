@@ -23,7 +23,5 @@ namespace SengokuProvider.API.Controllers
             _orgIntakeService = orgIntakeService;
             _commandProcessor = commandProcessor;
         }
-
-
     }
 }

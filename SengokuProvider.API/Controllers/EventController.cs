@@ -2,6 +2,7 @@
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Orgs;
 
 namespace SengokuProvider.API.Controllers
 {
@@ -12,14 +13,17 @@ namespace SengokuProvider.API.Controllers
         private readonly ILogger<EventController> _log;
         private readonly IEventIntakeService _eventIntakeService;
         private readonly IEventQueryService _eventQueryService;
+        private readonly IOrganizerQueryService _organizerQueryService;
         private readonly CommandProcessor _commandProcessor;
 
-        public EventController(ILogger<EventController> logger, IEventIntakeService eventIntakeService, IEventQueryService eventQueryService, CommandProcessor command)
+        public EventController(ILogger<EventController> logger, IEventIntakeService eventIntakeService, IEventQueryService eventQueryService,
+            IOrganizerQueryService orgQueryService, CommandProcessor command)
         {
             _log = logger;
             _eventIntakeService = eventIntakeService;
             _eventQueryService = eventQueryService;
             _commandProcessor = command;
+            _organizerQueryService = orgQueryService;
         }
 
         [HttpPost("IntakeEventsByLocation")]
@@ -180,7 +184,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _eventQueryService.GetBracketQueueByTournamentId(tournamentId);
+                var result = await _organizerQueryService.GetBracketQueueByTournamentId(tournamentId);
 
                 if (result == null || !result.Any())
                 {
