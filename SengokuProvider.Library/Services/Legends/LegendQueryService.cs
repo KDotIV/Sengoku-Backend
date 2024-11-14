@@ -197,10 +197,11 @@ namespace SengokuProvider.Library.Services.Legends
                     query.Parameters.AddWithValue("@OrgInput", orgId);
                     using (var reader = await query.ExecuteReaderAsync())
                     {
+                        if (!reader.HasRows) return tournamentBoardResult;
                         while (await reader.ReadAsync())
                         {
                             var tournamentBoard = new TournamentBoardResult
-                            { 
+                            {
                                 TournamentId = reader.GetInt32(reader.GetOrdinal("id")),
                                 TournamentName = _commonServices.CleanUrlSlugName(reader.GetString(reader.GetOrdinal("url_slug"))),
                                 UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),

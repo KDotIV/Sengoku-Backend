@@ -401,9 +401,5 @@ namespace SengokuProvider.Library.Services.Events
             }
             return null;
         }
-        public Task<List<BracketQueueData>> GetBracketQueueByTournamentId(int tournamentId)
-        {
-            throw new NotImplementedException();
-        }
     }
 }
