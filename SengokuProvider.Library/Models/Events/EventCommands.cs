@@ -20,6 +20,17 @@ namespace SengokuProvider.Library.Models.Events
             else return false;
         }
     }
+    public class IntakeNewRegionByIdCommand : ICommand
+    {
+        public required int RegionId { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+        public bool Validate()
+        {
+            if (RegionId > 0) return true;
+            else return false;
+        }
+    }
     public class GetTournamentsByLocationCommand : ICommand
     {
         public required int RegionId { get; set; }

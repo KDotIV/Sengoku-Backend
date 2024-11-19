@@ -54,6 +54,11 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
+        [HttpPost("IntakeNewRegion")]
+        public async Task<IActionResult> IntakeNewRegion([FromBody] IntakeNewRegionByIdCommand command)
+        {
+            return Ok();
+        }
         [HttpPost("IntakeTournamentsByGameIds")]
         public async Task<IActionResult> IntakeTournamentsByGameIds([FromBody] IntakeEventsByGameIdCommand command)
         {
