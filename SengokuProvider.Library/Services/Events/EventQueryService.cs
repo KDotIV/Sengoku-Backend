@@ -240,7 +240,6 @@ namespace SengokuProvider.Library.Services.Events
                                 newTournamentLink.EventId = reader.GetInt32(reader.GetOrdinal("event_id"));
                                 newTournamentLink.EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num"));
                                 newTournamentLink.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
-
                                 tournamentResults.Add(newTournamentLink);
                             }
                         }

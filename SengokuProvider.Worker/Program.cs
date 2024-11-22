@@ -105,7 +105,8 @@ IHost host = Host.CreateDefaultBuilder(args)
             var configuration = provider.GetService<IConfiguration>();
             var graphClient = provider.GetService<GraphQLHttpClient>();
             var throttler = provider.GetService<RequestThrottler>();
-            return new PlayerQueryService(connectionString, configuration, graphClient, throttler);
+            var commonServices = provider.GetService<ICommonDatabaseService>();
+            return new PlayerQueryService(connectionString, configuration, graphClient, throttler, commonServices);
         });
     })
     .Build();

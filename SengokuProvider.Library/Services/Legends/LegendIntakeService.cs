@@ -248,7 +248,7 @@ namespace SengokuProvider.Library.Services.Legends
                     {
                         cmd.Parameters.AddWithValue("@UserInput", userId);
                         cmd.Parameters.AddWithValue("@UserName", userName);
-                        var tournamentArrayParam = _commonServices.CreateDBIntArrayType("TournamentLinks", tournamentIds.ToArray());
+                        var tournamentArrayParam = _commonServices.CreateDBIntArrayType("@TournamentLinks", tournamentIds.ToArray());
                         cmd.Parameters.Add(tournamentArrayParam);
                         cmd.Parameters.AddWithValue("@OrgId", orgId);
                         cmd.Parameters.AddWithValue("@OrgName", orgName ?? "");

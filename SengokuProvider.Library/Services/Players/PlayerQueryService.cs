@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using System.Net;
 using System.Net.Http.Headers;
 
@@ -15,14 +16,16 @@ namespace SengokuProvider.Library.Services.Players
         private readonly GraphQLHttpClient _client;
         private readonly string _connectionString;
         private readonly RequestThrottler _requestThrottler;
+        private readonly ICommonDatabaseService _commonDatabaseServices;
         private readonly IConfiguration _configuration;
 
-        public PlayerQueryService(string connectionString, IConfiguration config, GraphQLHttpClient graphQlClient, RequestThrottler throttler)
+        public PlayerQueryService(string connectionString, IConfiguration config, GraphQLHttpClient graphQlClient, RequestThrottler throttler, ICommonDatabaseService commonServices)
         {
             _requestThrottler = throttler;
             _connectionString = connectionString;
             _configuration = config;
             _client = graphQlClient;
+            _commonDatabaseServices = commonServices;
             _client.HttpClient.DefaultRequestHeaders.Clear();
             _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
@@ -91,6 +94,62 @@ namespace SengokuProvider.Library.Services.Players
                     }
                 }
                 return playerStandingResults;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<List<PlayerStandingResult>> GetPlayerStandingsCodexModule(int[] playerIds, int[] tournamentIds, int[] gameIds, DateTime startDate = default, DateTime endDate = default)
+        {
+            var playerResults = new List<PlayerStandingResult>();
+
+            if (playerIds.Length < 1) return playerResults;
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT standings.entrant_id, standings.player_id, standings.tournament_link, 
+                                                        standings.placement, standings.entrants_num,
+                                                        players.player_name, tournament_links.event_id,
+                                                        tournament_links.url_slug, events.event_name, events.end_time, standings.last_updated
+                                                        FROM standings
+                                                        JOIN players ON standings.player_id = players.id
+                                                        JOIN tournament_links ON standings.tournament_link = tournament_links.id
+                                                        JOIN events ON events.link_id = tournament_links.event_id
+                                                        WHERE standings.player_id = @PlayerArray 
+                                                        and tournament_links.game_id = @TournamentsArray
+                                                        and start_time = @StartTimeInput
+                                                        and end_time = @EndTimeInput
+                                                        and tournament_links.game_id = @GamesArray
+                                                        ORDER BY players.player_name, events.end_time ASC;", conn))
+                    {
+                        cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@TournamentsArray", tournamentIds));
+                        cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@PlayerArray", playerIds));
+                        cmd.Parameters.AddWithValue("@StartTimeInput",startDate);
+                        cmd.Parameters.AddWithValue("@EndTimeInput", endDate);
+                        cmd.Parameters.AddWithValue("@GamesArray", gameIds);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if(!reader.HasRows)
+                            {
+                                Console.WriteLine("No standings were found for given Ids. Check parameters...");
+                                return playerResults;
+                            }
+                            while (await reader.ReadAsync())
+                            {
+                                playerResults.Add(ParseStandingsRecords(reader));
+                            }
+                        }
+                    };
+                }
+                return playerResults;
             }
             catch (NpgsqlException ex)
             {

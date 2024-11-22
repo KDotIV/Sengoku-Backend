@@ -89,7 +89,8 @@ builder.Services.AddScoped<IPlayerQueryService, PlayerQueryService>(provider =>
     var configuration = provider.GetService<IConfiguration>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var throttler = provider.GetService<RequestThrottler>();
-    return new PlayerQueryService(connectionString, configuration, graphQlClient, throttler);
+    var commonServices = provider.GetService<ICommonDatabaseService>();
+    return new PlayerQueryService(connectionString, configuration, graphQlClient, throttler, commonServices);
 });
 builder.Services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
 {
