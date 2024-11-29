@@ -33,6 +33,10 @@ namespace SengokuProvider.Library.Models.Common
             "d83c0620a5f75a508963410f7b57d9de", "06e39ad2570e5b095889599fe9134f49","f763d7005921e3ce3429c5aebeb303d8", "fd44ced3386190f70c9b8b900947876f"];
         public static readonly Queue<string> TokenQueue = new Queue<string>(BearerArray);
     }
+    public struct StartggGameIds
+    {
+        public static readonly HashSet<int> GameIds = new HashSet<int> { 33945, 1386, 36953, 43868, 49783 };
+    }
     public struct QueryConstants
     {
         public const string DatePriority = @"
@@ -44,12 +48,13 @@ namespace SengokuProvider.Library.Models.Common
                                 ) AS distance
                             FROM 
                                 events e
-                            JOIN 
-                                addresses a ON e.address_id = a.id
+                            JOIN addresses a ON e.address_id = a.id
+                            JOIN tournament_links tl ON e.link_id = tl.event_id
                             WHERE
                                 e.region = ANY(@RegionIds)
                                 AND e.closing_registration_date >= CURRENT_DATE
                                 AND e.start_time >= CURRENT_DATE
+                                AND tl.game_id = ANY(@GameIds)
                             ORDER BY
                                 e.closing_registration_date ASC,
                                 distance ASC
@@ -64,12 +69,13 @@ namespace SengokuProvider.Library.Models.Common
                                 ) AS distance
                             FROM 
                                 events e
-                            JOIN 
-                                addresses a ON e.address_id = a.id
+                            JOIN addresses a ON e.address_id = a.id
+                            JOIN tournament_links tl ON e.link_id = tl.event_id
                             WHERE
                                 e.region = ANY(@RegionIds)
                                 AND e.closing_registration_date >= CURRENT_DATE
                                 AND e.start_time >= CURRENT_DATE
+                                AND tl.game_id = ANY(@GameIds)
                             ORDER BY
                                 distance ASC,
                                 e.closing_registration_date ASC

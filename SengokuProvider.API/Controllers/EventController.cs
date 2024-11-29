@@ -64,10 +64,10 @@ namespace SengokuProvider.API.Controllers
             }
 
             var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if(!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
             {
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response );
+                return new BadRequestObjectResult(parsedRequest.Response);
             }
             try
             {
@@ -137,6 +137,7 @@ namespace SengokuProvider.API.Controllers
         [HttpGet("QueryEventsByLocation")]
         public async Task<IActionResult> QueryEventsByLocation(
             [FromQuery] int regionId,
+            [FromQuery] int[] gameIds,
             [FromQuery] int perPage = 50,
             [FromQuery] string priority = "date")
         {
@@ -150,7 +151,8 @@ namespace SengokuProvider.API.Controllers
             {
                 RegionId = regionId,
                 PerPage = perPage,
-                Priority = priority
+                Priority = priority,
+                GameIds = gameIds ?? new int[0]
             };
 
             var parsedRequest = await _commandProcessor.ParseRequest(command);

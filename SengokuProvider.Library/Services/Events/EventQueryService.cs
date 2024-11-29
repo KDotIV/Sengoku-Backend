@@ -6,6 +6,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Common.Interfaces;
 using System.Net;
 
 namespace SengokuProvider.Library.Services.Events
@@ -13,15 +14,17 @@ namespace SengokuProvider.Library.Services.Events
     public class EventQueryService : IEventQueryService
     {
         private readonly string _connectionString;
+        private readonly ICommonDatabaseService _commonServices;
         private readonly IntakeValidator _validator;
         private readonly GraphQLHttpClient _client;
         private readonly RequestThrottler _requestThrottler;
-        public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator, RequestThrottler requestThrottler)
+        public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator, RequestThrottler requestThrottler, ICommonDatabaseService commonServices)
         {
             _connectionString = connectionString;
             _validator = validator;
             _client = client;
             _requestThrottler = requestThrottler;
+            _commonServices = commonServices;
         }
         public async Task<List<int>> QueryRelatedRegionsById(int regionId)
         {
@@ -259,6 +262,8 @@ namespace SengokuProvider.Library.Services.Events
         public async Task<List<AddressEventResult>> GetEventsByLocation(GetTournamentsByLocationCommand command, int pageNumber)
         {
             if (command == null || command.RegionId == 0) throw new ArgumentNullException(nameof(command));
+            if (command.GameIds.Length == 0) command.GameIds = [.. StartggGameIds.GameIds];
+
             try
             {
                 var currentRegions = await QueryRelatedRegionsById(command.RegionId);
@@ -297,13 +302,8 @@ namespace SengokuProvider.Library.Services.Events
                     {
                         cmd.Connection = conn;
                         cmd.CommandText = priorityQueryString;
-
-                        var regionIdsParam = cmd.CreateParameter();
-                        regionIdsParam.ParameterName = "RegionIds";
-                        regionIdsParam.Value = regionIds.ToArray();
-                        regionIdsParam.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer;
-
-                        cmd.Parameters.Add(regionIdsParam);
+                        cmd.Parameters.Add(_commonServices.CreateDBIntArrayType("@RegionIds", regionIds.ToArray()));
+                        cmd.Parameters.Add(_commonServices.CreateDBIntArrayType("@GameIds", command.GameIds));
                         cmd.Parameters.AddWithValue("@ReferenceLatitude", locationReference?.Latitude ?? 0);
                         cmd.Parameters.AddWithValue("@ReferenceLongitude", locationReference?.Longitude ?? 0);
                         cmd.Parameters.AddWithValue("@PerPage", command.PerPage);

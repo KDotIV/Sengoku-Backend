@@ -62,7 +62,8 @@ IHost host = Host.CreateDefaultBuilder(args)
             var intakeValidator = provider.GetService<IntakeValidator>();
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
             var throttler = provider.GetService<RequestThrottler>();
-            return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler);
+            var commonServices = provider.GetService<ICommonDatabaseService>();
+            return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler, commonServices);
         });
         services.AddSingleton<IEventIntegrityService, EventIntegrityService>(provider =>
         {

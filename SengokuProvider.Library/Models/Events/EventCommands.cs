@@ -36,6 +36,7 @@ namespace SengokuProvider.Library.Models.Events
         public required int RegionId { get; set; }
         public required int PerPage { get; set; }
         public required string Priority { get; set; }
+        public required int[] GameIds { get; set; }
         public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
         public bool Validate()

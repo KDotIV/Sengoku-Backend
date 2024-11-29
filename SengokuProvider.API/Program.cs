@@ -106,7 +106,8 @@ builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
     var intakeValidator = provider.GetService<IntakeValidator>();
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var throttler = provider.GetService<RequestThrottler>();
-    return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler);
+    var commonServices = provider.GetService<ICommonDatabaseService>();
+    return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler, commonServices);
 });
 builder.Services.AddScoped<ILegendIntakeService, LegendIntakeService>(provider =>
 {
