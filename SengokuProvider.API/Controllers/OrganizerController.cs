@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using SengokuProvider.Library.Models.Orgs;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Orgs;
@@ -22,6 +23,32 @@ namespace SengokuProvider.API.Controllers
             _orgQueryService = orgQueryService;
             _orgIntakeService = orgIntakeService;
             _commandProcessor = commandProcessor;
+        }
+        [HttpPost("CreateTravelCoOp")]
+        public async Task<IActionResult> CreateTravelCoOp([FromBody] CreateTravelCoOpCommand command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                bool result = await _orgIntakeService.CreateTravelCoOp(command);
+                return new OkObjectResult($"Travel CoOp Successfully Created");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Creating New CoOp");
+                return new ObjectResult($"Error Message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
         }
     }
 }

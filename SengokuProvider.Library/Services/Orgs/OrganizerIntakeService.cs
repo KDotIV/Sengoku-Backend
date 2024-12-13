@@ -1,4 +1,5 @@
 ﻿using GraphQL.Client.Http;
+using SengokuProvider.Library.Models.Orgs;
 using SengokuProvider.Library.Services.Common;
 
 namespace SengokuProvider.Library.Services.Orgs
@@ -20,11 +21,15 @@ namespace SengokuProvider.Library.Services.Orgs
             throw new NotImplementedException();
         }
 
-        public Task DeleteBracketFromCurrentRun(int tournamentIds, int userId)
+        public Task<bool> CreateTravelCoOp(CreateTravelCoOpCommand command)
         {
             throw new NotImplementedException();
         }
 
+        public Task DeleteBracketFromCurrentRun(int[] tournamentIds, int userId)
+        {
+            throw new NotImplementedException();
+        }
         public async Task StartBracketRun(int[] tournamentIds, int userId)
         {
             if (tournamentIds.Length == 0 || userId == 0) return;
