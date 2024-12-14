@@ -80,6 +80,31 @@ namespace SengokuProvider.Library.Models.Common
                                 distance ASC,
                                 e.closing_registration_date ASC
                             LIMIT @PerPage;";
+        public const string LocalPriority = @"
+                            SELECT a.address, a.latitude, a.longitude, e.event_name, e.event_description, e.region, 
+                                    e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open, e.url_slug, e.online_tournament,
+                                    SQRT(
+                                        POW(COALESCE(a.longitude, @ReferenceLongitude) - @ReferenceLongitude, 2) + 
+                                        POW(COALESCE(a.latitude, @ReferenceLatitude) - @ReferenceLatitude, 2)
+                                    ) AS distance
+                                FROM 
+                                    events e
+                                JOIN addresses a ON e.address_id = a.id
+                                JOIN tournament_links tl ON e.link_id = tl.event_id
+                                WHERE
+                                    e.region = ANY(@RegionIds)
+                                    AND e.closing_registration_date >= CURRENT_DATE
+                                    AND e.start_time >= CURRENT_DATE
+                                    AND tl.game_id = ANY(@GameIds)
+                                    AND SQRT(
+                                        POW(COALESCE(a.longitude, @ReferenceLongitude) - @ReferenceLongitude, 2) + 
+                                        POW(COALESCE(a.latitude, @ReferenceLatitude) - @ReferenceLatitude, 2)
+                                    ) <= 20
+                                ORDER BY
+                                    distance ASC,
+                                    closing_registration_date ASC
+                                LIMIT @PerPage;";
+        public const string NationalPriority = @"";
     }
     public struct GeoConstants
     {

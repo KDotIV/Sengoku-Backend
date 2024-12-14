@@ -65,6 +65,45 @@ namespace SengokuProvider.Library.Services.Events
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
+        public async Task<List<string>> QueryLocalRegionsById(string regionId)
+        {
+            try
+            {
+                var relatedRegions = new List<string>();
+
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var cmd = new NpgsqlCommand())
+                    {
+                        cmd.Connection = conn;
+                        cmd.CommandText = @"SELECT DISTINCT id FROM public.regions WHERE id LIKE @InputRegionId";
+
+                        cmd.Parameters.AddWithValue("@InputRegionId", regionId + "%");
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) { return relatedRegions; }
+                            while (await reader.ReadAsync())
+                            {
+                                relatedRegions.Add(reader.GetString(reader.GetOrdinal("id")));
+                            }
+                        }
+                    }
+                }
+                relatedRegions.Add(regionId);
+                return relatedRegions;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
         public async Task<RegionData?> QueryRegion(GetRegionCommand command)
         {
             try
@@ -264,8 +303,17 @@ namespace SengokuProvider.Library.Services.Events
             {
                 var tempParts = StringExtensions.SplitByNum(command.RegionId, 1);
                 var splitZipcode = tempParts.First();
-                var currentRegions = await QueryRelatedRegionsById(splitZipcode);
+                List<string> currentRegions = new List<string>();
 
+                switch (command.Priority)
+                {
+                    case "local":
+                        currentRegions = await QueryLocalRegionsById(splitZipcode);
+                        break;
+                    default:
+                        currentRegions = await QueryRelatedRegionsById(splitZipcode);
+                        break;
+                }
                 var sortedAddresses = new List<AddressEventResult>();
 
                 using (var conn = new NpgsqlConnection(_connectionString))
@@ -285,6 +333,12 @@ namespace SengokuProvider.Library.Services.Events
 
                     switch (command.Priority)
                     {
+                        case "local":
+                            priorityQueryString = QueryConstants.LocalPriority;
+                            break;
+                        case "national":
+                            priorityQueryString = QueryConstants.NationalPriority;
+                            break;
                         case "distance":
                             priorityQueryString = QueryConstants.DistancePriority;
                             break;
