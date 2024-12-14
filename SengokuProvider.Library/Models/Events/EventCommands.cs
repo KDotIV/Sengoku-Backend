@@ -22,18 +22,18 @@ namespace SengokuProvider.Library.Models.Events
     }
     public class IntakeNewRegionByIdCommand : ICommand
     {
-        public required int RegionId { get; set; }
+        public required string RegionId { get; set; }
         public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
         public bool Validate()
         {
-            if (RegionId > 0) return true;
+            if (!string.IsNullOrEmpty(RegionId)) return true;
             else return false;
         }
     }
     public class GetTournamentsByLocationCommand : ICommand
     {
-        public required int RegionId { get; set; }
+        public required string RegionId { get; set; }
         public required int PerPage { get; set; }
         public required string Priority { get; set; }
         public required int[] GameIds { get; set; }
@@ -41,7 +41,7 @@ namespace SengokuProvider.Library.Models.Events
         public string? Response { get; set; }
         public bool Validate()
         {
-            if (RegionId > 0 &&
+            if (!string.IsNullOrEmpty(RegionId) &&
                 !string.IsNullOrEmpty(Priority) &&
                 PerPage > 0) return true;
             else return false;

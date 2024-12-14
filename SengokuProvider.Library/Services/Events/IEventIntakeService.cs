@@ -11,6 +11,6 @@ namespace SengokuProvider.Library.Services.Events
         public Task<bool> SendTournamentLinkEventMessage(int eventLinkId);
         public Task<bool> SendEventIntakeLocationMessage(IntakeEventsByLocationCommand command);
         public Task<bool> UpdateEventData(UpdateEventCommand command);
-        public Task<int> IntakeNewRegion(AddressData addressData);
+        public Task<string> IntakeNewRegion(AddressData addressData);
     }
 }

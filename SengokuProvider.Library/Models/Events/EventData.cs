@@ -5,7 +5,7 @@
         public int Id { get; set; }
         public string EventName { get; set; } = string.Empty;
         public string EventDescription { get; set; } = string.Empty;
-        public int Region { get; set; }
+        public string? Region { get; set; }
         public int AddressID { get; set; }
         public int LinkID { get; set; }
         public DateTime? StartTime { get; set; }

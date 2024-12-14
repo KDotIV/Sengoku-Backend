@@ -136,17 +136,16 @@ namespace SengokuProvider.API.Controllers
         }
         [HttpGet("QueryEventsByLocation")]
         public async Task<IActionResult> QueryEventsByLocation(
-            [FromQuery] int regionId,
+            [FromQuery] string regionId,
             [FromQuery] int[] gameIds,
             [FromQuery] int perPage = 50,
             [FromQuery] string priority = "date")
         {
-            if (regionId <= 0)
+            if (string.IsNullOrEmpty(regionId))
             {
                 _log.LogError("Invalid RegionId parameter");
                 return BadRequest("RegionId must be a positive integer.");
             }
-
             var command = new GetTournamentsByLocationCommand
             {
                 RegionId = regionId,
@@ -176,9 +175,9 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("QueryRelatedRegionsById")]
-        public async Task<IActionResult> QueryRelatedRegionsById([FromQuery] int regionId)
+        public async Task<IActionResult> QueryRelatedRegionsById([FromQuery] string regionId)
         {
-            if (regionId <= 0)
+            if (string.IsNullOrEmpty(regionId))
             {
                 _log.LogError("Invalid RegionId parameter");
                 return BadRequest("RegionId must be a positive integer.");

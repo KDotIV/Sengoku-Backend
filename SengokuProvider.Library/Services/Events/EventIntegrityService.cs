@@ -84,7 +84,7 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 eventToUpdate.Id = reader.GetInt32(reader.GetOrdinal("id"));
                                 eventToUpdate.EventName = reader.GetString(reader.GetOrdinal("event_name"));
-                                eventToUpdate.Region = reader.GetInt32(reader.GetOrdinal("region"));
+                                eventToUpdate.Region = reader.GetString(reader.GetOrdinal("region"));
                                 eventToUpdate.AddressID = reader.GetInt32(reader.GetOrdinal("address_id"));
                                 eventToUpdate.ClosingRegistration = reader.IsDBNull(reader.GetOrdinal("closing_registration_date"))
                                                                     ? null
@@ -141,7 +141,7 @@ namespace SengokuProvider.Library.Services.Events
             {
                 newCommand.UpdateParameters.Add(new Tuple<string, string>("url_slug", firstNode.Slug));
             }
-            if (eventToUpdate.Region == 1)
+            if (eventToUpdate.Region is not null || eventToUpdate.Region != "00000")
             {
                 var addressData = await _queryService.GetAddressById(eventToUpdate.AddressID);
                 if (addressData == null)
@@ -154,7 +154,7 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     Console.WriteLine("Creating New Region");
                     var regionResult = await _intakeService.IntakeNewRegion(addressData);
-                    if (regionResult <= 0) { throw new ApplicationException($"Unable to Insert New Region by Address: {eventToUpdate.AddressID}"); }
+                    if (regionResult == "00000") { throw new ApplicationException($"Unable to Insert New Region by Address: {eventToUpdate.AddressID}"); }
 
                     newCommand.UpdateParameters.Add(new Tuple<string, string>("region", regionResult.ToString()));
                 }

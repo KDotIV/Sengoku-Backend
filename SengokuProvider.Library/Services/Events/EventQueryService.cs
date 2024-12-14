@@ -26,11 +26,11 @@ namespace SengokuProvider.Library.Services.Events
             _requestThrottler = requestThrottler;
             _commonServices = commonServices;
         }
-        public async Task<List<int>> QueryRelatedRegionsById(int regionId)
+        public async Task<List<string>> QueryRelatedRegionsById(string regionId)
         {
             try
             {
-                var relatedRegions = new List<int>();
+                var relatedRegions = new List<string>();
 
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
@@ -39,11 +39,7 @@ namespace SengokuProvider.Library.Services.Events
                     using (var cmd = new NpgsqlCommand())
                     {
                         cmd.Connection = conn;
-                        cmd.CommandText = @"SELECT r2.id
-                            FROM public.regions r1
-                            JOIN regions r2 ON r1.province = r2.province
-                            WHERE r1.id = @InputRegionId
-                              AND r2.id != @InputRegionId;";
+                        cmd.CommandText = @"SELECT DISTINCT r2.id FROM public.regions r1 JOIN regions r2 ON r1.province = r2.province WHERE r1.id like '@InputRegionId%';";
 
                         cmd.Parameters.AddWithValue("@InputRegionId", regionId);
 
@@ -52,7 +48,7 @@ namespace SengokuProvider.Library.Services.Events
                             if (!reader.HasRows) { return relatedRegions; }
                             while (await reader.ReadAsync())
                             {
-                                relatedRegions.Add(reader.GetInt32(0));
+                                relatedRegions.Add(reader.GetString(reader.GetOrdinal("id")));
                             }
                         }
                     }
@@ -76,7 +72,7 @@ namespace SengokuProvider.Library.Services.Events
                 if (!command.Validate())
                 {
                     Console.WriteLine($"Parameters cannot be null: {command.QueryParameter.Item1} - Value: {command.QueryParameter.Item2}");
-                    return new RegionData() { Name = "", Latitude = 0.0, Longitude = 0.0, Province = "" };
+                    return new RegionData() { Id = "", Name = "", Latitude = 0.0, Longitude = 0.0, Province = "" };
                 }
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
@@ -122,7 +118,7 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 return new RegionData
                                 {
-                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                    Id = reader.GetString(reader.GetOrdinal("id")),
                                     Name = reader.GetString(reader.GetOrdinal("name")),
                                     Latitude = reader.GetDouble(reader.GetOrdinal("latitude")),
                                     Longitude = reader.GetDouble(reader.GetOrdinal("longitude")),
@@ -143,7 +139,7 @@ namespace SengokuProvider.Library.Services.Events
             }
             return null;
         }
-        public async Task<List<RegionData>> GetRegionData(List<int> regionIds)
+        public async Task<List<RegionData>> GetRegionData(List<string> regionIds)
         {
             var regions = new List<RegionData>();
             try
@@ -154,7 +150,7 @@ namespace SengokuProvider.Library.Services.Events
                     using (var cmd = new NpgsqlCommand(@"SELECT id, name, latitude, longitude, province FROM regions WHERE id = ANY(@Input)", conn))
                     {
                         // Passing the list as an array parameter
-                        var param = new NpgsqlParameter("@Input", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer)
+                        var param = new NpgsqlParameter("@Input", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text)
                         {
                             Value = regionIds.ToArray()
                         };
@@ -166,7 +162,7 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 regions.Add(new RegionData
                                 {
-                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                    Id = reader.GetString(reader.GetOrdinal("id")),
                                     Name = reader.GetString(reader.GetOrdinal("name")),
                                     Latitude = reader.GetDouble(reader.GetOrdinal("latitude")),
                                     Longitude = reader.GetDouble(reader.GetOrdinal("longitude")),
@@ -261,7 +257,7 @@ namespace SengokuProvider.Library.Services.Events
         }
         public async Task<List<AddressEventResult>> GetEventsByLocation(GetTournamentsByLocationCommand command, int pageNumber)
         {
-            if (command == null || command.RegionId == 0) throw new ArgumentNullException(nameof(command));
+            if (command == null || string.IsNullOrEmpty(command.RegionId)) throw new ArgumentNullException(nameof(command));
             if (command.GameIds.Length == 0) command.GameIds = [.. StartggGameIds.GameIds];
 
             try
@@ -276,7 +272,7 @@ namespace SengokuProvider.Library.Services.Events
 
                     var regionData = await GetRegionData(currentRegions);
                     if (regionData == null || regionData.Count == 0) return sortedAddresses;
-                    var regionIds = new List<int>();
+                    var regionIds = new List<string>();
                     var locationReference = regionData.FirstOrDefault(x => x.Id == command.RegionId);
 
                     foreach (var region in regionData)
@@ -302,7 +298,7 @@ namespace SengokuProvider.Library.Services.Events
                     {
                         cmd.Connection = conn;
                         cmd.CommandText = priorityQueryString;
-                        cmd.Parameters.Add(_commonServices.CreateDBIntArrayType("@RegionIds", regionIds.ToArray()));
+                        cmd.Parameters.Add(_commonServices.CreateDBTextArrayType("@RegionIds", regionIds.ToArray()));
                         cmd.Parameters.Add(_commonServices.CreateDBIntArrayType("@GameIds", command.GameIds));
                         cmd.Parameters.AddWithValue("@ReferenceLatitude", locationReference?.Latitude ?? 0);
                         cmd.Parameters.AddWithValue("@ReferenceLongitude", locationReference?.Longitude ?? 0);
@@ -320,7 +316,7 @@ namespace SengokuProvider.Library.Services.Events
                                     Distance = reader.IsDBNull(reader.GetOrdinal("distance")) ? 0.0 : Math.Round(reader.GetDouble(reader.GetOrdinal("distance")), 4),
                                     EventName = reader.IsDBNull(reader.GetOrdinal("event_name")) ? string.Empty : reader.GetString(reader.GetOrdinal("event_name")),
                                     EventDescription = reader.IsDBNull(reader.GetOrdinal("event_description")) ? string.Empty : reader.GetString(reader.GetOrdinal("event_description")),
-                                    Region = reader.IsDBNull(reader.GetOrdinal("region")) ? 0 : reader.GetInt32(reader.GetOrdinal("region")),
+                                    Region = reader.IsDBNull(reader.GetOrdinal("region")) ? string.Empty : reader.GetString(reader.GetOrdinal("region")),
                                     StartTime = reader.IsDBNull(reader.GetOrdinal("start_time")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("start_time")),
                                     EndTime = reader.IsDBNull(reader.GetOrdinal("end_time")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("end_time")),
                                     LinkId = reader.IsDBNull(reader.GetOrdinal("link_id")) ? 0 : reader.GetInt32(reader.GetOrdinal("link_id")),

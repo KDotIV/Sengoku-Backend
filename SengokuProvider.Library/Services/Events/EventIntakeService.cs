@@ -385,14 +385,14 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 command.Parameters.AddWithValue("@Event_Name", newEvent.EventName ?? string.Empty);
                                 command.Parameters.AddWithValue(@"Event_Description", newEvent.EventDescription ?? string.Empty);
-                                command.Parameters.AddWithValue(@"Region", newEvent.Region);
+                                command.Parameters.AddWithValue(@"Region", newEvent.Region ?? string.Empty);
                                 command.Parameters.AddWithValue("@Address_Id", newEvent.AddressID);
-                                command.Parameters.AddWithValue(@"Start_Time", newEvent.StartTime);
-                                command.Parameters.AddWithValue(@"End_Time", newEvent.EndTime);
+                                command.Parameters.AddWithValue(@"Start_Time", newEvent.StartTime ?? default);
+                                command.Parameters.AddWithValue(@"End_Time", newEvent.EndTime ?? default);
                                 command.Parameters.AddWithValue(@"Link_Id", newEvent.LinkID);
-                                command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration);
-                                command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen);
-                                command.Parameters.AddWithValue(@"IsOnline", newEvent.IsOnline);
+                                command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration ?? default);
+                                command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen ?? default);
+                                command.Parameters.AddWithValue(@"IsOnline", newEvent.IsOnline ?? false);
                                 command.Parameters.AddWithValue(@"Slug", newEvent.UrlSlug ?? string.Empty);
                                 command.Parameters.AddWithValue(@"Updated", newEvent.LastUpdate);
                                 var result = await command.ExecuteNonQueryAsync();
@@ -441,7 +441,7 @@ namespace SengokuProvider.Library.Services.Events
             {
                 if (!await CheckDuplicateEvents(node.Id))
                 {
-                    int regionId = await GetRegionId(node.City);
+                    string regionId = await GetRegionId(node.City);
                     int addressId = addressMap.TryGetValue(node.VenueAddress ?? string.Empty, out var id) ? id : 0; // Use the confirmed address ID from the map or give default if online event
 
                     var eventData = new EventData
@@ -500,33 +500,33 @@ namespace SengokuProvider.Library.Services.Events
             }
             return addressData;
         }
-        private async Task<int> GetRegionId(string? city)
+        private async Task<string> GetRegionId(string? city)
         {
             var queryResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city ?? string.Empty) });
-            return queryResult?.Id ?? 1;
+            return queryResult?.Id ?? "00000";
         }
-        public async Task<int> IntakeNewRegion(AddressData addressData)
+        public async Task<string> IntakeNewRegion(AddressData addressData)
         {
-            if (string.IsNullOrEmpty(addressData.Address)) return 0;
+            if (string.IsNullOrEmpty(addressData.Address)) return "00000";
 
             var addressSplit = addressData.Address.Split(",");
             if (addressSplit.Length < 3)
             {
                 Console.WriteLine("Address data is insufficient for processing.");
-                return 0;
+                return "00000";
             }
 
             var tempCity = addressSplit[1].Trim();
-            int tempZipCode = 0;
+            string tempZipCode = "0000";
 
             // Ensure the split operation has the expected length to avoid out-of-bounds errors
             if (addressSplit.Length > 2)
             {
                 var zipCodePart = addressSplit[2].Trim().Split(" ");
-                if (zipCodePart.Length > 1 && !int.TryParse(zipCodePart[1], out tempZipCode))
+                if (zipCodePart.Length > 1 && string.IsNullOrEmpty(zipCodePart[1]))
                 {
                     Console.WriteLine("Failed to parse ZIP code from address.");
-                    return 0;
+                    return "00000";
                 }
             }
 
@@ -559,7 +559,7 @@ namespace SengokuProvider.Library.Services.Events
                 }
             }
 
-            return 0;
+            return "0000";
         }
         private string DetermineProvince(AddressData addressData)
         {
