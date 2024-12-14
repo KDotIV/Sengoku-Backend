@@ -262,7 +262,7 @@ namespace SengokuProvider.Library.Services.Events
 
             try
             {
-                var tempParts = StringExtensions.SplitByNum(command.RegionId, 3);
+                var tempParts = StringExtensions.SplitByNum(command.RegionId, 1);
                 var splitZipcode = tempParts.First();
                 var currentRegions = await QueryRelatedRegionsById(splitZipcode);
 
