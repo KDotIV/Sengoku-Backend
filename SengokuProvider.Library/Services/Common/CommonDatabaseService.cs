@@ -14,7 +14,6 @@ namespace SengokuProvider.Library.Services.Common
         {
             _connectionString = connectionString;
         }
-
         public Task<int> CreateAssociativeTable()
         {
             throw new NotImplementedException();

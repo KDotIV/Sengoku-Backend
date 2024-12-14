@@ -39,9 +39,9 @@ namespace SengokuProvider.Library.Services.Events
                     using (var cmd = new NpgsqlCommand())
                     {
                         cmd.Connection = conn;
-                        cmd.CommandText = @"SELECT DISTINCT r2.id FROM public.regions r1 JOIN regions r2 ON r1.province = r2.province WHERE r1.id like '@InputRegionId%';";
+                        cmd.CommandText = @"SELECT DISTINCT r2.id FROM public.regions r1 JOIN regions r2 ON r1.province = r2.province WHERE r1.id LIKE @InputRegionId";
 
-                        cmd.Parameters.AddWithValue("@InputRegionId", regionId);
+                        cmd.Parameters.AddWithValue("@InputRegionId", regionId + "%");
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
@@ -262,7 +262,9 @@ namespace SengokuProvider.Library.Services.Events
 
             try
             {
-                var currentRegions = await QueryRelatedRegionsById(command.RegionId);
+                var tempParts = StringExtensions.SplitByNum(command.RegionId, 3);
+                var splitZipcode = tempParts.First();
+                var currentRegions = await QueryRelatedRegionsById(splitZipcode);
 
                 var sortedAddresses = new List<AddressEventResult>();
 

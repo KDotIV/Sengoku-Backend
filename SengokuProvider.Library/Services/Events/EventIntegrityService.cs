@@ -141,7 +141,8 @@ namespace SengokuProvider.Library.Services.Events
             {
                 newCommand.UpdateParameters.Add(new Tuple<string, string>("url_slug", firstNode.Slug));
             }
-            if (eventToUpdate.Region is not null || eventToUpdate.Region != "00000")
+            //We use 1 as a flag to update zipcodes/addresses for Events table
+            if (eventToUpdate.Region == "1")
             {
                 var addressData = await _queryService.GetAddressById(eventToUpdate.AddressID);
                 if (addressData == null)
