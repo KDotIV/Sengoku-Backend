@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Npgsql;
+using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
 
 namespace SengokuProvider.Library.Services.Users
@@ -33,6 +34,30 @@ namespace SengokuProvider.Library.Services.Users
                     command.Parameters.AddWithValue("@Password", password);
                     return await command.ExecuteNonQueryAsync();
                 }
+            }
+        }
+        public async Task<UserData> GetUserById(int userId)
+        {
+            if(userId < 0) { throw new ArgumentNullException("Invalid UserId"); }
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+
+                var newQuery = @"SELECT * FROM users WHERE id = @Input";
+                var result = await conn.QueryFirstOrDefaultAsync(newQuery, new { Input = userId });
+
+                return result != null;
+            };
+        }
+        public async Task<bool> CheckUserById(int userId)
+        {
+            if (userId < 0) return false;
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+
+                var newQuery = @"SELECT * FROM users WHERE id = @Input";
+                return await conn.QueryFirstOrDefaultAsync<bool>(newQuery, new { Input = userId });
             }
         }
         private bool CheckDuplicatedUser(string input)

@@ -5,6 +5,7 @@ using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Services.Orgs;
 using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Factories;
@@ -108,6 +109,15 @@ IHost host = Host.CreateDefaultBuilder(args)
             var throttler = provider.GetService<RequestThrottler>();
             var commonServices = provider.GetService<ICommonDatabaseService>();
             return new PlayerQueryService(connectionString, configuration, graphClient, throttler, commonServices);
+        });
+        services.AddSingleton<IOrganizerIntakeService, OrganizerIntakeService>(provider =>
+        {
+            var configuration = provider.GetService<IConfiguration>();
+            var graphClient = provider.GetService<GraphQLHttpClient>();
+            var throttler = provider.GetService<RequestThrottler>();
+            var userService = provider.GetService<IUserService>();
+            var commonServices = provider.GetService<ICommonDatabaseService>();
+            return new OrganizerIntakeService(connectionString, graphClient, throttler, userService, commonServices);
         });
     })
     .Build();

@@ -64,9 +64,12 @@ builder.Services.AddScoped<IOrganizerQueryService, OrganizerQueryService>(provid
 });
 builder.Services.AddScoped<IOrganizerIntakeService, OrganizerIntakeService>(provider =>
 {
-    var graphQlClient = provider.GetService<GraphQLHttpClient>();
+    var configuration = provider.GetService<IConfiguration>();
+    var graphClient = provider.GetService<GraphQLHttpClient>();
     var throttler = provider.GetService<RequestThrottler>();
-    return new OrganizerIntakeService(connectionString, graphQlClient, throttler);
+    var userService = provider.GetService<IUserService>();
+    var commonServices = provider.GetService<ICommonDatabaseService>();
+    return new OrganizerIntakeService(connectionString, graphClient, throttler, userService, commonServices);
 });
 builder.Services.AddScoped<IEventIntakeService, EventIntakeService>(provider =>
 {

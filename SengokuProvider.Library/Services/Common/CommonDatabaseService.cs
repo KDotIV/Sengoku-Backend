@@ -36,6 +36,15 @@ namespace SengokuProvider.Library.Services.Common
 
             return newParameters;
         }
+        public NpgsqlParameter CreateDBNumericType(string parameterName, double value)
+        {
+            var newParameters = new NpgsqlParameter();
+            newParameters.ParameterName = parameterName;
+            newParameters.Value = value;
+            newParameters.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Numeric;
+
+            return newParameters;
+        }
         public string CleanUrlSlugName(string urlSlug)
         {
             if (string.IsNullOrEmpty(urlSlug))
