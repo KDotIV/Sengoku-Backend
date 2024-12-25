@@ -31,7 +31,6 @@ namespace SengokuProvider.Library.Services.Orgs
         {
             throw new NotImplementedException();
         }
-
         public async Task<bool> CreateTravelCoOp(CreateTravelCoOpCommand command)
         {
             if(command == null || command.UserId < 0 ) throw new ArgumentNullException(nameof(command));

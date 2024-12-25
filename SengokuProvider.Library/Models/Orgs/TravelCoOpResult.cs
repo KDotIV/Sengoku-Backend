@@ -14,6 +14,7 @@ namespace SengokuProvider.Library.Models.Orgs
         public required double FundingGoal { get; set; }
         public required List<int> CoOpItems { get; set; } = new List<int>();
         public required List<int> CollabUserIds { get; set; }
+        public required DateTime LastUpdated { get; set; }
         public double CurrentFunding {  get; set; }
     }
 }

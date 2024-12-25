@@ -100,4 +100,13 @@ namespace SengokuProvider.Library.Services.Common
                    !char.IsDigit(identifier[0]);
         }
     }
+    public class GenericArrayHandler<T> : SqlMapper.TypeHandler<T[]>
+    {
+        public override T[]? Parse(object value) => (T[])value;
+
+        public override void SetValue(System.Data.IDbDataParameter parameter, T[]? value)
+        {
+            parameter.Value = value;
+        }
+    }
 }

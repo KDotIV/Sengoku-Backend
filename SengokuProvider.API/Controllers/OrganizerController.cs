@@ -24,6 +24,14 @@ namespace SengokuProvider.API.Controllers
             _orgIntakeService = orgIntakeService;
             _commandProcessor = commandProcessor;
         }
+        [HttpGet("GetCoOpResultsUser")]
+        public async Task<IActionResult> GetCoOpResultsByUserId([FromQuery] int userId)
+        {
+            var result = await _orgQueryService.GetCoOpResultsByUserId(userId);
+            if (result.Count == 0) { return Ok("There are no CoOps under this User"); }
+
+            return Ok(result);
+        }
         [HttpPost("CreateTravelCoOp")]
         public async Task<IActionResult> CreateTravelCoOp([FromBody] CreateTravelCoOpCommand command)
         {
