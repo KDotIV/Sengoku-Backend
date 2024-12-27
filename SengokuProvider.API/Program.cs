@@ -86,7 +86,8 @@ builder.Services.AddScoped<ILegendQueryService, LegendQueryService>(provider =>
 {
     var graphQlClient = provider.GetService<GraphQLHttpClient>();
     var commonService = provider.GetService<ICommonDatabaseService>();
-    return new LegendQueryService(connectionString, graphQlClient, commonService);
+    var eventQueryService = provider.GetService<IEventQueryService>();
+    return new LegendQueryService(connectionString, graphQlClient, commonService, eventQueryService);
 });
 builder.Services.AddScoped<IPlayerQueryService, PlayerQueryService>(provider =>
 {

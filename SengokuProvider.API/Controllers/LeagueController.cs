@@ -54,27 +54,30 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("GetLeaderboardResultsByLeagueId")]
-        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([AsParameters] GetLeaderboardResultsByLeagueCommand command)
+        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromQuery] int leagueId)
         {
-            if (command == null)
-            {
-                _log.LogError("Command is null");
-                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
-            }
-            var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
-            {
-                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
-            }
             try
             {
-                List<LeaderboardData> result = await _legendQueryService.GetLeaderboardResultsByLeagueId(command.LeagueId);
+                List<LeaderboardData> result = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueId);
                 return Ok(result);
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Intaking Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetLeagueTournamentSchedule")]
+        public async Task<IActionResult> GetLeagueTournamentScheduleByLeagueId([FromQuery] int leagueId)
+        {
+            try
+            {
+                List<LeagueTournamentData> result = await _legendQueryService.GetLeagueTournamentScheduleByLeagueId(leagueId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Finding Tournament Schedule");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }

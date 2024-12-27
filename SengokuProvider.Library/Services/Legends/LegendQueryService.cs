@@ -1,10 +1,13 @@
-﻿using GraphQL.Client.Http;
+﻿using Dapper;
+using GraphQL.Client.Http;
 using Npgsql;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
+using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Library.Services.Events;
 
 namespace SengokuProvider.Library.Services.Legends
 {
@@ -13,12 +16,14 @@ namespace SengokuProvider.Library.Services.Legends
         private readonly string _connectString;
         private readonly GraphQLHttpClient _client;
         private readonly ICommonDatabaseService _commonServices;
+        private readonly IEventQueryService _eventQueryService;
 
-        public LegendQueryService(string connectionString, GraphQLHttpClient graphQlClient, ICommonDatabaseService commonServices)
+        public LegendQueryService(string connectionString, GraphQLHttpClient graphQlClient, ICommonDatabaseService commonServices, IEventQueryService eventQuery)
         {
             _connectString = connectionString;
             _client = graphQlClient;
             _commonServices = commonServices;
+            _eventQueryService = eventQuery;
         }
         public async Task<List<LeagueByOrgResults>> GetLeaderboardsByOrgId(int OrgId)
         {
@@ -213,6 +218,56 @@ namespace SengokuProvider.Library.Services.Legends
                     }
                 }
                 return tournamentBoardResult;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<List<LeagueTournamentData>> GetLeagueTournamentScheduleByLeagueId(int leagueId)
+        {
+            if (leagueId < 0) throw new ArgumentException($"League Id must be valid");
+
+            try
+            {
+                var result = new List<LeagueTournamentData>();
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT tlink.id, e.event_name, tlink.url_slug, tlink.viewership, tlink.player_ids, tlink.game_id, tlink.entrants_num, e.start_time, 
+                                                        tlink.last_updated FROM tournament_links tlink
+                                                        JOIN tournament_leagues tleague ON tlink.id = tleague.tournament_id
+                                                        JOIN leagues l ON l.id = tleague.league_id
+                                                        JOIN events e ON tlink.event_id = e.link_id
+                                                        WHERE tleague.league_id = @LeagueId;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@LeagueId", leagueId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) return result;
+                            while (await reader.ReadAsync())
+                            {
+                                SqlMapper.AddTypeHandler(new GenericArrayHandler<int>());
+                                var newTournamentData = new LeagueTournamentData
+                                {
+                                    TournamentLinkId = reader.GetInt32(reader.GetOrdinal("id")),
+                                    TournamentName = reader.GetString(reader.GetOrdinal("event_name")),
+                                    UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
+                                    PlayerIds = reader.GetFieldValue<int[]>(reader.GetOrdinal("player_ids")),
+                                    ViewershipUrls = reader.GetFieldValue<string[]>(reader.GetOrdinal("viewership")),
+                                    EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                                    LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                };
+                                result.Add(newTournamentData);
+                            }
+                        }
+                    }
+                }
+                return result;
             }
             catch (NpgsqlException ex)
             {
