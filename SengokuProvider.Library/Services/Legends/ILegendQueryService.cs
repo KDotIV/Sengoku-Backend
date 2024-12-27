@@ -9,6 +9,7 @@ namespace SengokuProvider.Library.Services.Legends
     {
         public Task<List<TournamentBoardResult>> GetCurrentRunnerBoard(int userId, int orgId = 0);
         public Task<List<LeaderboardData>> GetLeaderboardResultsByLeagueId(int leagueId);
+        public Task<List<LeaderboardData>> GetCurrentLeaderBoardResults(int[] leagueIds, int[] playerIds);
         public Task<List<LeagueByOrgResults>> GetLeaderboardsByOrgId(int OrgId);
         public Task<List<LeagueTournamentData>> GetLeagueTournamentScheduleByLeagueId(int leagueId);
         public Task<LegendData> GetLegendByPlayerIds(List<int> playerID);

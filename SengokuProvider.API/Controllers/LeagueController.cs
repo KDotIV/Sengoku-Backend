@@ -108,6 +108,32 @@ namespace SengokuProvider.API.Controllers
 
             }
         }
+        [HttpPut("UpdateLeaderboardStandingsLeague")]
+        public async Task<IActionResult> UpdateLeaderboardStandingsByLeagueId([FromBody] UpdateLeaderboardStandingsByLeague command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                var result = await _legendIntakeService.UpdateLeaderboardStandingsByLeagueId(command.LeagueId);
+                return new OkObjectResult(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Updating Leaderboard");
+                return new ObjectResult($"Error Message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
         [HttpPost("AddPlayerToLeague")]
         public async Task<IActionResult> AddPlayerToLeague([FromBody] OnboardPlayerToLeagueCommand command)
         {
