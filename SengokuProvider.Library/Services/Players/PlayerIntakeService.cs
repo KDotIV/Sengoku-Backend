@@ -260,7 +260,6 @@ namespace SengokuProvider.Library.Services.Players
 
             return totalPoints;
         }
-
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;

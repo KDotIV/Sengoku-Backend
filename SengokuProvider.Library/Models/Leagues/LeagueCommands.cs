@@ -40,6 +40,18 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
+    public class UpdateLeaderboardStandingsByLeague : ICommand
+    {
+        public required int LeagueId { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (LeagueId > 0) return true;
+            return false;
+        }
+    }
     public class GetLeaderboardsByOrgCommand : ICommand
     {
         public required int OrgId { get; set; }

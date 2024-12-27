@@ -101,6 +101,7 @@ namespace SengokuProvider.Library.Services.Legends
                     }
                     await transaction.CommitAsync();
                 }
+                await conn.CloseAsync();
             }
             return newOnboardResult;
         }
@@ -184,6 +185,99 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return boardResult;
         }
+        public async Task<UpdateLeaderboardResponse> UpdateLeaderboardStandingsByLeagueId(int leagueId)
+        {
+            if (leagueId < 0) throw new ArgumentException($"Cannot Update an invalid LeagueId {nameof(leagueId)}.");
+            var previousResults = await _legendQueryService.GetCurrentLeaderBoardResults(new int[leagueId], []);
+            var newResults = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueId);
+            return await UpdateCurrentLeaderboardResults(previousResults, newResults);
+        }
+        private async Task<UpdateLeaderboardResponse> UpdateCurrentLeaderboardResults(List<LeaderboardData> previousResults, List<LeaderboardData> newResults)
+        {
+            if (newResults.Count == 0) throw new ArgumentException($"New Results cannot be empty {nameof(newResults)}.");
+
+            // Compare previous and new leaderboard results by the frequency of playerId
+            var tempDict = previousResults.ToDictionary(k => k.PlayerId, v => v.CurrentScore);
+
+            // Ensures the state of the updated results
+            var updatedResults = new List<LeaderboardData>();
+
+            foreach (var updatedResult in newResults)
+            {
+                var resultCopy = new LeaderboardData
+                {
+                    PlayerId = updatedResult.PlayerId,
+                    PlayerName = updatedResult.PlayerName,
+                    LeagueId = updatedResult.LeagueId,
+                    CurrentScore = updatedResult.CurrentScore,
+                    TournamentCount = updatedResult.TournamentCount,
+                    ScoreDifference = 0 // Default, will be updated
+                };
+
+                if (tempDict.TryGetValue(updatedResult.PlayerId, out int currentValue))
+                {
+                    resultCopy.ScoreDifference = updatedResult.CurrentScore - currentValue;
+                }
+
+                updatedResults.Add(resultCopy);
+            }
+
+            return await IntakeUpdatedLeaderboardresults(updatedResults);
+        }
+        private async Task<UpdateLeaderboardResponse> IntakeUpdatedLeaderboardresults(List<LeaderboardData> updatedResults)
+        {
+            var updatedResponse = new UpdateLeaderboardResponse { SuccessfulPayers = new List<int>(), FailedPlayers = new List<int>(), Message = "" };
+            if (updatedResults.Count == 0) { updatedResponse.Message = "No new Leaderboard Results to Update"; return updatedResponse; }
+
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                using (var transaction = await conn.BeginTransactionAsync())
+                {
+                    foreach (var updatedRecord in updatedResults)
+                    {
+                        try
+                        {
+                            using (var cmd = new NpgsqlCommand(@"UPDATE player_leagues AS pl
+                                                            SET 
+                                                                last_updated = upval.last_updated,
+                                                                current_score = upval.current_score,
+                                                                score_change = upval.score_change,
+                                                                player_name = upval.player_name
+                                                            FROM (
+                                                                VALUES (@PlayerId, @LeagueId, CURRENT_DATE, @CurrentScore, @ScoreChange, @PlayerName)
+                                                            ) AS upval(player_id, league_id, last_updated, current_score, score_change, player_name)
+                                                            WHERE pl.player_id = upval.player_id AND pl.league_id = upval.league_id;", conn))
+                            {
+                                cmd.Parameters.AddWithValue("@PlayerId", updatedRecord.PlayerId);
+                                cmd.Parameters.AddWithValue("@LeagueId", updatedRecord.LeagueId);
+                                cmd.Parameters.AddWithValue("@CurrentScore", updatedRecord.CurrentScore);
+                                cmd.Parameters.AddWithValue("@ScoreChange", updatedRecord.ScoreDifference);
+                                cmd.Parameters.AddWithValue("@PlayerName", updatedRecord.PlayerName);
+                                var result = await cmd.ExecuteNonQueryAsync();
+                                if (result > 0) updatedResponse.SuccessfulPayers.Add(result);
+                                else updatedResponse.FailedPlayers.Add(result);
+                            }
+                        }
+                        catch (NpgsqlException ex)
+                        {
+                            Console.WriteLine(new ApplicationException("Database error occurred: ", ex));
+                            updatedResponse.FailedPlayers.Add(updatedRecord.PlayerId);
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(new ApplicationException("Unexpected Error Occurred: ", ex));
+                            updatedResponse.FailedPlayers.Add(updatedRecord.PlayerId);
+                            continue;
+                        }
+                    }
+                    await transaction.CommitAsync();
+                }
+                await conn.CloseAsync();
+            }
+            return updatedResponse;
+        }
         private async Task<bool> UpdateTournamentsToRunnerBoard(int userId, List<int> tournamentIds, int orgId = 0)
         {
             if (userId <= 0 || orgId < 0) return false;
@@ -215,7 +309,7 @@ namespace SengokuProvider.Library.Services.Legends
                         cmd.Parameters.AddWithValue("@OrgInput", orgId);
 
                         var updated = await cmd.ExecuteNonQueryAsync();
-                        if(updated > 0)
+                        if (updated > 0)
                         {
                             return true;
                         }

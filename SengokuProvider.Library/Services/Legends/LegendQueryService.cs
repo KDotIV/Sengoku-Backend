@@ -73,16 +73,17 @@ namespace SengokuProvider.Library.Services.Legends
                 using (var conn = new NpgsqlConnection(_connectString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"SELECT p.player_name, SUM(s.gained_points) AS total_points,COUNT(DISTINCT s.tournament_link) AS tournament_count
-                                                        FROM players p
-                                                        JOIN player_leagues pl ON p.id = pl.player_id
-                                                        JOIN standings s ON p.id = s.player_id
-                                                        JOIN tournament_links t ON s.tournament_link = t.id
-                                                        JOIN tournament_leagues tl ON t.id = tl.tournament_id
-                                                        JOIN leagues l ON tl.league_id = l.id
-                                                        WHERE l.id = @Input AND pl.league_id = @Input
-                                                        GROUP BY p.player_name, l.name
-                                                        ORDER BY total_points DESC;", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT p.player_name, p.id AS player_id, l.id AS league_id, SUM(s.gained_points) AS current_score,
+	                                                        COUNT(DISTINCT s.tournament_link) AS tournament_count
+	                                                        FROM players p
+	                                                        JOIN player_leagues pl ON p.id = pl.player_id
+	                                                        JOIN standings s ON p.id = s.player_id
+	                                                        JOIN tournament_links t ON s.tournament_link = t.id
+	                                                        JOIN tournament_leagues tl ON t.id = tl.tournament_id
+	                                                        JOIN leagues l ON tl.league_id = l.id
+	                                                        WHERE l.id = @Input AND pl.league_id = @Input
+	                                                        GROUP BY p.player_name, l.name, p.id, l.id
+	                                                        ORDER BY current_score DESC;", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", leagueId);
                         using (var reader = await cmd.ExecuteReaderAsync())
@@ -94,8 +95,10 @@ namespace SengokuProvider.Library.Services.Legends
                             {
                                 var mappedData = new LeaderboardData
                                 {
+                                    PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
                                     PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
-                                    TotalPoints = reader.GetInt32(reader.GetOrdinal("total_points")),
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
+                                    CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
                                     TournamentCount = reader.GetInt32(reader.GetOrdinal("tournament_count"))
                                 };
                                 queryResult.Add(mappedData);
@@ -104,6 +107,54 @@ namespace SengokuProvider.Library.Services.Legends
                         }
                     }
                 }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<List<LeaderboardData>> GetCurrentLeaderBoardResults(int[] leagueIds, int[] playerIds)
+        {
+            if (leagueIds.Length == 0) throw new ArgumentException($"Cannot search with an invalid LeagueId {nameof(leagueIds)}");
+
+            try
+            {
+                List<LeaderboardData> result = new List<LeaderboardData>();
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM player_leagues WHERE league_id = ANY(@LeagueIds);", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@LeagueIds", leagueIds);
+                        if (playerIds.Length > 0)
+                        {
+                            cmd.CommandText = @"SELECT * FROM player_leagues WHERE player_id = ANY(@PlayerIds) AND league_id = ANY(@LeagueIds);";
+                            cmd.Parameters.AddWithValue("@PlayerIds", playerIds);
+                        }
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) return result;
+                            while (await reader.ReadAsync())
+                            {
+                                var newLeaderboardData = new LeaderboardData
+                                {
+                                    PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
+                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
+                                    CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
+                                    ScoreDifference = reader.GetInt32(reader.GetOrdinal("score_change"))
+                                };
+                                result.Add(newLeaderboardData);
+                            }
+                        }
+                    };
+                }
+                return result;
             }
             catch (NpgsqlException ex)
             {
