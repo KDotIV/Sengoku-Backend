@@ -323,9 +323,9 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        public async Task<List<LeagueTournamentData>> GetLeagueTournamentScheduleByLeagueId(int leagueId)
+        public async Task<List<LeagueTournamentData>> GetLeagueTournamentScheduleByLeagueId(int[] leagueIds)
         {
-            if (leagueId < 0) throw new ArgumentException($"League Id must be valid");
+            if (leagueIds.Length < 0) throw new ArgumentException($"League Id must be valid");
 
             try
             {
@@ -333,14 +333,14 @@ namespace SengokuProvider.Library.Services.Legends
                 using (var conn = new NpgsqlConnection(_connectString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"SELECT tlink.id, e.event_name, tlink.url_slug, tlink.viewership, tlink.player_ids, tlink.game_id, tlink.entrants_num, e.start_time, 
+                    using (var cmd = new NpgsqlCommand(@"SELECT tlink.id, tleague.league_id, e.event_name, tlink.url_slug, tlink.viewership, tlink.player_ids, tlink.game_id, tlink.entrants_num, e.start_time, 
                                                         tlink.last_updated FROM tournament_links tlink
                                                         JOIN tournament_leagues tleague ON tlink.id = tleague.tournament_id
                                                         JOIN leagues l ON l.id = tleague.league_id
                                                         JOIN events e ON tlink.event_id = e.link_id
-                                                        WHERE tleague.league_id = @LeagueId;", conn))
+                                                        WHERE tleague.league_id = ANY(@LeagueIds);", conn))
                     {
-                        cmd.Parameters.AddWithValue("@LeagueId", leagueId);
+                        cmd.Parameters.AddWithValue("@LeagueIds", leagueIds);
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
                             if (!reader.HasRows) return result;
@@ -349,12 +349,14 @@ namespace SengokuProvider.Library.Services.Legends
                                 SqlMapper.AddTypeHandler(new GenericArrayHandler<int>());
                                 var newTournamentData = new LeagueTournamentData
                                 {
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("tleague.league_id")),
                                     TournamentLinkId = reader.GetInt32(reader.GetOrdinal("id")),
                                     TournamentName = reader.GetString(reader.GetOrdinal("event_name")),
                                     UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
                                     PlayerIds = reader.GetFieldValue<int[]>(reader.GetOrdinal("player_ids")),
                                     ViewershipUrls = reader.GetFieldValue<string[]>(reader.GetOrdinal("viewership")),
                                     EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                                    StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),
                                     LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
                                 result.Add(newTournamentData);
