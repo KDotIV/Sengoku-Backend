@@ -68,11 +68,11 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("GetLeagueTournamentSchedule")]
-        public async Task<IActionResult> GetLeagueTournamentScheduleByLeagueId([FromQuery] int leagueId)
+        public async Task<IActionResult> GetLeagueTournamentScheduleByLeagueId([FromQuery] int[] leagueIds)
         {
             try
             {
-                List<LeagueTournamentData> result = await _legendQueryService.GetLeagueTournamentScheduleByLeagueId(leagueId);
+                List<LeagueTournamentData> result = await _legendQueryService.GetLeagueTournamentScheduleByLeagueId(leagueIds);
                 return Ok(result);
             }
             catch (Exception ex)
