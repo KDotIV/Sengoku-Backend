@@ -33,9 +33,53 @@ namespace SengokuProvider.Library.Services.Legends
                 using (var conn = new NpgsqlConnection(_connectString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM leagues WHERE org_id = @Input", conn))
                     {
                         cmd.Parameters.AddWithValue("@Input", OrgId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) new List<LeagueByOrgResults>();
+                            var queryResult = new List<LeagueByOrgResults>();
+
+                            while (await reader.ReadAsync())
+                            {
+                                var mappedData = new LeagueByOrgResults
+                                {
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("id")),
+                                    LeagueName = reader.GetString(reader.GetOrdinal("name")),
+                                    OrgId = reader.GetInt32(reader.GetOrdinal("org_id")),
+                                    StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
+                                    EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
+                                    Game = reader.GetInt32(reader.GetOrdinal("game")),
+                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                };
+                                queryResult.Add(mappedData);
+                            }
+                            return queryResult;
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<List<LeagueByOrgResults>> GetLeagueByLeagueIds(int[] leagueIds)
+        {
+            if (leagueIds.Length == 0) throw new ArgumentException($"Must contain valid LeagueId {nameof(leagueIds)}");
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM public.leagues WHERE id = ANY(@Input)", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Input", leagueIds);
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
                             if (!reader.HasRows) new List<LeagueByOrgResults>();
@@ -319,6 +363,48 @@ namespace SengokuProvider.Library.Services.Legends
                     }
                 }
                 return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<List<LeagueByOrgResults>> GetAvailableLeagues()
+        {
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM public.leagues WHERE end_date > CURRENT_DATE;", conn))
+                    {
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) new List<LeagueByOrgResults>();
+                            var queryResult = new List<LeagueByOrgResults>();
+
+                            while (await reader.ReadAsync())
+                            {
+                                var mappedData = new LeagueByOrgResults
+                                {
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("id")),
+                                    LeagueName = reader.GetString(reader.GetOrdinal("name")),
+                                    OrgId = reader.GetInt32(reader.GetOrdinal("org_id")),
+                                    StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
+                                    EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
+                                    Game = reader.GetInt32(reader.GetOrdinal("game")),
+                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                };
+                                queryResult.Add(mappedData);
+                            }
+                            return queryResult;
+                        }
+                    }
+                }
             }
             catch (NpgsqlException ex)
             {

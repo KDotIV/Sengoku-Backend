@@ -160,9 +160,10 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("GetLeaderboardsByOrg")]
-        public async Task<IActionResult> GetLeaderboardsByOrgId([AsParameters] GetLeaderboardsByOrgCommand command)
+        [HttpGet("GetLeaguesByOrgId")]
+        public async Task<IActionResult> GetLeaguesByOrgId([FromQuery] int orgId)
         {
+            var command = new GetLeaderboardsByOrgCommand { OrgId = orgId };
             if (command == null)
             {
                 _log.LogError("Command is null");
@@ -183,6 +184,20 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Querying Leaderboard Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetLeaguesByLeagueIds")]
+        public async Task<IActionResult> GetLeaguesByLeagueIds([FromQuery] int[] leagueIds)
+        {
+            try
+            {
+                var result = await _legendQueryService.GetLeagueByLeagueIds(leagueIds);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying League Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
@@ -284,6 +299,34 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Adding Tournament to RunnerBoard");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetAvailableLeagues")]
+        public async Task<IActionResult> GetAvailableLeagues()
+        {
+            try
+            {
+                var result = await _legendQueryService.GetAvailableLeagues();
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Fetching League Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpPost("AddLeagueToUser")]
+        public async Task<IActionResult> AddLeagueToUser([FromQuery] int leagueId, [FromQuery] int userId)
+        {
+            try
+            {
+                bool result = await _legendIntakeService.AddLeagueToUser(leagueId, userId);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Registering League to User.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }

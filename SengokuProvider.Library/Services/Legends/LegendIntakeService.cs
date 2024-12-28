@@ -10,6 +10,7 @@ using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Handlers;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -21,13 +22,14 @@ namespace SengokuProvider.Library.Services.Legends
         private readonly IConfiguration _configuration;
         private readonly ILegendQueryService _legendQueryService;
         private readonly IEventQueryService _eventQueryService;
+        private readonly IUserService _userService;
         private readonly IAzureBusApiService _azureBusApiService;
         private readonly ICommonDatabaseService _commonServices;
         private readonly string _connectionString;
         private readonly int _orgLeagueLimit = 5;
         private static Random _rand = new Random();
         public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IEventQueryService eventQueryService,
-            IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
+            IUserService userService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
         {
             _configuration = configuration;
             _connectionString = connectionString;
@@ -35,6 +37,7 @@ namespace SengokuProvider.Library.Services.Legends
             _eventQueryService = eventQueryService;
             _azureBusApiService = azureServiceBus;
             _commonServices = commonServices;
+            _userService = userService;
         }
         public async Task<LegendData?> GenerateNewLegends(int playerId, string playerName)
         {
@@ -462,6 +465,53 @@ namespace SengokuProvider.Library.Services.Legends
             catch (Exception ex)
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<bool> AddLeagueToUser(int leagueId, int userId)
+        {
+            if (leagueId < 0 || userId < 0) { throw new ArgumentException($"LeagueId and UserId must be valid {nameof(leagueId)} - {nameof(userId)}"); }
+
+            try
+            {
+                var currentUserData = await _userService.GetUserById(userId);
+                var tempList = await _legendQueryService.GetLeagueByLeagueIds([leagueId]);
+                if (tempList.Count == 0) { throw new ArgumentNullException($"League Results were empty {nameof(tempList)}"); }
+                var currentLeagueData = tempList.First(x => x.LeagueId == leagueId);
+
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    try
+                    {
+                        using (var cmd = new NpgsqlCommand(@"INSERT INTO user_leagues (user_id, user_name, league_id, league_name, last_updated) VALUES (@UserInput, @UserName, @LeagueInput, @LeagueName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                        {
+                            cmd.Parameters.AddWithValue("@UserInput", userId);
+                            cmd.Parameters.AddWithValue("@UserName", currentUserData.UserName);
+                            cmd.Parameters.AddWithValue("@LeagueName", currentLeagueData.LeagueName);
+                            cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
+                            cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                            var result = await cmd.ExecuteNonQueryAsync();
+                            if (result > 0)
+                            {
+                                return true;
+                            }
+                            else { return false; }
+                        }
+                    }
+                    catch (NpgsqlException ex)
+                    {
+                        throw new ApplicationException("Database error occurred: ", ex);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                throw;
             }
         }
         private async Task<LegendData?> BuildLegendData(StandingsQueryResult? currentData, string playerName)

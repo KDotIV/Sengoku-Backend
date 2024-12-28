@@ -120,8 +120,9 @@ builder.Services.AddScoped<ILegendIntakeService, LegendIntakeService>(provider =
     var config = provider.GetService<IConfiguration>();
     var serviceBus = provider.GetService<IAzureBusApiService>();
     var eventQueryService = provider.GetService<IEventQueryService>();
+    var userQueryService = provider.GetService<IUserService>();
     var commonServices = provider.GetService<ICommonDatabaseService>();
-    return new LegendIntakeService(connectionString, config, queryService, eventQueryService, serviceBus, commonServices);
+    return new LegendIntakeService(connectionString, config, queryService, eventQueryService, userQueryService, serviceBus, commonServices);
 });
 
 builder.Services.AddControllers();

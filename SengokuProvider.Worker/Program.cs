@@ -83,10 +83,11 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             var legendQueryService = provider.GetService<ILegendQueryService>();
             var eventQueryService = provider.GetService<IEventQueryService>();
+            var userQueryService = provider.GetService<IUserService>();
             var commonServices = provider.GetService<ICommonDatabaseService>();
             var config = provider.GetService<IConfiguration>();
             var serviceBus = provider.GetService<IAzureBusApiService>();
-            return new LegendIntakeService(connectionString, config, legendQueryService, eventQueryService, serviceBus, commonServices);
+            return new LegendIntakeService(connectionString, config, legendQueryService, eventQueryService, userQueryService, serviceBus, commonServices);
         });
         services.AddSingleton<ILegendIntegrityService, LegendIntegrityService>(provider =>
         {
