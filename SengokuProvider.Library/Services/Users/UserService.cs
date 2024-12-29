@@ -9,6 +9,7 @@ namespace SengokuProvider.Library.Services.Users
     {
         private readonly string _connectionString;
         private readonly IntakeValidator _validator;
+        private readonly Random _rand;
         public UserService(string connectionString, IntakeValidator validator)
         {
             _connectionString = connectionString;
@@ -20,25 +21,41 @@ namespace SengokuProvider.Library.Services.Users
             {
                 throw new ArgumentException("Invalid input data");
             }
-            using (var conn = new NpgsqlConnection(_connectionString))
+            try
             {
-                conn.Open();
-
-                if (CheckDuplicatedUser(email)) { throw new ArgumentException("Email is already in use"); }
-
-                var createNewUserCommand = @"INSERT INTO users (user_name, email, password) VALUES (@Username, @Email, @Password)";
-                using (var command = new NpgsqlCommand(createNewUserCommand, conn))
+                using (var conn = new NpgsqlConnection(_connectionString))
                 {
-                    command.Parameters.AddWithValue("@Username", username);
-                    command.Parameters.AddWithValue("@Email", email);
-                    command.Parameters.AddWithValue("@Password", password);
-                    return await command.ExecuteNonQueryAsync();
+                    conn.Open();
+
+                    if (CheckDuplicatedUser(email)) { throw new ArgumentException("Email is already in use"); }
+
+                    var createNewUserCommand = @"INSERT INTO users (id, user_name, email, password) VALUES (@UserId, @Username, @Email, @Password) ON CONFLICT(id, email) DO NOTHING";
+                    using (var command = new NpgsqlCommand(createNewUserCommand, conn))
+                    {
+                        command.Parameters.AddWithValue("@UserId", await GenerateNewUserId());
+                        command.Parameters.AddWithValue("@Username", username);
+                        command.Parameters.AddWithValue("@Email", email);
+                        command.Parameters.AddWithValue("@Password", password);
+                        var result = await command.ExecuteNonQueryAsync();
+                        if (result > 0)
+                            return result;
+                        else
+                            return 4; //4 = Failed
+                    }
                 }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
         public async Task<UserData> GetUserById(int userId)
         {
-            if(userId < 0) { throw new ArgumentNullException("Invalid UserId"); }
+            if (userId < 0) { throw new ArgumentNullException("Invalid UserId"); }
             using (var conn = new NpgsqlConnection(_connectionString))
             {
                 await conn.OpenAsync();
@@ -70,6 +87,21 @@ namespace SengokuProvider.Library.Services.Users
                 var result = conn.QueryFirstOrDefault<string>(newQuery, new { Input = input });
 
                 return result != null;
+            }
+        }
+        private async Task<int> GenerateNewUserId()
+        {
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                while (true)
+                {
+                    var newId = _rand.Next(100000, 1000000);
+
+                    var newQuery = @"SELECT id FROM users WHERE id = @Input";
+                    var queryResult = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = newId });
+                    if (newId != queryResult || queryResult == 0) return newId;
+                }
             }
         }
     }
