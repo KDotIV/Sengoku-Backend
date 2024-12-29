@@ -19,5 +19,7 @@
         IntakeLegendsByTournament = 303,
         OnboardTournamentToLeague = 304,
         OnboardPlayerToLeague = 305,
+        //User Commands
+        CreateNewUser = 401,
     }
 }

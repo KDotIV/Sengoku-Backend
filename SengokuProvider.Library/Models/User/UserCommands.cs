@@ -7,7 +7,7 @@ namespace SengokuProvider.Library.Models.User
         public required string UserName { get; set; }
         public required string Password { get; set; }
         public required string Email { get; set; }
-        public required CommandRegistry Topic { get; set; }
+        public CommandRegistry Topic { get; set; } = CommandRegistry.CreateNewUser;
         public string? Response { get; set; }
 
         public bool Validate()
