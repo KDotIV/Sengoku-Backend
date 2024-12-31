@@ -356,6 +356,7 @@ namespace SengokuProvider.Library.Services.Legends
                                     PlayerIds = reader.GetFieldValue<int[]>(reader.GetOrdinal("player_ids")) ?? Array.Empty<int>(),
                                     ViewershipUrls = reader.GetFieldValue<string[]>(reader.GetOrdinal("viewership")),
                                     EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                                    GameId = reader.GetInt32(reader.GetOrdinal("game_id")),
                                     StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),
                                     LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
