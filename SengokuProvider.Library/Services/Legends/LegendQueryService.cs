@@ -349,11 +349,11 @@ namespace SengokuProvider.Library.Services.Legends
                                 SqlMapper.AddTypeHandler(new GenericArrayHandler<int>());
                                 var newTournamentData = new LeagueTournamentData
                                 {
-                                    LeagueId = reader.GetInt32(reader.GetOrdinal("tleague.league_id")),
+                                    LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
                                     TournamentLinkId = reader.GetInt32(reader.GetOrdinal("id")),
                                     TournamentName = reader.GetString(reader.GetOrdinal("event_name")),
                                     UrlSlug = reader.GetString(reader.GetOrdinal("url_slug")),
-                                    PlayerIds = reader.GetFieldValue<int[]>(reader.GetOrdinal("player_ids")),
+                                    PlayerIds = reader.GetFieldValue<int[]>(reader.GetOrdinal("player_ids")) ?? Array.Empty<int>(),
                                     ViewershipUrls = reader.GetFieldValue<string[]>(reader.GetOrdinal("viewership")),
                                     EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
                                     StartTime = reader.GetDateTime(reader.GetOrdinal("start_time")),

@@ -18,9 +18,7 @@ namespace SengokuProvider.Library.Services.Users
         public async Task<int> CreateUser(string username, string email, string password)
         {
             if (!_validator.IsValidIdentifier(username) || !_validator.IsValidIdentifier(email) || !_validator.IsValidIdentifier(password))
-            {
                 throw new ArgumentException("Invalid input data");
-            }
             try
             {
                 using (var conn = new NpgsqlConnection(_connectionString))
