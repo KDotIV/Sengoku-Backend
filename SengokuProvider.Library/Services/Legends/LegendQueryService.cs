@@ -122,7 +122,7 @@ namespace SengokuProvider.Library.Services.Legends
                 using (var conn = new NpgsqlConnection(_connectString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"SELECT p.player_name, p.id AS player_id,l.id AS league_id, tl.last_updated, t.game_id,
+                    using (var cmd = new NpgsqlCommand(@"SELECT p.player_name, p.id AS player_id,l.id AS league_id, tl.last_updated, t.game_id, l.name AS league_name,
                                                             SUM(s.gained_points) AS current_score, COUNT(DISTINCT s.tournament_link) AS tournament_count, pl.score_change
 	                                                        FROM players p
 	                                                        JOIN player_leagues pl ON p.id = pl.player_id
