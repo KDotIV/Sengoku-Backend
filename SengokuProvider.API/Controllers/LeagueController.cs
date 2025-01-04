@@ -134,6 +134,7 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error Message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+
         [HttpPost("AddPlayerToLeague")]
         public async Task<IActionResult> AddPlayerToLeague([FromBody] OnboardPlayerToLeagueCommand command)
         {

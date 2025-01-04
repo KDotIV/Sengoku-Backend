@@ -214,7 +214,8 @@ namespace SengokuProvider.Library.Services.Legends
                     LeagueId = updatedResult.LeagueId,
                     CurrentScore = updatedResult.CurrentScore,
                     TournamentCount = updatedResult.TournamentCount,
-                    ScoreDifference = 0 // Default, will be updated
+                    ScoreDifference = 0, // Default, will be updated
+                    LastUpdated = DateTime.UtcNow
                 };
 
                 if (tempDict.TryGetValue(updatedResult.PlayerId, out int currentValue))

@@ -300,7 +300,8 @@ namespace SengokuProvider.Library.Services.Players
                                 placement = EXCLUDED.placement,
                                 entrants_num = EXCLUDED.entrants_num,
                                 active = EXCLUDED.active,
-                                gained_points = EXCLUDED.gained_points;";
+                                gained_points = EXCLUDED.gained_points,
+                                last_updated = EXCLUDED.last_updated;";
 
                             using (var cmd = new NpgsqlCommand(createInsertCommand, conn))
                             {
