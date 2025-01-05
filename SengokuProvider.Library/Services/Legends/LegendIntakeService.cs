@@ -214,13 +214,13 @@ namespace SengokuProvider.Library.Services.Legends
                     LeagueId = updatedResult.LeagueId,
                     CurrentScore = updatedResult.CurrentScore,
                     TournamentCount = updatedResult.TournamentCount,
-                    ScoreDifference = 0, // Default, will be updated
+                    ScoreChange = 0, // Default, will be updated
                     LastUpdated = DateTime.UtcNow
                 };
 
                 if (tempDict.TryGetValue(updatedResult.PlayerId, out int currentValue))
                 {
-                    resultCopy.ScoreDifference = updatedResult.CurrentScore - currentValue;
+                    resultCopy.ScoreChange = updatedResult.CurrentScore - currentValue;
                 }
 
                 updatedResults.Add(resultCopy);
@@ -256,7 +256,7 @@ namespace SengokuProvider.Library.Services.Legends
                                 cmd.Parameters.AddWithValue("@PlayerId", updatedRecord.PlayerId);
                                 cmd.Parameters.AddWithValue("@LeagueId", updatedRecord.LeagueId);
                                 cmd.Parameters.AddWithValue("@CurrentScore", updatedRecord.CurrentScore);
-                                cmd.Parameters.AddWithValue("@ScoreChange", updatedRecord.ScoreDifference);
+                                cmd.Parameters.AddWithValue("@ScoreChange", updatedRecord.ScoreChange);
                                 cmd.Parameters.AddWithValue("@PlayerName", updatedRecord.PlayerName);
                                 var result = await cmd.ExecuteNonQueryAsync();
                                 if (result > 0) updatedResponse.SuccessfulPayers.Add(result);

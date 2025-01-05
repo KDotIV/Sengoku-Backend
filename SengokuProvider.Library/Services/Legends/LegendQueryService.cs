@@ -120,16 +120,36 @@ namespace SengokuProvider.Library.Services.Legends
 
             try
             {
-                using (var conn = new NpgsqlConnection(_connectString))
-                {
-                    await conn.OpenAsync();
-                    const string sql = @"SELECT * FROM fn_top_scores_by_leagues(@LeagueIds, @TopN);";
+                var result = new List<LeaderboardData>();
 
-                    var results = await conn.QueryAsync<LeaderboardData>(
-                        sql, new { LeagueIds = leagueIds, TopN = 2 }
-                    );
-                    return results.ToList();
+                using var conn = new NpgsqlConnection(_connectString);
+                await conn.OpenAsync();
+
+                const string sql = @"SELECT * FROM fn_top_scores_by_leagues(@LeagueIds, @TopN);";
+
+                using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@LeagueIds", leagueIds);
+                cmd.Parameters.AddWithValue("@TopN", 2);
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    if (!reader.HasRows) return result;
+                    var data = new LeaderboardData
+                    {
+                        PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
+                        LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
+                        PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
+                        CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
+                        LeagueName = reader.GetString(reader.GetOrdinal("league_name")),
+                        ScoreChange = reader.GetInt32(reader.GetOrdinal("score_difference")),
+                        TournamentCount = reader.GetInt32(reader.GetOrdinal("tournament_count")),
+                        GameId = reader.GetInt32(reader.GetOrdinal("game_id")),
+                        LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                    };
+                    result.Add(data);
                 }
+                return result;
             }
             catch (NpgsqlException ex)
             {
@@ -170,7 +190,7 @@ namespace SengokuProvider.Library.Services.Legends
                                     PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
                                     LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
                                     CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
-                                    ScoreDifference = reader.GetInt32(reader.GetOrdinal("score_change")),
+                                    ScoreChange = reader.GetInt32(reader.GetOrdinal("score_change")),
                                     LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
                                 result.Add(newLeaderboardData);
