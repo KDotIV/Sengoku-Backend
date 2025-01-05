@@ -192,7 +192,7 @@ namespace SengokuProvider.Library.Services.Legends
         {
             if (leagueId < 0) throw new ArgumentException($"Cannot Update an invalid LeagueId {nameof(leagueId)}.");
             var previousResults = await _legendQueryService.GetCurrentLeaderBoardResults(new int[leagueId], []);
-            var newResults = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueId);
+            var newResults = await _legendQueryService.GetLeaderboardResultsByLeagueId(new int[leagueId], 2);
             return await UpdateCurrentLeaderboardResults(previousResults, newResults);
         }
         private async Task<UpdateLeaderboardResponse> UpdateCurrentLeaderboardResults(List<LeaderboardData> previousResults, List<LeaderboardData> newResults)

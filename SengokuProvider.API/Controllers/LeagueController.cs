@@ -54,11 +54,11 @@ namespace SengokuProvider.API.Controllers
             }
         }
         [HttpGet("GetLeaderboardResultsByLeagueId")]
-        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromQuery] int leagueId)
+        public async Task<IActionResult> GetLeaderboardResultsByLeagueId([FromQuery] int[] leagueIds, [FromQuery] int topN)
         {
             try
             {
-                List<LeaderboardData> result = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueId);
+                List<LeaderboardData> result = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueIds, topN);
                 return Ok(result);
             }
             catch (Exception ex)

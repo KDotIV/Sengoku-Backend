@@ -113,52 +113,22 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        public async Task<List<LeaderboardData>> GetLeaderboardResultsByLeagueId(int leagueId)
+        public async Task<List<LeaderboardData>> GetLeaderboardResultsByLeagueId(int[] leagueIds, int topN)
         {
-            if (leagueId < 1) return new List<LeaderboardData>();
+            if (leagueIds.Length < 1)
+                return [];
 
             try
             {
                 using (var conn = new NpgsqlConnection(_connectString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"SELECT p.player_name, p.id AS player_id,l.id AS league_id, tl.last_updated, t.game_id, l.name AS league_name,
-                                                            SUM(s.gained_points) AS current_score, COUNT(DISTINCT s.tournament_link) AS tournament_count, pl.score_change
-	                                                        FROM players p
-	                                                        JOIN player_leagues pl ON p.id = pl.player_id
-	                                                        JOIN standings s ON p.id = s.player_id
-	                                                        JOIN tournament_links t ON s.tournament_link = t.id
-	                                                        JOIN tournament_leagues tl ON t.id = tl.tournament_id
-	                                                        JOIN leagues l ON tl.league_id = l.id
-	                                                        WHERE l.id = @Input AND pl.league_id = @Input
-	                                                        GROUP BY p.player_name, l.name, p.id, pl.score_change, l.id, tl.last_updated, t.game_id
-	                                                        ORDER BY current_score DESC;", conn))
-                    {
-                        cmd.Parameters.AddWithValue("@Input", leagueId);
-                        using (var reader = await cmd.ExecuteReaderAsync())
-                        {
-                            if (!reader.HasRows) return new List<LeaderboardData>();
-                            var queryResult = new List<LeaderboardData>();
+                    const string sql = @"SELECT * FROM fn_top_scores_by_leagues(@LeagueIds, @TopN);";
 
-                            while (await reader.ReadAsync())
-                            {
-                                var mappedData = new LeaderboardData
-                                {
-                                    PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
-                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
-                                    LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
-                                    LeagueName = reader.GetString(reader.GetOrdinal("league_name")),
-                                    CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
-                                    ScoreDifference = reader.GetInt32(reader.GetOrdinal("score_change")),
-                                    GameId = reader.GetInt32(reader.GetOrdinal("game_id")),
-                                    TournamentCount = reader.GetInt32(reader.GetOrdinal("tournament_count")),
-                                    LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
-                                };
-                                queryResult.Add(mappedData);
-                            }
-                            return queryResult;
-                        }
-                    }
+                    var results = await conn.QueryAsync<LeaderboardData>(
+                        sql, new { LeagueIds = leagueIds, TopN = 2 }
+                    );
+                    return results.ToList();
                 }
             }
             catch (NpgsqlException ex)
