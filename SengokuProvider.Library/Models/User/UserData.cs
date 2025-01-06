@@ -15,7 +15,6 @@
         public int Id { get; set; }
         public required UserType UserType { get; set; }
     }
-
     public enum UserType
     {
         Admin = 0,

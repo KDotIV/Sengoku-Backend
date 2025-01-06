@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Npgsql;
 using SengokuProvider.Library.Models.Common;
 
 namespace SengokuProvider.Library.Services.Comms
@@ -6,9 +7,13 @@ namespace SengokuProvider.Library.Services.Comms
     public class DiscordWebhookHandler : IDiscordWebhookHandler
     {
         private readonly HttpClient _httpClient;
-        public DiscordWebhookHandler()
+        private readonly string? _connection;
+        private readonly Random _rand = new Random();
+
+        public DiscordWebhookHandler(string? connection)
         {
             _httpClient = new HttpClient();
+            _connection = connection;
         }
         public async Task SendThreadUpdateMessage(int gameId, string messageContent, long threadId, object? attachments = default)
         {
@@ -55,6 +60,46 @@ namespace SengokuProvider.Library.Services.Comms
                 Console.WriteLine($"{ex.Message.ToString()} - {ex.StackTrace}");
             }
             return false;
+        }
+        public async Task<bool> SubscribeToFeed(string serverName, string subscribedChannel, string webhookUrl, string feedId)
+        {
+            if(string.IsNullOrEmpty(serverName) || string.IsNullOrEmpty(subscribedChannel) || string.IsNullOrEmpty(webhookUrl) || string.IsNullOrEmpty(feedId))
+            {
+                throw new ArgumentNullException("One or more parameters are null or empty.");
+            }
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connection))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO subscribed_feeds (id, subscriber, subscribed_channel, 
+                                                        webhook_url, feed_id, last_updated) VALUES (@InputId, @Subscriber, @Channel,
+                                                        @Webhook, @FeedId, @LastUpdated) ON CONFLICT DO NOTHING", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@InputId", _rand.Next(100000, 1000000));
+                        cmd.Parameters.AddWithValue("@Subscriber", serverName);
+                        cmd.Parameters.AddWithValue("@Channel", subscribedChannel);
+                        cmd.Parameters.AddWithValue("@Webhook", webhookUrl);
+                        cmd.Parameters.AddWithValue("@FeedId", feedId);
+                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                        var result = await cmd.ExecuteNonQueryAsync();
+                        if (result > 0)
+                        {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
         }
     }
 }

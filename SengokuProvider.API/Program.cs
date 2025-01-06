@@ -55,7 +55,10 @@ builder.Services.AddScoped<IUserService, UserService>(provider =>
     var intakeValidator = provider.GetRequiredService<IntakeValidator>();
     return new UserService(connectionString, intakeValidator);
 });
-builder.Services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>();
+builder.Services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>(provider =>
+{
+    return new DiscordWebhookHandler(connectionString);
+});
 builder.Services.AddScoped<IOrganizerQueryService, OrganizerQueryService>(provider =>
 {
     var graphQlClient = provider.GetService<GraphQLHttpClient>();

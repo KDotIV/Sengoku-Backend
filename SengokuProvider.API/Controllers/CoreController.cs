@@ -61,5 +61,35 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpPost("SubscribeDiscordWebhookToFeed")]
+        public async Task<IActionResult> CreateFeedToDiscordWebhook([FromBody] CreateDiscordFeedCommand command)
+        {
+            if (command == null)
+            {
+                _logger.LogError("Command cannot be null");
+                return new BadRequestObjectResult("Command cannot be null") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _logger.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                bool result = await _discordWebhook.SubscribeToFeed(command.ServerName, command.SubscribedChannel, command.WebhookUrl, command.FeedId);
+                if (result)
+                {
+                    return new OkObjectResult($"Webhook subscribed to feed successfully.");
+                }
+                _logger.LogError("SubscribeToFeed execution failed.");
+                return new ObjectResult("Unexpected Error Occured");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error subscribing to feed.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
     }
 }

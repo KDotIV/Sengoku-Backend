@@ -8,9 +8,9 @@ namespace SengokuProvider.Library.Services.Common
 {
     public class CommonDatabaseService : ICommonDatabaseService
     {
-        private readonly string _connectionString;
+        private readonly string? _connectionString;
 
-        public CommonDatabaseService(string connectionString)
+        public CommonDatabaseService(string? connectionString)
         {
             _connectionString = connectionString;
         }

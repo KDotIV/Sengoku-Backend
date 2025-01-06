@@ -17,21 +17,21 @@ namespace SengokuProvider.Library.Services.Players
 {
     public class PlayerIntakeService : IPlayerIntakeService
     {
-        private readonly IPlayerQueryService _queryService;
-        private readonly ILegendQueryService _legendQueryService;
-        private readonly IEventQueryService _eventQueryService;
-        private readonly IAzureBusApiService _azureBusApiService;
-        private readonly IConfiguration _config;
+        private readonly IPlayerQueryService? _queryService;
+        private readonly ILegendQueryService? _legendQueryService;
+        private readonly IEventQueryService? _eventQueryService;
+        private readonly IAzureBusApiService? _azureBusApiService;
+        private readonly IConfiguration? _config;
 
-        private readonly string _connectionString;
+        private readonly string? _connectionString;
         private ConcurrentDictionary<int, int> _playersCache;
         private ConcurrentDictionary<int, string> _playerRegistry;
         private HashSet<int> _eventCache;
         private int _currentEventId;
         private static Random _rand = new Random();
 
-        public PlayerIntakeService(string connectionString, IConfiguration configuration, IPlayerQueryService playerQueryService,
-            ILegendQueryService legendQueryService, IEventQueryService eventQueryService, IAzureBusApiService serviceBus)
+        public PlayerIntakeService(string? connectionString, IConfiguration? configuration, IPlayerQueryService? playerQueryService,
+            ILegendQueryService? legendQueryService, IEventQueryService? eventQueryService, IAzureBusApiService? serviceBus)
         {
             _connectionString = connectionString;
             _config = configuration;

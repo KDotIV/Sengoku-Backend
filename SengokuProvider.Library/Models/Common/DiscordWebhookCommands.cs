@@ -14,4 +14,17 @@
             return false;
         }
     }
+    public class CreateDiscordFeedCommand : ICommand
+    {
+        public required string FeedId;
+        public required string WebhookUrl { get; set; }
+        public required string ServerName { get; set; }
+        public required string SubscribedChannel { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+        public bool Validate()
+        {
+            throw new NotImplementedException();
+        }
+    }
 }

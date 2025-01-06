@@ -13,13 +13,13 @@ namespace SengokuProvider.Library.Services.Players
 {
     public class PlayerQueryService : IPlayerQueryService
     {
-        private readonly GraphQLHttpClient _client;
-        private readonly string _connectionString;
-        private readonly RequestThrottler _requestThrottler;
-        private readonly ICommonDatabaseService _commonDatabaseServices;
-        private readonly IConfiguration _configuration;
+        private readonly GraphQLHttpClient? _client;
+        private readonly string? _connectionString;
+        private readonly RequestThrottler? _requestThrottler;
+        private readonly ICommonDatabaseService? _commonDatabaseServices;
+        private readonly IConfiguration? _configuration;
 
-        public PlayerQueryService(string connectionString, IConfiguration config, GraphQLHttpClient graphQlClient, RequestThrottler throttler, ICommonDatabaseService commonServices)
+        public PlayerQueryService(string? connectionString, IConfiguration? config, GraphQLHttpClient? graphQlClient, RequestThrottler? throttler, ICommonDatabaseService? commonServices)
         {
             _requestThrottler = throttler;
             _connectionString = connectionString;

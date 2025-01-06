@@ -13,12 +13,12 @@ namespace SengokuProvider.Library.Services.Legends
 {
     public class LegendQueryService : ILegendQueryService
     {
-        private readonly string _connectString;
-        private readonly GraphQLHttpClient _client;
-        private readonly ICommonDatabaseService _commonServices;
-        private readonly IEventQueryService _eventQueryService;
+        private readonly string? _connectString;
+        private readonly GraphQLHttpClient? _client;
+        private readonly ICommonDatabaseService? _commonServices;
+        private readonly IEventQueryService? _eventQueryService;
 
-        public LegendQueryService(string connectionString, GraphQLHttpClient graphQlClient, ICommonDatabaseService commonServices, IEventQueryService eventQuery)
+        public LegendQueryService(string? connectionString, GraphQLHttpClient? graphQlClient, ICommonDatabaseService? commonServices, IEventQueryService? eventQuery)
         {
             _connectString = connectionString;
             _client = graphQlClient;

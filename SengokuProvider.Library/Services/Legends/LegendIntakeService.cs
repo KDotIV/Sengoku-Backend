@@ -19,17 +19,17 @@ namespace SengokuProvider.Library.Services.Legends
 {
     public class LegendIntakeService : ILegendIntakeService
     {
-        private readonly IConfiguration _configuration;
-        private readonly ILegendQueryService _legendQueryService;
-        private readonly IEventQueryService _eventQueryService;
-        private readonly IUserService _userService;
-        private readonly IAzureBusApiService _azureBusApiService;
-        private readonly ICommonDatabaseService _commonServices;
-        private readonly string _connectionString;
+        private readonly IConfiguration? _configuration;
+        private readonly ILegendQueryService? _legendQueryService;
+        private readonly IEventQueryService? _eventQueryService;
+        private readonly IUserService? _userService;
+        private readonly IAzureBusApiService? _azureBusApiService;
+        private readonly ICommonDatabaseService? _commonServices;
+        private readonly string? _connectionString;
         private readonly int _orgLeagueLimit = 5;
         private static Random _rand = new Random();
-        public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IEventQueryService eventQueryService,
-            IUserService userService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
+        public LegendIntakeService(string? connectionString, IConfiguration? configuration, ILegendQueryService? queryService, IEventQueryService? eventQueryService,
+            IUserService? userService, IAzureBusApiService? azureServiceBus, ICommonDatabaseService? commonServices)
         {
             _configuration = configuration;
             _connectionString = connectionString;

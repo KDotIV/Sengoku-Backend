@@ -11,14 +11,14 @@ namespace SengokuProvider.Library.Services.Orgs
 {
     public class OrganizerIntakeService : IOrganizerIntakeService
     {
-        private readonly string _connectionString;
-        private readonly GraphQLHttpClient _client;
-        private readonly RequestThrottler _throttler;
+        private readonly string? _connectionString;
+        private readonly GraphQLHttpClient? _client;
+        private readonly RequestThrottler? _throttler;
         private static Random _rand = new Random();
-        private readonly IUserService _userService;
-        private readonly ICommonDatabaseService _commonDatabaseService;
-        public OrganizerIntakeService(string connectionString, GraphQLHttpClient client, RequestThrottler throttler, 
-            IUserService userService, ICommonDatabaseService commonServices)
+        private readonly IUserService? _userService;
+        private readonly ICommonDatabaseService? _commonDatabaseService;
+        public OrganizerIntakeService(string? connectionString, GraphQLHttpClient? client, RequestThrottler? throttler, 
+            IUserService? userService, ICommonDatabaseService? commonServices)
         {
             _connectionString = connectionString;
             _client = client;

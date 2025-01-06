@@ -7,10 +7,10 @@ namespace SengokuProvider.Library.Services.Users
 {
     public class UserService : IUserService
     {
-        private readonly string _connectionString;
+        private readonly string? _connectionString;
         private readonly IntakeValidator _validator;
         private readonly Random _rand;
-        public UserService(string connectionString, IntakeValidator validator)
+        public UserService(string? connectionString, IntakeValidator validator)
         {
             _connectionString = connectionString;
             _validator = validator;
