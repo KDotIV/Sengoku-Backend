@@ -80,17 +80,24 @@ namespace SengokuProvider.Library.Services.Common
                 throw new ArgumentException("Invalid table or column name.");
             }
 
-            var columnsDefinition = string.Join(", ", columnDefinitions.Select(cn => $"\"{cn.Item1}\" {cn.Item2}"));
+            var columnsDefinition = string.Join(", ", columnDefinitions.Select((cn, index) => $"@colName{index} {cn.Item2}"));
             using (var conn = new NpgsqlConnection(_connectionString))
             {
                 conn.Open();
 
-                var createTableCommand = @$"CREATE TABLE IF NOT EXISTS ""{tableName}"" (
+                var createTableCommand = @$"CREATE TABLE IF NOT EXISTS @tableName (
                     ""id"" SERIAL PRIMARY KEY,
                     {columnsDefinition}
                     );";
 
-                return await conn.ExecuteAsync(createTableCommand);
+                var command = new NpgsqlCommand(createTableCommand, conn);
+                command.Parameters.AddWithValue("@tableName", tableName);
+                for (int i = 0; i < columnDefinitions.Length; i++)
+                {
+                    command.Parameters.AddWithValue($"@colName{i}", columnDefinitions[i].Item1);
+                }
+
+                return await command.ExecuteNonQueryAsync();
             }
         }
         private bool IsValidIdentifier(string identifier)
