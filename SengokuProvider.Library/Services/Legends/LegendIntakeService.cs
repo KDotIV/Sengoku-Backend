@@ -632,9 +632,9 @@ namespace SengokuProvider.Library.Services.Legends
                                 {
                                     Id = reader.GetInt32(reader.GetOrdinal("id")),
                                     PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
-                                    Style = reader.GetString(reader.GetOrdinal("style")),
+                                    Style = reader.IsDBNull(reader.GetOrdinal("style")) ? null : reader.GetString(reader.GetOrdinal("style")),
                                     PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link")),
-                                    UserId = reader.GetInt32(reader.GetOrdinal("user_id")),
+                                    UserId = reader.IsDBNull(reader.GetOrdinal("user_id")) ? default : reader.GetInt32(reader.GetOrdinal("user_id")),
                                     UserLink = reader.GetInt32(reader.GetOrdinal("user_link")),
                                     LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 });
