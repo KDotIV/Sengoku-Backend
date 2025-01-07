@@ -16,7 +16,7 @@
     }
     public class CreateDiscordFeedCommand : ICommand
     {
-        public required string FeedId;
+        public required string FeedId { get; set; }
         public required string WebhookUrl { get; set; }
         public required string ServerName { get; set; }
         public required string SubscribedChannel { get; set; }
@@ -24,7 +24,9 @@
         public string? Response { get; set; }
         public bool Validate()
         {
-            throw new NotImplementedException();
+            if (!string.IsNullOrEmpty(FeedId) && !string.IsNullOrEmpty(WebhookUrl) &&
+                !string.IsNullOrEmpty(ServerName) && !string.IsNullOrEmpty(SubscribedChannel)) return true;
+            return false;
         }
     }
 }

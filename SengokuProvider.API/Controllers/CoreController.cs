@@ -8,7 +8,7 @@ namespace SengokuProvider.API.Controllers
 {
     [ApiController]
     [Route("api/core/")]
-    public class CoreController
+    public class CoreController : Controller
     {
         private readonly ILogger<CoreController> _logger;
         private readonly CommandProcessor _commandProcessor;
@@ -43,10 +43,10 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                bool result = await _discordWebhook.SubscribeToFeed(command.ServerName, command.SubscribedChannel, command.WebhookUrl, command.FeedId);
+                var result = await _discordWebhook.SubscribeToFeed(command.ServerName, command.SubscribedChannel, command.WebhookUrl, command.FeedId);
                 if (result)
                 {
-                    return new OkObjectResult($"Webhook subscribed to feed successfully.");
+                    return Ok(result);
                 }
                 _logger.LogError("SubscribeToFeed execution failed.");
                 return new ObjectResult("Unexpected Error Occured");
