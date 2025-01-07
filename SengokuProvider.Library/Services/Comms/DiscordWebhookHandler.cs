@@ -63,7 +63,7 @@ namespace SengokuProvider.Library.Services.Comms
         }
         public async Task<bool> SubscribeToFeed(string serverName, string subscribedChannel, string webhookUrl, string feedId)
         {
-            if(string.IsNullOrEmpty(serverName) || string.IsNullOrEmpty(subscribedChannel) || string.IsNullOrEmpty(webhookUrl) || string.IsNullOrEmpty(feedId))
+            if (string.IsNullOrEmpty(serverName) || string.IsNullOrEmpty(subscribedChannel) || string.IsNullOrEmpty(webhookUrl) || string.IsNullOrEmpty(feedId))
             {
                 throw new ArgumentNullException("One or more parameters are null or empty.");
             }
@@ -91,6 +91,54 @@ namespace SengokuProvider.Library.Services.Comms
                     }
                 }
                 return false;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<FeedData> GetFeedById(string feedId)
+        {
+            var result = new FeedData
+            {
+                FeedId = string.Empty,
+                FeedType = default,
+                FeedName = string.Empty,
+                UserOwner = string.Empty,
+                UserId = 0,
+                LastUpdated = DateTime.MinValue
+            };
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connection))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM feeds WHERE feed_id = @FeedId", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@FeedId", feedId);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) if (!reader.HasRows)
+                                    return result;
+
+                            while (await reader.ReadAsync())
+                            {
+                                result.FeedId = reader.GetString(reader.GetOrdinal("feed_id"));
+                                result.FeedType = (FeedType)reader.GetInt32(reader.GetOrdinal("feed_type"));
+                                result.FeedName = reader.GetString(reader.GetOrdinal("feed_name"));
+                                result.UserOwner = reader.GetString(reader.GetOrdinal("user_owner"));
+                                result.UserId = reader.GetInt32(reader.GetOrdinal("user_id"));
+                                result.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
+
+                            }
+                        }
+                    }
+                }
+                return result;
             }
             catch (NpgsqlException ex)
             {

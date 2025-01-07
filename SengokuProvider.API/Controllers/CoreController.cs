@@ -27,40 +27,6 @@ namespace SengokuProvider.API.Controllers
         {
             return new OkObjectResult("I'm Alive...");
         }
-        [HttpPost("CreateTable")]
-        public async Task<IActionResult> CreateDatabaseTable([FromBody] CreateTableCommand command)
-        {
-            if (command == null)
-            {
-                _logger.LogError("CreateTable command is null.");
-                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
-            }
-
-            var parsedRequest = await _commandProcessor.ParseRequest(command);
-
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
-            {
-                _logger.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
-            }
-
-            try
-            {
-                var result = await _commonDb.CreateTable(parsedRequest.TableName, parsedRequest.TableDefinitions);
-                if (result > 0)
-                {
-                    return new OkObjectResult($"Table {parsedRequest.TableName} created successfully.");
-                }
-
-                _logger.LogError("CreateTable execution failed.");
-                return new ObjectResult("Unexpected Error Occured");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error creating table.");
-                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-            }
-        }
         [HttpPost("SubscribeDiscordWebhookToFeed")]
         public async Task<IActionResult> CreateFeedToDiscordWebhook([FromBody] CreateDiscordFeedCommand command)
         {
@@ -88,6 +54,34 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error subscribing to feed.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetFeedsByType")]
+        public async Task<IActionResult> GetFeedsByType([FromQuery] int feedType)
+        {
+            throw new NotImplementedException();
+        }
+        [HttpGet("GetFeedById")]
+        public async Task<IActionResult> GetFeedById([FromQuery] string feedId)
+        {
+            if (string.IsNullOrEmpty(feedId))
+            {
+                _logger.LogError("FeedId cannot be null or empty.");
+                return new BadRequestObjectResult("FeedId cannot be null or empty.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            try
+            {
+                FeedData result = await _discordWebhook.GetFeedById(feedId);
+                if (result.UserId > 0)
+                {
+                    return new OkObjectResult(result);
+                }
+                return new NotFoundObjectResult("No Feed found under that Id.") { StatusCode = StatusCodes.Status404NotFound };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting feed by id.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
