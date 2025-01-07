@@ -110,6 +110,8 @@ namespace SengokuProvider.Library.Services.Legends
         }
         public async Task<PlayerOnboardResult> AddPlayerToLeague(int[] playerIds, int leagueId)
         {
+            List<PlayerData> currentPlayers = await GetPlayersByIds(playerIds);
+
             var newOnboardResult = new PlayerOnboardResult { Response = "Open" };
 
             if (leagueId < 0) { newOnboardResult.Response = "PlayerId or LeagueId cannot be invalid ids"; }
@@ -119,13 +121,14 @@ namespace SengokuProvider.Library.Services.Legends
                 await conn.OpenAsync();
                 using (var transaction = await conn.BeginTransactionAsync())
                 {
-                    foreach (var playerId in playerIds)
+                    foreach (var player in currentPlayers)
                     {
                         try
                         {
-                            using (var cmd = new NpgsqlCommand(@"INSERT INTO player_leagues (player_id, league_id, last_updated) VALUES (@PlayerInput, @LeagueInput, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                            using (var cmd = new NpgsqlCommand(@"INSERT INTO player_leagues (player_id, league_id, player_name, last_updated) VALUES (@PlayerInput, @LeagueInput, @PlayerName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
                             {
-                                cmd.Parameters.AddWithValue("@PlayerInput", playerId);
+                                cmd.Parameters.AddWithValue("@PlayerInput", player.Id);
+                                cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
                                 cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
                                 cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
 
@@ -133,9 +136,9 @@ namespace SengokuProvider.Library.Services.Legends
                                 if (result > 0)
                                 {
                                     newOnboardResult.Response = "Successfully Inserted Tournament to League";
-                                    newOnboardResult.Successful.Add(playerId);
+                                    newOnboardResult.Successful.Add(player.Id);
                                 }
-                                else { newOnboardResult.Failures.Add(playerId); }
+                                else { newOnboardResult.Failures.Add(player.Id); }
                             }
                         }
                         catch (NpgsqlException ex)
@@ -604,6 +607,50 @@ namespace SengokuProvider.Library.Services.Legends
             catch (Exception ex)
             {
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        private async Task<List<PlayerData>> GetPlayersByIds(int[] playerIds)
+        {
+            if (playerIds.Length == 0) { throw new ArgumentException("PlayerIds cannot be empty"); }
+
+            var playerList = new List<PlayerData>();
+
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM players where id = ANY(@PlayerInput);", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@PlayerInput", playerIds);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) return playerList;
+                            while (await reader.ReadAsync())
+                            {
+                                playerList.Add(new PlayerData
+                                {
+                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
+                                    Style = reader.GetString(reader.GetOrdinal("style")),
+                                    PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link")),
+                                    UserId = reader.GetInt32(reader.GetOrdinal("user_id")),
+                                    UserLink = reader.GetInt32(reader.GetOrdinal("user_link")),
+                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                });
+                            }
+                        }
+                    }
+                }
+                return playerList;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
         private async Task<int> GenerateNewLegendId()
