@@ -51,6 +51,7 @@ namespace SengokuProvider.Library.Services.Legends
                                     StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
                                     EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
                                     Game = reader.GetInt32(reader.GetOrdinal("game")),
+                                    IsActive = reader.GetBoolean(reader.GetOrdinal("active")),
                                     LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
                                 queryResult.Add(mappedData);
@@ -95,6 +96,7 @@ namespace SengokuProvider.Library.Services.Legends
                                     StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
                                     EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
                                     Game = reader.GetInt32(reader.GetOrdinal("game")),
+                                    IsActive = reader.GetBoolean(reader.GetOrdinal("active")),
                                     LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
                                 queryResult.Add(mappedData);
@@ -395,6 +397,7 @@ namespace SengokuProvider.Library.Services.Legends
                                     StartDate = reader.GetDateTime(reader.GetOrdinal("start_date")),
                                     EndDate = reader.GetDateTime(reader.GetOrdinal("end_date")),
                                     Game = reader.GetInt32(reader.GetOrdinal("game")),
+                                    IsActive = reader.GetBoolean(reader.GetOrdinal("active")),
                                     LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
                                 queryResult.Add(mappedData);

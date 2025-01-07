@@ -9,6 +9,7 @@
         public required DateTime EndDate { get; set; } = DateTime.MinValue.AddDays(1);
         public int Game { get; set; }
         public required DateTime LastUpdate { get; set; } = DateTime.UtcNow;
+        public required bool IsActive { get; set; } = false;
         public string Response { get; set; } = "";
     }
 }

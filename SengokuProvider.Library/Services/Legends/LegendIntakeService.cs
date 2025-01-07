@@ -414,7 +414,7 @@ namespace SengokuProvider.Library.Services.Legends
         }
         public async Task<LeagueByOrgResults> InsertNewLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "")
         {
-            LeagueByOrgResults result = new LeagueByOrgResults { LeagueId = 0, LeagueName = "default", OrgId = orgId, StartDate = startDate, EndDate = endDate, LastUpdate = DateTime.UtcNow };
+            LeagueByOrgResults result = new LeagueByOrgResults { LeagueId = 0, LeagueName = "default", OrgId = orgId, StartDate = startDate, EndDate = endDate, LastUpdate = DateTime.UtcNow, IsActive = false };
 
             if (orgId < 0) return result;
             bool hasLeague = await CheckExistingLeagues(orgId, leagueName);
