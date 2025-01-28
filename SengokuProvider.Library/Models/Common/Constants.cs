@@ -25,6 +25,7 @@ namespace SengokuProvider.Library.Models.Common
             { 25, 10 },
             { 33, 10 }
         };
+        public const double RookieMultiplier = 0.5;
     }
     public struct BearerConstants
     {

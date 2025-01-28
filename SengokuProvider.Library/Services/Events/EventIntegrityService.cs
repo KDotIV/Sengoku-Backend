@@ -123,7 +123,7 @@ namespace SengokuProvider.Library.Services.Events
             newCommand = await BuildUpdateCommand(eventToUpdate, newCommand, firstNode, tempDateTime);
             return newCommand;
         }
-        private async Task<UpdateEventCommand> BuildUpdateCommand(EventData eventToUpdate, UpdateEventCommand newCommand, EventNode? firstNode, DateTime tempDateTime)
+        private async Task<UpdateEventCommand> BuildUpdateCommand(EventData eventToUpdate, UpdateEventCommand newCommand, EventNode firstNode, DateTime tempDateTime)
         {
             if (!eventToUpdate.ClosingRegistration.HasValue || eventToUpdate.ClosingRegistration != tempDateTime)
             {
@@ -184,7 +184,7 @@ namespace SengokuProvider.Library.Services.Events
             addressParts.RemoveAll(part => part.Length == 2 || part.All(char.IsDigit)); // Assuming 2-letter parts are states/countries
 
             // The last remaining element could be the city, typically after removing postal code and country
-            string city = addressParts.FirstOrDefault();
+            string? city = addressParts.FirstOrDefault();
 
             if (!string.IsNullOrEmpty(city))
             {

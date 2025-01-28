@@ -13,12 +13,12 @@ namespace SengokuProvider.Library.Services.Events
 {
     public class EventQueryService : IEventQueryService
     {
-        private readonly string? _connectionString;
-        private readonly ICommonDatabaseService? _commonServices;
-        private readonly IntakeValidator? _validator;
-        private readonly GraphQLHttpClient? _client;
-        private readonly RequestThrottler? _requestThrottler;
-        public EventQueryService(string? connectionString, GraphQLHttpClient? client, IntakeValidator? validator, RequestThrottler? requestThrottler, ICommonDatabaseService? commonServices)
+        private readonly string _connectionString;
+        private readonly ICommonDatabaseService _commonServices;
+        private readonly IntakeValidator _validator;
+        private readonly GraphQLHttpClient _client;
+        private readonly RequestThrottler _requestThrottler;
+        public EventQueryService(string connectionString, GraphQLHttpClient client, IntakeValidator validator, RequestThrottler requestThrottler, ICommonDatabaseService commonServices)
         {
             _connectionString = connectionString;
             _validator = validator;

@@ -13,33 +13,20 @@ using SengokuProvider.Worker.Handlers;
 using System.Net.Http.Headers;
 
 IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices((context, services) =>
+    .ConfigureServices((Action<HostBuilderContext, IServiceCollection>)((context, services) =>
     {
         var configuration = context.Configuration;
         services.AddHostedService<EventReceivedWorker>();
         services.AddHostedService<LegendReceivedWorker>();
         services.AddHostedService<PlayerReceivedWorker>();
+        string connectionString, graphQLUrl, bearerToken, serviceBusConnection;
 
-        var connectionString = configuration.GetConnectionString("AlexandriaConnectionString");
-        var graphQLUrl = configuration["GraphQLSettings:Endpoint"];
-        var bearerToken = configuration["GraphQLSettings:Bearer"];
-        var serviceBusConnection = configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
-
-        services.AddSingleton<IAzureBusApiService, AzureBusApiService>(provider =>
-        {
-            var client = provider.GetService<ServiceBusClient>();
-            return new AzureBusApiService(client);
-        });
+        SetupServiceDependencies(services, configuration, out connectionString, out graphQLUrl, out bearerToken, out serviceBusConnection);
 
         services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
         services.AddSingleton<ILegendHandlerFactory, LegendHandlerFactory>();
         services.AddSingleton<IPlayerHandlerFactory, PlayerHandlerFactory>();
-        services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
-        services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
-        {
-            HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
-        });
-        services.AddSingleton(provider => { var config = provider.GetService<IConfiguration>(); return new RequestThrottler(config); });
+
         services.AddSingleton<ICommonDatabaseService, CommonDatabaseService>(provider =>
         {
             return new CommonDatabaseService(connectionString);
@@ -121,6 +108,30 @@ IHost host = Host.CreateDefaultBuilder(args)
             var commonServices = provider.GetService<ICommonDatabaseService>();
             return new OrganizerIntakeService(connectionString, graphClient, throttler, userService, commonServices);
         });
-    })
+    }))
     .Build();
 await host.RunAsync();
+
+static void SetupServiceDependencies(IServiceCollection services, IConfiguration configuration, out string connectionString, out string graphQLUrl, out string bearerToken, out string serviceBusConnection)
+{
+    connectionString = configuration.GetConnectionString("AlexandriaConnectionString") ?? throw new ArgumentNullException("Connection String is Null or Empty");
+    graphQLUrl = configuration["GraphQLSettings:Endpoint"] ?? throw new ArgumentNullException("GraphQL Endpoint is Null or Empty");
+    bearerToken = configuration["GraphQLSettings:Bearer"] ?? throw new ArgumentNullException("Bearer Token is Null or Empty");
+    serviceBusConnection = configuration["ServiceBusSettings:AzureWebJobsServiceBus"] ?? throw new ArgumentNullException("Service Bus Connection is Null or Empty");
+
+    var serviceBusClient = new ServiceBusClient(serviceBusConnection);
+
+    var graphQLUrlCopy = graphQLUrl;
+    var bearerTokenCopy = bearerToken;
+
+    services.AddSingleton<IAzureBusApiService, AzureBusApiService>(provider =>
+    {
+        return new AzureBusApiService(serviceBusClient);
+    });
+    services.AddSingleton(provider => serviceBusClient);
+    services.AddSingleton(provider => new GraphQLHttpClient(graphQLUrlCopy, new NewtonsoftJsonSerializer())
+    {
+        HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerTokenCopy) } }
+    });
+    services.AddSingleton(provider => { var config = provider.GetService<IConfiguration>(); return new RequestThrottler(config); });
+}

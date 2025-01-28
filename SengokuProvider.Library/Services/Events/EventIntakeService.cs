@@ -21,17 +21,17 @@ namespace SengokuProvider.Library.Services.Events
 {
     public class EventIntakeService : IEventIntakeService
     {
-        private readonly IntakeValidator? _validator;
-        private readonly GraphQLHttpClient? _client;
-        private readonly IEventQueryService? _queryService;
-        private readonly RequestThrottler? _requestThrottler;
-        private readonly IConfiguration? _config;
-        private readonly IAzureBusApiService? _azureBusApiService;
+        private readonly IntakeValidator _validator;
+        private readonly GraphQLHttpClient _client;
+        private readonly IEventQueryService _queryService;
+        private readonly RequestThrottler _requestThrottler;
+        private readonly IConfiguration _config;
+        private readonly IAzureBusApiService _azureBusApiService;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<string, int> _addressCache;
-        public EventIntakeService(string? connectionString, IConfiguration? configuration, GraphQLHttpClient? client, IEventQueryService? eventQueryService,
-            IAzureBusApiService? busApiService, IntakeValidator? validator, RequestThrottler? throttler)
+        public EventIntakeService(string connectionString, IConfiguration configuration, GraphQLHttpClient client, IEventQueryService eventQueryService,
+            IAzureBusApiService busApiService, IntakeValidator validator, RequestThrottler throttler)
         {
             _config = configuration;
             _connectionString = connectionString;

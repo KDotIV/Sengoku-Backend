@@ -23,7 +23,7 @@ namespace SengokuProvider.API.Controllers
             _discordWebhook = webHookHandler;
         }
         [HttpGet("Pulse")]
-        public async Task<IActionResult> Pulse()
+        public IActionResult Pulse()
         {
             return new OkObjectResult("I'm Alive...");
         }

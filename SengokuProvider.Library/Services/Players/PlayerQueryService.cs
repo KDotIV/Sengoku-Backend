@@ -13,13 +13,13 @@ namespace SengokuProvider.Library.Services.Players
 {
     public class PlayerQueryService : IPlayerQueryService
     {
-        private readonly GraphQLHttpClient? _client;
-        private readonly string? _connectionString;
-        private readonly RequestThrottler? _requestThrottler;
-        private readonly ICommonDatabaseService? _commonDatabaseServices;
-        private readonly IConfiguration? _configuration;
+        private readonly GraphQLHttpClient _client;
+        private readonly string _connectionString;
+        private readonly RequestThrottler _requestThrottler;
+        private readonly ICommonDatabaseService _commonDatabaseServices;
+        private readonly IConfiguration _configuration;
 
-        public PlayerQueryService(string? connectionString, IConfiguration? config, GraphQLHttpClient? graphQlClient, RequestThrottler? throttler, ICommonDatabaseService? commonServices)
+        public PlayerQueryService(string connectionString, IConfiguration config, GraphQLHttpClient graphQlClient, RequestThrottler throttler, ICommonDatabaseService commonServices)
         {
             _requestThrottler = throttler;
             _connectionString = connectionString;
@@ -131,13 +131,13 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@TournamentsArray", tournamentIds));
                         cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@PlayerArray", playerIds));
-                        cmd.Parameters.AddWithValue("@StartTimeInput",startDate);
+                        cmd.Parameters.AddWithValue("@StartTimeInput", startDate);
                         cmd.Parameters.AddWithValue("@EndTimeInput", endDate);
                         cmd.Parameters.AddWithValue("@GamesArray", gameIds);
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
-                            if(!reader.HasRows)
+                            if (!reader.HasRows)
                             {
                                 Console.WriteLine("No standings were found for given Ids. Check parameters...");
                                 return playerResults;
@@ -190,7 +190,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
+                int numEntrants = data.TournamentLink.NumEntrants;
 
                 var newStandings = new PlayerStandingResult
                 {
@@ -201,7 +201,7 @@ namespace SengokuProvider.Library.Services.Players
                     StandingDetails = new StandingDetails
                     {
                         IsActive = tempNode.Standing.IsActive,
-                        Placement = tempNode.Standing.Placement ?? 0,
+                        Placement = tempNode.Standing.Placement,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
                         EventId = data.TournamentLink.EventLink.Id,
                         EventName = data.TournamentLink.EventLink.Name,
@@ -294,17 +294,22 @@ namespace SengokuProvider.Library.Services.Players
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
 
-                        if (playerData?.TournamentLink?.Entrants?.Nodes != null)
+                        if (playerData == null || playerData.TournamentLink == null)
+                        {
+                            throw new ApplicationException("Failed to retrieve player data");
+                        }
+
+                        if (playerData.TournamentLink.Entrants.Nodes != null)
                         {
                             allNodes.AddRange(playerData.TournamentLink.Entrants.Nodes);
                             Console.WriteLine("Tournament Node Added");
                         }
 
                         currentEventLinkName = playerData.TournamentLink.EventLink.Name;
-                        currentTournamentLinkName = playerData.TournamentLink?.Name ?? string.Empty;
+                        currentTournamentLinkName = playerData.TournamentLink.Name ?? string.Empty;
                         currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
                         currentEntrantsNum = playerData.TournamentLink?.NumEntrants ?? 0;
-                        currentTournamentLinkSlug = playerData.TournamentLink.Slug;
+                        currentTournamentLinkSlug = playerData.TournamentLink?.Slug ?? string.Empty;
 
                         // Update pagination info for the next iteration
                         var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;

@@ -17,21 +17,21 @@ namespace SengokuProvider.Library.Services.Players
 {
     public class PlayerIntakeService : IPlayerIntakeService
     {
-        private readonly IPlayerQueryService? _queryService;
-        private readonly ILegendQueryService? _legendQueryService;
-        private readonly IEventQueryService? _eventQueryService;
-        private readonly IAzureBusApiService? _azureBusApiService;
-        private readonly IConfiguration? _config;
+        private readonly IPlayerQueryService _queryService;
+        private readonly ILegendQueryService _legendQueryService;
+        private readonly IEventQueryService _eventQueryService;
+        private readonly IAzureBusApiService _azureBusApiService;
+        private readonly IConfiguration _config;
 
-        private readonly string? _connectionString;
+        private readonly string _connectionString;
         private ConcurrentDictionary<int, int> _playersCache;
         private ConcurrentDictionary<int, string> _playerRegistry;
         private HashSet<int> _eventCache;
         private int _currentEventId;
         private static Random _rand = new Random();
 
-        public PlayerIntakeService(string? connectionString, IConfiguration? configuration, IPlayerQueryService? playerQueryService,
-            ILegendQueryService? legendQueryService, IEventQueryService? eventQueryService, IAzureBusApiService? serviceBus)
+        public PlayerIntakeService(string connectionString, IConfiguration configuration, IPlayerQueryService playerQueryService,
+            ILegendQueryService legendQueryService, IEventQueryService eventQueryService, IAzureBusApiService serviceBus)
         {
             _connectionString = connectionString;
             _config = configuration;
@@ -45,7 +45,7 @@ namespace SengokuProvider.Library.Services.Players
         }
         public async Task<bool> SendPlayerIntakeMessage(int tournamentLink)
         {
-            if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
+            if (_config == null || string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]))
             {
                 Console.WriteLine("Service Bus Settings Cannot be empty or null");
                 return false;
@@ -138,9 +138,6 @@ namespace SengokuProvider.Library.Services.Players
                 return mappedResult;
             }
 
-            const int participationPoints = 5;
-            const int winnerBonus = 50;
-
             foreach (var tempNode in playerData.PlayerQuery.User.Events.Nodes)
             {
                 if (tempNode == null || tempNode.Entrants?.Nodes == null || tempNode.Entrants.Nodes.Count == 0 || tempNode.NumEntrants == 0)
@@ -154,7 +151,7 @@ namespace SengokuProvider.Library.Services.Players
                     continue;
                 }
 
-                int numEntrants = tempNode.NumEntrants ?? 0;
+                int numEntrants = tempNode.NumEntrants;
                 int totalPoints = CalculateLeaguePoints(firstRecord, numEntrants);
 
                 var newStanding = new PlayerStandingResult
@@ -166,7 +163,7 @@ namespace SengokuProvider.Library.Services.Players
                     StandingDetails = new StandingDetails
                     {
                         IsActive = firstRecord.Standing.IsActive,
-                        Placement = firstRecord.Standing.Placement ?? 0,
+                        Placement = firstRecord.Standing.Placement,
                         GamerTag = playerData.PlayerQuery.GamerTag ?? string.Empty,
                         EventId = tempNode.EventLink?.Id ?? 0,
                         EventName = tempNode.EventLink?.Name ?? string.Empty,
@@ -198,7 +195,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
+                int numEntrants = data.TournamentLink.NumEntrants;
                 try
                 {
                     int totalPoints = CalculateLeaguePoints(tempNode, numEntrants);
@@ -211,7 +208,7 @@ namespace SengokuProvider.Library.Services.Players
                         StandingDetails = new StandingDetails
                         {
                             IsActive = tempNode.Standing.IsActive,
-                            Placement = tempNode.Standing.Placement ?? 0,
+                            Placement = tempNode.Standing.Placement,
                             GamerTag = tempNode.Participants?.FirstOrDefault()?.Player?.GamerTag ?? "",
                             EventId = data.TournamentLink.EventLink.Id,
                             EventName = data.TournamentLink.EventLink.Name,
@@ -236,13 +233,24 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-        private int CalculateLeaguePoints(CommonEntrantNode tempNode, int totalEntrants)
+        private int CalculateLeaguePoints(CommonEntrantNode tempNode, int totalEntrants, bool isRookieEvent = false)
         {
-            int participationPoints = 5;
-            int totalPoints = participationPoints;
-            int placement = tempNode.Standing?.Placement ?? int.MaxValue;  // Default to MaxValue if placement is not found
+            int participationPoints = 5; // base participation for Circuit
+            double multiplier = 1.0;
 
-            // Apply points based on placement
+            if (isRookieEvent)
+            {
+                participationPoints = 2;
+                multiplier = CommonConstants.RookieMultiplier;
+            }
+
+            // Start with participation points
+            double totalPoints = participationPoints;
+
+            // Determine final standing
+            int placement = tempNode.Standing?.Placement ?? int.MaxValue;
+
+            // Apply main or rookie distribution
             foreach (var entry in CommonConstants.EnhancedPointDistribution)
             {
                 if (placement <= entry.Key)
@@ -252,14 +260,22 @@ namespace SengokuProvider.Library.Services.Players
                 }
             }
 
-            // Ensure minimum points for participation
-            if (totalPoints < participationPoints)
-            {
-                totalPoints = participationPoints;
-            }
+            //rookie multiplier if needed
+            totalPoints *= multiplier;
 
-            return totalPoints;
+            //adjust from entrant num
+            totalPoints = totalPoints * Math.Sqrt(totalEntrants);
+
+            int finalPoints = (int)Math.Floor(totalPoints);
+
+            // Ensure minimum points for participation
+            if (finalPoints < participationPoints)
+            {
+                finalPoints = participationPoints;
+            }
+            return finalPoints;
         }
+
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;

@@ -11,14 +11,14 @@ namespace SengokuProvider.Library.Services.Orgs
 {
     public class OrganizerIntakeService : IOrganizerIntakeService
     {
-        private readonly string? _connectionString;
-        private readonly GraphQLHttpClient? _client;
-        private readonly RequestThrottler? _throttler;
+        private readonly string _connectionString;
+        private readonly GraphQLHttpClient _client;
+        private readonly RequestThrottler _throttler;
         private static Random _rand = new Random();
-        private readonly IUserService? _userService;
-        private readonly ICommonDatabaseService? _commonDatabaseService;
-        public OrganizerIntakeService(string? connectionString, GraphQLHttpClient? client, RequestThrottler? throttler, 
-            IUserService? userService, ICommonDatabaseService? commonServices)
+        private readonly IUserService _userService;
+        private readonly ICommonDatabaseService _commonDatabaseService;
+        public OrganizerIntakeService(string connectionString, GraphQLHttpClient client, RequestThrottler throttler,
+            IUserService userService, ICommonDatabaseService commonServices)
         {
             _connectionString = connectionString;
             _client = client;
@@ -33,13 +33,13 @@ namespace SengokuProvider.Library.Services.Orgs
         }
         public async Task<bool> CreateTravelCoOp(CreateTravelCoOpCommand command)
         {
-            if(command == null || command.UserId < 0 ) throw new ArgumentNullException(nameof(command));
+            if (command == null || command.UserId < 0) throw new ArgumentNullException(nameof(command));
             if (await _userService.CheckUserById(command.UserId) == false) throw new ArgumentException($"User must already be registered");
 
             return await InsertNewCoOpData(command.UserId, command.OperationName, command.UserName, command.FundingGoal,
                 command.CurrentItems, command.CurrentFunding, command.CollabUserIds);
         }
-        private async Task<bool> InsertNewCoOpData(int userId, string OpName, string userName, double fundingGoal, 
+        private async Task<bool> InsertNewCoOpData(int userId, string OpName, string userName, double fundingGoal,
             List<int> currentItems, double currentFunding, List<int> collabUserIds)
         {
             try

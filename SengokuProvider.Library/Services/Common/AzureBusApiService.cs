@@ -5,8 +5,8 @@ namespace SengokuProvider.Library.Services.Common
 {
     public class AzureBusApiService : IAzureBusApiService
     {
-        private readonly ServiceBusClient? _client;
-        public AzureBusApiService(ServiceBusClient? client)
+        private readonly ServiceBusClient _client;
+        public AzureBusApiService(ServiceBusClient client)
         {
             _client = client;
         }

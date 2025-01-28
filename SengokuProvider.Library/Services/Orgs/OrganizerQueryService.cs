@@ -10,12 +10,12 @@ namespace SengokuProvider.Library.Services.Orgs
 {
     public class OrganizerQueryService : IOrganizerQueryService
     {
-        private readonly string? _connectionString;
-        private readonly GraphQLHttpClient? _client;
-        private readonly RequestThrottler? _throttler;
-        private readonly ICommonDatabaseService? _commonDatabaseService;
-        public OrganizerQueryService(string? connectionString, GraphQLHttpClient? httpClient, RequestThrottler? throttler,
-            ICommonDatabaseService? commonServices)
+        private readonly string _connectionString;
+        private readonly GraphQLHttpClient _client;
+        private readonly RequestThrottler _throttler;
+        private readonly ICommonDatabaseService _commonDatabaseService;
+        public OrganizerQueryService(string connectionString, GraphQLHttpClient httpClient, RequestThrottler throttler,
+            ICommonDatabaseService commonServices)
         {
             _connectionString = connectionString;
             _client = httpClient;
