@@ -41,10 +41,10 @@ namespace SengokuProvider.Library.Models.Players
         public CommonEntrantList Entrants { get; set; } = new CommonEntrantList();
 
         [JsonProperty("slug")]
-        public string Slug { get; set; } = string.Empty;
+        public string? Slug { get; set; }
 
         [JsonProperty("numEntrants")]
-        public int NumEntrants { get; set; } = 0;
+        public int? NumEntrants { get; set; }
     }
 
     public class CommonTournament : BaseTournament { }
@@ -83,16 +83,16 @@ namespace SengokuProvider.Library.Models.Players
     public class CommonSet
     {
         [JsonProperty("round")]
-        public int Round { get; set; }
+        public int? Round { get; set; }
 
         [JsonProperty("winnerId")]
-        public int WinnerEntrantId { get; set; } = 0;
+        public int? WinnerEntrantId { get; set; }
     }
 
     public class PageInfo
     {
         [JsonProperty("total")]
-        public int Total { get; set; }
+        public int? Total { get; set; }
 
         [JsonProperty("totalPages")]
         public int? TotalPages { get; set; }
@@ -116,19 +116,19 @@ namespace SengokuProvider.Library.Models.Players
     public class BaseTournament
     {
         [JsonProperty("id")]
-        public int Id { get; set; } = 0;
+        public int Id { get; set; }
 
         [JsonProperty("name")]
-        public string Name { get; set; } = string.Empty;
+        public string? Name { get; set; } = string.Empty;
 
         [JsonProperty("slug")]
-        public string Slug { get; set; } = string.Empty;
+        public string? Slug { get; set; } = string.Empty;
     }
 
     public class BaseParticipant
     {
         [JsonProperty("id")]
-        public int Id { get; set; } = 0;
+        public int Id { get; set; }
 
         [JsonProperty("player")]
         public CommonPlayer Player { get; set; } = new CommonPlayer();
@@ -140,12 +140,12 @@ namespace SengokuProvider.Library.Models.Players
     public class BaseStanding
     {
         [JsonProperty("id")]
-        public int Id { get; set; } = 0;
+        public int Id { get; set; }
 
         [JsonProperty("placement")]
-        public int Placement { get; set; } = 0;
+        public int? Placement { get; set; }
 
         [JsonProperty("isFinal")]
-        public bool IsActive { get; set; } = false;
+        public bool? IsActive { get; set; }
     }
 }

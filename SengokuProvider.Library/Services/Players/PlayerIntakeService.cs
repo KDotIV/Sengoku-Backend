@@ -151,7 +151,7 @@ namespace SengokuProvider.Library.Services.Players
                     continue;
                 }
 
-                int numEntrants = tempNode.NumEntrants;
+                int numEntrants = tempNode.NumEntrants ?? 0;
                 int totalPoints = CalculateLeaguePoints(firstRecord, numEntrants);
 
                 var newStanding = new PlayerStandingResult
@@ -162,8 +162,8 @@ namespace SengokuProvider.Library.Services.Players
                     LastUpdated = DateTime.UtcNow,
                     StandingDetails = new StandingDetails
                     {
-                        IsActive = firstRecord.Standing.IsActive,
-                        Placement = firstRecord.Standing.Placement,
+                        IsActive = firstRecord.Standing.IsActive ?? false,
+                        Placement = firstRecord.Standing.Placement ?? 0,
                         GamerTag = playerData.PlayerQuery.GamerTag ?? string.Empty,
                         EventId = tempNode.EventLink?.Id ?? 0,
                         EventName = tempNode.EventLink?.Name ?? string.Empty,
@@ -195,7 +195,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int numEntrants = data.TournamentLink.NumEntrants;
+                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
                 try
                 {
                     int totalPoints = CalculateLeaguePoints(tempNode, numEntrants);
@@ -207,8 +207,8 @@ namespace SengokuProvider.Library.Services.Players
                         UrlSlug = data.TournamentLink.Slug,
                         StandingDetails = new StandingDetails
                         {
-                            IsActive = tempNode.Standing.IsActive,
-                            Placement = tempNode.Standing.Placement,
+                            IsActive = tempNode.Standing.IsActive ?? false,
+                            Placement = tempNode.Standing.Placement ?? 0,
                             GamerTag = tempNode.Participants?.FirstOrDefault()?.Player?.GamerTag ?? "",
                             EventId = data.TournamentLink.EventLink.Id,
                             EventName = data.TournamentLink.EventLink.Name,

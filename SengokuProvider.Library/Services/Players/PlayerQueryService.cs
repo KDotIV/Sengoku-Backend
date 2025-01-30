@@ -190,7 +190,7 @@ namespace SengokuProvider.Library.Services.Players
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
                 if (tempNode.Standing == null) continue;
-                int numEntrants = data.TournamentLink.NumEntrants;
+                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
 
                 var newStandings = new PlayerStandingResult
                 {
@@ -200,8 +200,8 @@ namespace SengokuProvider.Library.Services.Players
                     UrlSlug = data.TournamentLink.Slug,
                     StandingDetails = new StandingDetails
                     {
-                        IsActive = tempNode.Standing.IsActive,
-                        Placement = tempNode.Standing.Placement,
+                        IsActive = tempNode.Standing.IsActive ?? false,
+                        Placement = tempNode.Standing.Placement ?? 0,
                         GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
                         EventId = data.TournamentLink.EventLink.Id,
                         EventName = data.TournamentLink.EventLink.Name,
