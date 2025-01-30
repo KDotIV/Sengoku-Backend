@@ -296,7 +296,9 @@ namespace SengokuProvider.Library.Services.Players
 
                         if (playerData == null || playerData.TournamentLink == null)
                         {
-                            throw new ApplicationException("Failed to retrieve player data");
+                            Console.WriteLine("Failed to retrieve player data");
+                            totalPages = 0;
+                            break;
                         }
 
                         if (playerData.TournamentLink.Entrants.Nodes != null)
