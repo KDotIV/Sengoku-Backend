@@ -93,7 +93,7 @@ namespace SengokuProvider.Worker.Handlers
             catch (Exception ex)
             {
                 _log.LogError(ex.Message, ex);
-                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace.ToString());
+                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
                 throw;
             }
         }

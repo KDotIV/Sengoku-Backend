@@ -307,11 +307,11 @@ namespace SengokuProvider.Library.Services.Players
                             Console.WriteLine("Tournament Node Added");
                         }
 
-                        currentEventLinkName = playerData.TournamentLink.EventLink.Name;
+                        currentEventLinkName = playerData.TournamentLink.EventLink?.Name ?? string.Empty;
                         currentTournamentLinkName = playerData.TournamentLink.Name ?? string.Empty;
+                        currentTournamentLinkSlug = playerData.TournamentLink?.Slug ?? string.Empty;
                         currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
                         currentEntrantsNum = playerData.TournamentLink?.NumEntrants ?? 0;
-                        currentTournamentLinkSlug = playerData.TournamentLink?.Slug ?? string.Empty;
 
                         // Update pagination info for the next iteration
                         var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;
