@@ -17,7 +17,7 @@ namespace EventTournamentScheduler
         }
 
         [Function("EventIntakeScheduler")]
-        public async Task Run([TimerTrigger("00 01,13 * * *", RunOnStartup = true)] TimerInfo schedule)
+        public async Task Run([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
         {
             Console.WriteLine("Beginning Scheduled Event Intake");
             var tempStartDate = DateTime.Today;
