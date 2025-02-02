@@ -17,6 +17,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SengokuProvider.Library", "
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Exports", "Exports", "{F4124BD3-58B8-44A4-BC27-DC5EC8DBE07B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventTournamentScheduler", "..\EventTournamentScheduler\EventTournamentScheduler.csproj", "{709CB3C0-85DA-4B41-A434-7FBE29770ED5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,6 +44,12 @@ Global
 		{6DDFA0D7-3242-426E-BC9F-A1B3EE80F824}.QA|Any CPU.Build.0 = QA|Any CPU
 		{6DDFA0D7-3242-426E-BC9F-A1B3EE80F824}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6DDFA0D7-3242-426E-BC9F-A1B3EE80F824}.Release|Any CPU.Build.0 = Release|Any CPU
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5}.QA|Any CPU.ActiveCfg = Debug|Any CPU
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5}.QA|Any CPU.Build.0 = Debug|Any CPU
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -50,6 +58,7 @@ Global
 		{70A185E4-FEA9-4719-AC63-1053FF0C017F} = {BD491C8C-EC45-45C2-861A-537CD6B6DAF0}
 		{EF225696-2473-42C1-A23F-9672E157D598} = {9B18D3C2-D611-485D-8FA2-036AC6FE0CFC}
 		{6DDFA0D7-3242-426E-BC9F-A1B3EE80F824} = {FACDBAB8-DDD1-4C7C-B0EA-40EE5FC647D0}
+		{709CB3C0-85DA-4B41-A434-7FBE29770ED5} = {9B18D3C2-D611-485D-8FA2-036AC6FE0CFC}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CB2BCAA9-54AD-45BD-8328-8690D5B4699F}

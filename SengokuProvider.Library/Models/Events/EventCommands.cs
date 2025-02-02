@@ -8,6 +8,8 @@ namespace SengokuProvider.Library.Models.Events
         public string? StateCode { get; set; }
         public required int StartDate { get; set; }
         public required int EndDate { get; set; }
+        public string[] Filters { get; set; } = ["addrState: $state"];
+        public string[] VariableDefinitions { get; set; } = ["$perPage: Int", "$state: String!"];
         public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
         public bool Validate()

@@ -79,6 +79,7 @@ namespace SengokuProvider.Library.Services.Events
 
             return await ProcessTournamentData(newEventData);
         }
+
         public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
             try
