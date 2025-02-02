@@ -1,7 +1,7 @@
 using Microsoft.Azure.Functions.Worker;
-using Microsoft.Extensions.Logging;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using TimerInfo = Microsoft.Azure.Functions.Worker.TimerInfo;
