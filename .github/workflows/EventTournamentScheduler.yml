@@ -1,4 +1,4 @@
-name: Build and deploy .NET Core application to Function App EventTournamentScheduler
+name: EventTournamentScheduler-QA
 on:
   push:
     branches:
@@ -20,10 +20,9 @@ jobs:
       with:
         dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
     - name: Setup .NET Core (for inproc extensions)
-      uses: actions/setup-dotnetv4
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_CORE_VERSION_INPROC }}
-        include-prerelease: True
     - name: Restore
       run: dotnet restore "${{ env.WORKING_DIRECTORY }}"
     - name: Build
