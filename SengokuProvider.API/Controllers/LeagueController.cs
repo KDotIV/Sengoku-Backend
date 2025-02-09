@@ -161,6 +161,32 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpPost("OnboardTournamentStandingstoLeague")]
+        public async Task<IActionResult> OnboardTournamentStandingstoLeague([FromBody] OnboardTournamentStandingstoLeague command)
+        {
+            if (command == null)
+            {
+                _log.LogError("Command was null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            try
+            {
+                var results = await _legendIntakeService.IntakeTournamentStandingsByEventLink(command.TournamentLinks, command.EventLinkSlug, command.GameIds, command.LeagueId, command.Open);
+                return Ok(results);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Intaking Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
         [HttpGet("GetLeaguesByOrgId")]
         public async Task<IActionResult> GetLeaguesByOrgId([FromQuery] int orgId)
         {

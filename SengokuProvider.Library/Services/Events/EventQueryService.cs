@@ -452,5 +452,112 @@ namespace SengokuProvider.Library.Services.Events
             }
             return null;
         }
+        public async Task<List<TournamentData>> GetTournamentLinksByUrl(string eventLinkSlug, int[]? gameIds = default)
+        {
+            if (string.IsNullOrEmpty(eventLinkSlug)) return new List<TournamentData>();
+
+            return await VerifyEventLinkExists(eventLinkSlug);
+        }
+
+        public async Task<TournamentGraphQLResult?> QueryStartggTournamentLinksByUrl(string eventLinkSlug)
+        {
+            var tempQuery = @"query TournamentEvents($tourneySlug: String!) { tournament(slug: $tourneySlug) {
+                                    id, name, events { id, name }}}";
+
+            var request = new GraphQLHttpRequest
+            {
+                Query = tempQuery,
+                Variables = new
+                {
+                    tourneySlug = eventLinkSlug,
+                }
+            };
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 1000;
+
+            while (!success && retryCount < maxRetries)
+            {
+                await _requestThrottler.WaitIfPaused();
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+                    if (response.Data == null) throw new Exception("Failed to retrieve tournament data.");
+
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                    var eventData = JsonConvert.DeserializeObject<TournamentGraphQLResult>(tempJson);
+
+                    success = true;
+                    return eventData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests(_client);
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    throw;
+                }
+            }
+            return null;
+        }
+        private async Task<List<TournamentData>> VerifyEventLinkExists(string eventLinkSlug, int[]? gameIds = null)
+        {
+            try
+            {
+                var result = new List<TournamentData>();
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+
+                    using (var cmd = new NpgsqlCommand("SELECT * FROM get_tournament_links_by_url(@urlTextInput, @GameArrInput)", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@urlTextInput", eventLinkSlug);
+                        cmd.Parameters.AddWithValue("@GameArrInput", gameIds ?? (object)DBNull.Value);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows)
+                            {
+                                Console.WriteLine("No tournaments were found with that Url");
+                                return result;
+                            }
+                            while (await reader.ReadAsync())
+                            {
+                                result.Add(new TournamentData
+                                {
+                                    Id = reader.GetInt32(0),
+                                    UrlSlug = reader.GetString(1),
+                                    GameId = reader.GetInt32(2),
+                                    EventId = reader.GetInt32(3),
+                                    EntrantsNum = reader.GetInt32(4),
+                                    LastUpdated = reader.GetDateTime(5)
+                                });
+                            }
+                        }
+                    }
+                }
+                return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
     }
 }

@@ -29,11 +29,11 @@ namespace SengokuProvider.Library.Services.Players
             _client.HttpClient.DefaultRequestHeaders.Clear();
             _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
-        public async Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int tournamentId)
+        public async Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int[] tournamentIds)
         {
-            if (tournamentId == 0 || tournamentId < 0) { List<PlayerData> badResult = new List<PlayerData>(); Console.WriteLine("TournamentId cannot be invalid"); return badResult; }
+            if (tournamentIds.Length == 0 || tournamentIds.Length < 0) { List<PlayerData> badResult = new List<PlayerData>(); Console.WriteLine("TournamentId cannot be invalid"); return badResult; }
 
-            var result = await QueryPlayerDataByTournamentId(tournamentId);
+            var result = await QueryPlayerDataByTournamentId(tournamentIds);
 
             return result;
         }
@@ -552,7 +552,7 @@ namespace SengokuProvider.Library.Services.Players
             };
             return result;
         }
-        private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int tournamentLink)
+        private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int[] tournamentLinks)
         {
             List<PlayerData> playerResult = new List<PlayerData>();
             try
@@ -560,14 +560,9 @@ namespace SengokuProvider.Library.Services.Players
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"select p.id, p.player_name, p.startgg_link, p.user_link, s.last_updated
-                                                            FROM players as p 
-                                                            JOIN standings as s ON s.player_id = p.id
-                                                            JOIN tournament_links as t ON t.id = s.tournament_link
-                                                            where t.id = @Input
-                                                            ORDER BY player_name ASC;", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM get_players_by_tournament_link(@TournamentLinks)", conn))
                     {
-                        cmd.Parameters.AddWithValue("@Input", tournamentLink);
+                        cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@TournamentLinks", tournamentLinks));
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {

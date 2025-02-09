@@ -48,43 +48,6 @@ IHost host = Host.CreateDefaultBuilder(args)
         });
         services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
         {
-            services.AddSingleton<IEventIntakeService, EventIntakeService>(provider =>
-            {
-                var intakeValidator = GetRequiredService<IntakeValidator>(provider);
-                var graphQlClient = GetRequiredService<GraphQLHttpClient>(provider);
-                var queryService = GetRequiredService<IEventQueryService>(provider);
-                var throttler = GetRequiredService<RequestThrottler>(provider);
-                var serviceBus = GetRequiredService<IAzureBusApiService>(provider);
-                return new EventIntakeService(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler);
-            });
-
-            services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
-            {
-                var intakeValidator = GetRequiredService<IntakeValidator>(provider);
-                var graphQlClient = GetRequiredService<GraphQLHttpClient>(provider);
-                var throttler = GetRequiredService<RequestThrottler>(provider);
-                var commonServices = GetRequiredService<ICommonDatabaseService>(provider);
-                return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler, commonServices);
-            });
-
-            services.AddSingleton<ILegendQueryService, LegendQueryService>(provider =>
-            {
-                var client = GetRequiredService<GraphQLHttpClient>(provider);
-                var commonService = GetRequiredService<ICommonDatabaseService>(provider);
-                var eventQueryService = GetRequiredService<IEventQueryService>(provider);
-                return new LegendQueryService(connectionString, client, commonService, eventQueryService);
-            });
-
-            services.AddSingleton<ILegendIntakeService, LegendIntakeService>(provider =>
-            {
-                var legendQueryService = GetRequiredService<ILegendQueryService>(provider);
-                var eventQueryService = GetRequiredService<IEventQueryService>(provider);
-                var userQueryService = GetRequiredService<IUserService>(provider);
-                var commonServices = GetRequiredService<ICommonDatabaseService>(provider);
-                var config = GetRequiredService<IConfiguration>(provider);
-                var serviceBus = GetRequiredService<IAzureBusApiService>(provider);
-                return new LegendIntakeService(connectionString, config, legendQueryService, eventQueryService, userQueryService, serviceBus, commonServices);
-            });
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
             var graphQlClient = provider.GetRequiredService<GraphQLHttpClient>();
             var throttler = provider.GetRequiredService<RequestThrottler>();
@@ -109,10 +72,11 @@ IHost host = Host.CreateDefaultBuilder(args)
             var legendQueryService = provider.GetRequiredService<ILegendQueryService>();
             var eventQueryService = provider.GetRequiredService<IEventQueryService>();
             var userQueryService = provider.GetRequiredService<IUserService>();
+            var playerQueryService = provider.GetRequiredService<IPlayerQueryService>();
             var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
             var config = provider.GetRequiredService<IConfiguration>();
             var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new LegendIntakeService(connectionString, config, legendQueryService, eventQueryService, userQueryService, serviceBus, commonServices);
+            return new LegendIntakeService(connectionString, config, legendQueryService, eventQueryService, userQueryService, playerQueryService, serviceBus, commonServices);
         });
         services.AddSingleton<ILegendIntegrityService, LegendIntegrityService>(provider =>
         {

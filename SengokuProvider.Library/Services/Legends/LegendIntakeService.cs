@@ -10,9 +10,11 @@ using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Worker.Handlers;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace SengokuProvider.Library.Services.Legends
@@ -23,13 +25,14 @@ namespace SengokuProvider.Library.Services.Legends
         private readonly ILegendQueryService _legendQueryService;
         private readonly IEventQueryService _eventQueryService;
         private readonly IUserService _userService;
+        private readonly IPlayerQueryService _playerQueryService;
         private readonly IAzureBusApiService _azureBusApiService;
         private readonly ICommonDatabaseService _commonServices;
         private readonly string _connectionString;
         private readonly int _orgLeagueLimit = 5;
         private static Random _rand = new Random();
         public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IEventQueryService eventQueryService,
-            IUserService userService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
+            IUserService userService, IPlayerQueryService playerQueryService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
         {
             _configuration = configuration;
             _connectionString = connectionString;
@@ -38,6 +41,7 @@ namespace SengokuProvider.Library.Services.Legends
             _azureBusApiService = azureServiceBus;
             _commonServices = commonServices;
             _userService = userService;
+            _playerQueryService = playerQueryService;
         }
         public async Task<LegendData?> GenerateNewLegends(int playerId, string playerName)
         {
@@ -110,6 +114,7 @@ namespace SengokuProvider.Library.Services.Legends
         }
         public async Task<PlayerOnboardResult> AddPlayerToLeague(int[] playerIds, int leagueId)
         {
+            if (playerIds.Length == 0) return new PlayerOnboardResult { Response = "PlayerId List cannot be Empty" };
             List<PlayerData> currentPlayers = await GetPlayersByIds(playerIds);
 
             var newOnboardResult = new PlayerOnboardResult { Response = "Open" };
@@ -121,47 +126,98 @@ namespace SengokuProvider.Library.Services.Legends
                 await conn.OpenAsync();
                 using (var transaction = await conn.BeginTransactionAsync())
                 {
-                    foreach (var player in currentPlayers)
+                    try
                     {
-                        try
-                        {
-                            using (var cmd = new NpgsqlCommand(@"INSERT INTO player_leagues (player_id, league_id, player_name, last_updated) VALUES (@PlayerInput, @LeagueInput, @PlayerName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
-                            {
-                                cmd.Parameters.AddWithValue("@PlayerInput", player.Id);
-                                cmd.Parameters.AddWithValue("@PlayerName", player.PlayerName);
-                                cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
-                                cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+                        var insertQuery = new StringBuilder(@"INSERT INTO player_leagues (player_id, league_id, player_name, last_updated) VALUES ");
+                        var parameters = new List<NpgsqlParameter>();
+                        var valueCounter = 0;
 
-                                var result = await cmd.ExecuteNonQueryAsync();
-                                if (result > 0)
-                                {
-                                    newOnboardResult.Response = "Successfully Inserted Tournament to League";
-                                    newOnboardResult.Successful.Add(player.Id);
-                                }
-                                else { newOnboardResult.Failures.Add(player.Id); }
+                        foreach (var player in currentPlayers)
+                        {
+                            if (valueCounter > 0)
+                            {
+                                insertQuery.Append(", ");
+                            }
+
+                            insertQuery.Append($"(@PlayerInput{valueCounter}, @LeagueInput{valueCounter}, @PlayerName{valueCounter}, @LastUpdated{valueCounter})");
+
+                            parameters.Add(new NpgsqlParameter($"@PlayerInput{valueCounter}", player.Id));
+                            parameters.Add(new NpgsqlParameter($"@LeagueInput{valueCounter}", leagueId));
+                            parameters.Add(new NpgsqlParameter($"@PlayerName{valueCounter}", player.PlayerName));
+                            parameters.Add(new NpgsqlParameter($"@LastUpdated{valueCounter}", DateTime.UtcNow));
+
+                            valueCounter++;
+                        }
+
+                        insertQuery.Append(" ON CONFLICT DO NOTHING;");
+
+                        using (var cmd = new NpgsqlCommand(insertQuery.ToString(), conn))
+                        {
+                            cmd.Parameters.AddRange(parameters.ToArray());
+                            var result = await cmd.ExecuteNonQueryAsync();
+
+                            if (result > 0)
+                            {
+                                newOnboardResult.Response = "Successfully Inserted Players to League";
+                                newOnboardResult.Successful.AddRange(currentPlayers.Select(p => p.Id));
+                            }
+                            else
+                            {
+                                newOnboardResult.Failures.AddRange(currentPlayers.Select(p => p.Id));
                             }
                         }
-                        catch (NpgsqlException ex)
-                        {
-                            newOnboardResult.Response = ex.Message;
-                            throw new ApplicationException("Database error occurred: ", ex);
-                        }
-                        catch (Exception ex)
-                        {
-                            newOnboardResult.Response = ex.Message;
-                            throw new ApplicationException("Unexpected Error Occurred: ", ex);
-                        }
+
+                        await transaction.CommitAsync();
                     }
-                    await transaction.CommitAsync();
+                    catch (NpgsqlException ex)
+                    {
+                        newOnboardResult.Response = ex.Message;
+                        throw new ApplicationException("Database error occurred: ", ex);
+                    }
+                    catch (Exception ex)
+                    {
+                        newOnboardResult.Response = ex.Message;
+                        throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                    }
                 }
             }
             return newOnboardResult;
+        }
+        public async Task<PlayerOnboardResult> AddPlayerToLeague(HashSet<int> playerIds, int leagueId)
+        {
+            return await AddPlayerToLeague(playerIds.ToArray(), leagueId);
         }
         public async Task<List<TournamentBoardResult>> AddTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds)
         {
             var success = await UpdateTournamentsToRunnerBoard(userId, tournamentIds, orgId);
 
             return await _legendQueryService.GetCurrentRunnerBoard(userId, orgId);
+        }
+        public async Task<PlayerOnboardResult> IntakeTournamentStandingsByEventLink(int[] tournamentLinks, string eventLinkSlug, int[] gameIds, int leagueId, bool open = true)
+        {
+            if (tournamentLinks.Length == 0)
+            {
+                tournamentLinks = (await _eventQueryService.GetTournamentLinksByUrl(eventLinkSlug, gameIds))
+                                  .Select(t => t.Id)
+                                  .ToArray();
+            }
+
+            var tempPlayerIds = await ExtractPlayerIds(tournamentLinks);
+            return await AddPlayerToLeague(tempPlayerIds, leagueId);
+        }
+        private async Task<HashSet<int>> ExtractPlayerIds(int[] tournamentLinks)
+        {
+            var playerIds = new HashSet<int>();
+            const int batchSize = 500;
+
+            for (int i = 0; i < tournamentLinks.Length; i += batchSize)
+            {
+                var batch = tournamentLinks.Skip(i).Take(batchSize).ToArray();
+                var batchPlayerIds = await _playerQueryService.GetRegisteredPlayersByTournamentId(batch);
+                playerIds.UnionWith(batchPlayerIds.Select(p => p.Id).ToArray());
+            }
+
+            return playerIds;
         }
         public async Task<BoardRunnerResult> CreateNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, string? orgName = default)
         {

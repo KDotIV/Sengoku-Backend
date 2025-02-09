@@ -235,7 +235,7 @@ namespace SengokuProvider.Library.Services.Players
         }
         private int CalculateLeaguePoints(CommonEntrantNode tempNode, int totalEntrants, bool isRookieEvent = false)
         {
-            int participationPoints = 5; // base participation for Circuit
+            int participationPoints = 5;
             double multiplier = 1.0;
 
             if (isRookieEvent)

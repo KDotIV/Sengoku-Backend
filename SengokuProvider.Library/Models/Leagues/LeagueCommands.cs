@@ -28,6 +28,25 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
+    public class OnboardTournamentStandingstoLeague : ICommand
+    {
+        public required int[] TournamentLinks { get; set; }
+        public required string EventLinkSlug { get; set; }
+        public required int LeagueId { get; set; }
+        public int[] GameIds { get; set; } = new int[0];
+        public required bool Open { get; set; } = false;
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            if (TournamentLinks != null &&
+                GameIds != null &&
+                LeagueId > 0 &&
+                !string.IsNullOrEmpty(EventLinkSlug)) return true;
+            return false;
+        }
+    }
     public class GetLeaderboardResultsByLeagueCommand : ICommand
     {
         public required int LeagueId { get; set; }

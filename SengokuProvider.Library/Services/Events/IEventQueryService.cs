@@ -13,5 +13,7 @@ namespace SengokuProvider.Library.Services.Events
         public Task<RegionData?> QueryRegion(GetRegionCommand command);
         public Task<List<string>> QueryRelatedRegionsById(string regionId);
         public Task<List<string>> QueryLocalRegionsById(string regionId);
+        public Task<List<TournamentData>> GetTournamentLinksByUrl(string eventLinkSlug, int[]? gameIds = default);
+        public Task<TournamentGraphQLResult?> QueryStartggTournamentLinksByUrl(string eventLinkSlug);
     }
 }

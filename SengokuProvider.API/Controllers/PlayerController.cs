@@ -23,31 +23,18 @@ namespace SengokuProvider.API.Controllers
             _playerQueryService = queryService;
             _commandProcessor = commandProcessor;
         }
-        [HttpPost("GetRegisteredPlayersByTournamentId")]
-        public async Task<IActionResult> GetRegisteredPlayersByTournamentId([FromBody] GetRegisteredPlayersByTournamentIdCommand command)
+        [HttpGet("GetRegisteredPlayersByTournamentId")]
+        public async Task<IActionResult> GetRegisteredPlayersByTournamentId([FromQuery] int[] tournamentLinks)
         {
-            if (command == null)
-            {
-                _log.LogError("Command cannot be empty or null");
-                return new BadRequestObjectResult("Command cannot be null") { StatusCode = StatusCodes.Status400BadRequest };
-            }
-
-            var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
-            {
-                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
-            }
-
+            if (tournamentLinks == null || tournamentLinks.Length == 0) return BadRequest("Tournament Request cannot be null");
             try
             {
-                var result = await _playerQueryService.GetRegisteredPlayersByTournamentId(command.TournamentLink);
+                var result = await _playerQueryService.GetRegisteredPlayersByTournamentId(tournamentLinks);
                 if (result.Count == 0)
                 {
                     return new ObjectResult($"No PlayerData found") { StatusCode = StatusCodes.Status404NotFound };
                 }
-                var resultJson = JsonConvert.SerializeObject(result);
-                return new OkObjectResult($"{resultJson}");
+                return Ok(result);
             }
             catch (Exception ex)
             {
