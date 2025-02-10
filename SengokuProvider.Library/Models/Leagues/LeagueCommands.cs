@@ -61,13 +61,13 @@ namespace SengokuProvider.Library.Models.Leagues
     }
     public class UpdateLeaderboardStandingsByLeague : ICommand
     {
-        public required int LeagueId { get; set; }
+        public required int[] LeagueIds { get; set; }
         public CommandRegistry Topic { get; set; }
         public string? Response { get; set; }
 
         public bool Validate()
         {
-            if (LeagueId > 0) return true;
+            if (LeagueIds.Length > 0) return true;
             return false;
         }
     }

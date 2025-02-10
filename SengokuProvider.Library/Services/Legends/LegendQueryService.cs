@@ -175,11 +175,11 @@ namespace SengokuProvider.Library.Services.Legends
 
                     using (var cmd = new NpgsqlCommand(@"SELECT * FROM player_leagues WHERE league_id = ANY(@LeagueIds) ORDER BY current_score DESC;", conn))
                     {
-                        cmd.Parameters.AddWithValue("@LeagueIds", leagueIds);
+                        cmd.Parameters.Add(_commonServices.CreateDBIntArrayType("@LeagueIds", leagueIds));
                         if (playerIds.Length > 0)
                         {
                             cmd.CommandText = @"SELECT * FROM player_leagues WHERE player_id = ANY(@PlayerIds) AND league_id = ANY(@LeagueIds) ORDER BY current_score DESC;";
-                            cmd.Parameters.AddWithValue("@PlayerIds", playerIds);
+                            cmd.Parameters.Add(_commonServices.CreateDBIntArrayType("@PlayerIds", playerIds));
                         }
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {

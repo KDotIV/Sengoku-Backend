@@ -125,7 +125,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _legendIntakeService.UpdateLeaderboardStandingsByLeagueId(command.LeagueId);
+                var result = await _legendIntakeService.UpdateLeaderboardStandingsByLeagueId(command.LeagueIds);
                 return new OkObjectResult(result);
             }
             catch (Exception ex)
