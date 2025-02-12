@@ -131,7 +131,7 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Updating Leaderboard");
-                return new ObjectResult($"Error Message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+                return new ObjectResult($"Error Message: {ex.Message}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
 

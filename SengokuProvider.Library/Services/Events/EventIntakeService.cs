@@ -79,7 +79,6 @@ namespace SengokuProvider.Library.Services.Events
 
             return await ProcessTournamentData(newEventData);
         }
-
         public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
             try
@@ -374,8 +373,6 @@ namespace SengokuProvider.Library.Services.Events
                             ON CONFLICT (link_id) DO UPDATE SET
                                 event_name = EXCLUDED.event_name,
                                 event_description = EXCLUDED.event_description,
-                                region = EXCLUDED.region,
-                                address_id = EXCLUDED.address_id,
                                 start_time = EXCLUDED.start_time,
                                 end_time = EXCLUDED.end_time,
                                 closing_registration_date = EXCLUDED.closing_registration_date,
@@ -398,6 +395,7 @@ namespace SengokuProvider.Library.Services.Events
                                 command.Parameters.AddWithValue(@"Updated", newEvent.LastUpdate);
                                 var result = await command.ExecuteNonQueryAsync();
                                 if (result > 0) totalSuccess++;
+                                Console.WriteLine($"Updated Event: {newEvent.LinkID} {newEvent.EventName}");
                             }
                         }
                         await transaction.CommitAsync();
@@ -445,7 +443,7 @@ namespace SengokuProvider.Library.Services.Events
                     string regionId = await GetRegionId(node.City);
                     int addressId = addressMap.TryGetValue(node.VenueAddress ?? string.Empty, out var id) ? id : 0; // Use the confirmed address ID from the map or give default if online event
 
-                    var eventData = new EventData
+                    var newEventData = new EventData
                     {
                         LinkID = node.Id,
                         EventName = node.Name,
@@ -460,7 +458,24 @@ namespace SengokuProvider.Library.Services.Events
                         LastUpdate = DateTime.UtcNow,
                         UrlSlug = node.Slug
                     };
-                    events.Add(eventData);
+                    events.Add(newEventData);
+                }
+                else
+                {
+                    var updatedEventData = new EventData
+                    {
+                        LinkID = node.Id,
+                        EventName = node.Name,
+                        EventDescription = "Sample description",
+                        StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
+                        EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
+                        ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
+                        IsRegistrationOpen = node.IsRegistrationOpen,
+                        IsOnline = node.IsOnline,
+                        LastUpdate = DateTime.UtcNow,
+                        UrlSlug = node.Slug
+                    };
+                    events.Add(updatedEventData);
                 }
             }
 

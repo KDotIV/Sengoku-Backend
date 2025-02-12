@@ -44,8 +44,8 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _eventIntakeService.SendEventIntakeLocationMessage(command);
-                return new OkObjectResult($"Intake Message Successfully Sent");
+                var result = await _eventIntakeService.IntakeTournamentData(command);
+                return Ok(result);
             }
             catch (Exception ex)
             {
@@ -124,7 +124,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _eventIntakeService.SendTournamentLinkEventMessage(command.EventLinkId);
+                var result = await _eventIntakeService.IntakeTournamentIdData(command);
                 return new OkObjectResult($"Tournaments Inserted: {result}");
             }
             catch (Exception ex)

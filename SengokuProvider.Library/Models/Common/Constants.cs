@@ -54,7 +54,7 @@ namespace SengokuProvider.Library.Models.Common
                             WHERE
                                 e.region = ANY(@RegionIds)
                                 AND e.closing_registration_date >= CURRENT_DATE
-                                AND e.start_time >= CURRENT_DATE
+                                AND e.end_time >= CURRENT_DATE
                                 AND tl.game_id = ANY(@GameIds)
                             ORDER BY
                                 e.closing_registration_date ASC,
@@ -75,7 +75,7 @@ namespace SengokuProvider.Library.Models.Common
                             WHERE
                                 e.region = ANY(@RegionIds)
                                 AND e.closing_registration_date >= CURRENT_DATE
-                                AND e.start_time >= CURRENT_DATE
+                                AND e.end_time >= CURRENT_DATE
                                 AND tl.game_id = ANY(@GameIds)
                             ORDER BY
                                 distance ASC,
@@ -95,7 +95,7 @@ namespace SengokuProvider.Library.Models.Common
                                 WHERE
                                     e.region = ANY(@RegionIds)
                                     AND e.closing_registration_date >= CURRENT_DATE
-                                    AND e.start_time >= CURRENT_DATE
+                                    AND e.end_time >= CURRENT_DATE
                                     AND tl.game_id = ANY(@GameIds)
                                     AND SQRT(
                                         POW(COALESCE(a.longitude, @ReferenceLongitude) - @ReferenceLongitude, 2) + 
