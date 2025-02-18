@@ -88,6 +88,10 @@ namespace SengokuProvider.Library.Services.Legends
                                 cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
 
                                 var result = await cmd.ExecuteNonQueryAsync();
+                                if (result == 0)
+                                {
+                                    newOnboardResult.Response = "Tournament has already been added to League";
+                                }
                                 if (result > 0)
                                 {
                                     newOnboardResult.Response = "Successfully Inserted Tournament to League";
@@ -164,10 +168,6 @@ namespace SengokuProvider.Library.Services.Legends
                                 newOnboardResult.Response = "Successfully Inserted Players to League";
                                 newOnboardResult.Successful.AddRange(currentPlayers.Select(p => p.Id));
                             }
-                            else
-                            {
-                                newOnboardResult.Failures.AddRange(currentPlayers.Select(p => p.Id));
-                            }
                         }
 
                         await transaction.CommitAsync();
@@ -196,17 +196,27 @@ namespace SengokuProvider.Library.Services.Legends
 
             return await _legendQueryService.GetCurrentRunnerBoard(userId, orgId);
         }
-        public async Task<PlayerOnboardResult> IntakeTournamentStandingsByEventLink(int[] tournamentLinks, string eventLinkSlug, int[] gameIds, int leagueId, bool open = true)
+        public async Task<LeaderboardOnboardIntakeResult> IntakeTournamentStandingsByEventLink(int[] tournamentLinks, string eventLinkSlug, int[] gameIds, int leagueId, bool open = true)
         {
+            var totalResult = new LeaderboardOnboardIntakeResult
+            {
+                PlayerResult = new PlayerOnboardResult { Response = "" },
+                TournamentResults = new TournamentOnboardResult { Response = "" }
+            };
+
             if (tournamentLinks.Length == 0)
             {
                 tournamentLinks = (await _eventQueryService.GetTournamentLinksByUrl(eventLinkSlug, gameIds))
                                   .Select(t => t.Id)
                                   .ToArray();
             }
-            if (await UpdateTournamentStandings(tournamentLinks) == 0) return new PlayerOnboardResult { Response = "Onboarding Failed. Check Logs" };
+            if (await UpdateTournamentStandings(tournamentLinks) == 0) { totalResult.TournamentResults.Response = "Onboarding Failed. Check Logs"; return totalResult; }
             var tempPlayerIds = await ExtractPlayerIds(tournamentLinks);
-            return await AddPlayerToLeague(tempPlayerIds, leagueId);
+
+            totalResult.PlayerResult = await AddPlayerToLeague(tempPlayerIds, leagueId);
+            totalResult.TournamentResults = await AddTournamentToLeague(tournamentLinks, leagueId);
+
+            return totalResult;
         }
         private async Task<int> UpdateTournamentStandings(int[] tournamentLinks)
         {

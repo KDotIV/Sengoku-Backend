@@ -119,7 +119,6 @@ namespace SengokuProvider.Library.Services.Legends
         {
             if (leagueIds.Length < 1)
                 return [];
-
             try
             {
                 var result = new List<LeaderboardData>();
@@ -198,7 +197,8 @@ namespace SengokuProvider.Library.Services.Legends
                                 result.Add(newLeaderboardData);
                             }
                         }
-                    };
+                    }
+                    ;
                 }
                 return result;
             }

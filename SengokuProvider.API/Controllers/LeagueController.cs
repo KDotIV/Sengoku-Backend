@@ -175,7 +175,6 @@ namespace SengokuProvider.API.Controllers
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);
             }
-
             try
             {
                 var results = await _legendIntakeService.IntakeTournamentStandingsByEventLink(command.TournamentLinks, command.EventLinkSlug, command.GameIds, command.LeagueId, command.Open);
