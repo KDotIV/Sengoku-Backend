@@ -24,6 +24,7 @@ namespace SengokuProvider.Library.Services.Legends
         private readonly IConfiguration _configuration;
         private readonly ILegendQueryService _legendQueryService;
         private readonly IEventQueryService _eventQueryService;
+        private readonly IEventIntakeService _eventIntakeService;
         private readonly IUserService _userService;
         private readonly IPlayerQueryService _playerQueryService;
         private readonly IAzureBusApiService _azureBusApiService;
@@ -32,12 +33,13 @@ namespace SengokuProvider.Library.Services.Legends
         private readonly int _orgLeagueLimit = 5;
         private static Random _rand = new Random();
         public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IEventQueryService eventQueryService,
-            IUserService userService, IPlayerQueryService playerQueryService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
+            IEventIntakeService eventIntakeService, IUserService userService, IPlayerQueryService playerQueryService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
         {
             _configuration = configuration;
             _connectionString = connectionString;
             _legendQueryService = queryService;
             _eventQueryService = eventQueryService;
+            _eventIntakeService = eventIntakeService;
             _azureBusApiService = azureServiceBus;
             _commonServices = commonServices;
             _userService = userService;
@@ -156,6 +158,7 @@ namespace SengokuProvider.Library.Services.Legends
                             cmd.Parameters.AddRange(parameters.ToArray());
                             var result = await cmd.ExecuteNonQueryAsync();
 
+                            if (result == 0) { newOnboardResult.Response = "All Players have already been added to League"; }
                             if (result > 0)
                             {
                                 newOnboardResult.Response = "Successfully Inserted Players to League";
@@ -201,9 +204,22 @@ namespace SengokuProvider.Library.Services.Legends
                                   .Select(t => t.Id)
                                   .ToArray();
             }
-
+            if (await UpdateTournamentStandings(tournamentLinks) == 0) return new PlayerOnboardResult { Response = "Onboarding Failed. Check Logs" };
             var tempPlayerIds = await ExtractPlayerIds(tournamentLinks);
             return await AddPlayerToLeague(tempPlayerIds, leagueId);
+        }
+        private async Task<int> UpdateTournamentStandings(int[] tournamentLinks)
+        {
+            try
+            {
+                var currentTournaments = await _eventQueryService.GetTournamentLinksById(tournamentLinks);
+                return await _eventIntakeService.IntakeTournamentsByLinkId(tournamentLinks);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error while Updating Tournament Standings: {ex.Message} - {ex.StackTrace}");
+                return 0;
+            }
         }
         private async Task<HashSet<int>> ExtractPlayerIds(int[] tournamentLinks)
         {

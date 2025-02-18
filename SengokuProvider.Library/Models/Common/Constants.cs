@@ -13,17 +13,17 @@ namespace SengokuProvider.Library.Models.Common
     {
         public static readonly Dictionary<int, int> EnhancedPointDistribution = new Dictionary<int, int>
         {
-            { 1, 150 },
-            { 2, 100 },
-            { 3, 80 },
-            { 4, 70 },
-            { 5, 60 },
-            { 7, 50 },
-            { 9, 40 },
-            { 13, 30 },
-            { 17, 20 },
-            { 25, 10 },
-            { 33, 10 }
+            { 1, 100 },   // 1st place
+            { 2, 90 },    // 2nd place
+            { 3, 80 },    // 3rd place
+            { 4, 70 },    // 4th place
+            { 5, 60 },    // 5th place
+            { 7, 50 },    // 7th place
+            { 9, 45 },    // 9th place
+            { 13, 40 },   // 13th place
+            { 17, 35 },   // 17th place
+            { 25, 30 },   // 25th place
+            { 33, 25 }    // 33rd place
         };
         public const double RookieMultiplier = 0.5;
     }

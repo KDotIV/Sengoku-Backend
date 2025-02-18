@@ -458,8 +458,7 @@ namespace SengokuProvider.Library.Services.Events
 
             return await VerifyEventLinkExists(eventLinkSlug);
         }
-
-        public async Task<TournamentGraphQLResult?> QueryStartggTournamentLinksByUrl(string eventLinkSlug)
+        public async Task<TournamentsBySlugGraphQLResult?> QueryStartggTournamentLinksByUrl(string eventLinkSlug)
         {
             var tempQuery = @"query TournamentEvents($tourneySlug: String!) { tournament(slug: $tourneySlug) {
                                     id, name, events { id, name }}}";
@@ -486,7 +485,7 @@ namespace SengokuProvider.Library.Services.Events
                     if (response.Data == null) throw new Exception("Failed to retrieve tournament data.");
 
                     var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var eventData = JsonConvert.DeserializeObject<TournamentGraphQLResult>(tempJson);
+                    var eventData = JsonConvert.DeserializeObject<TournamentsBySlugGraphQLResult>(tempJson);
 
                     success = true;
                     return eventData;

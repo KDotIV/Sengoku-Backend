@@ -79,6 +79,39 @@ namespace SengokuProvider.Library.Services.Events
 
             return await ProcessTournamentData(newEventData);
         }
+        public async Task<int> IntakeTournamentsByLinkId(int[] tournamentLinks)
+        {
+            if (tournamentLinks == null || tournamentLinks.Length == 0) throw new ArgumentNullException("Tournament Links cannot be empty or null");
+            var intakeResult = new List<int>();
+            try
+            {
+                var tournamentBatch = new List<TournamentLinkGraphQLResult?>();
+
+                foreach (var link in tournamentLinks)
+                {
+                    tournamentBatch.Add(await QueryStartggTournamentDataByLinkId(link));
+                }
+
+                var builtTournaments = BuildTournamentData(tournamentBatch);
+                var totalSuccess = await InsertNewTournamentData(0, builtTournaments);
+
+                Console.WriteLine($"Sending Tournament Links for Player Intake");
+                foreach (var tournamentLink in builtTournaments)
+                {
+                    await SendTournamentPlayerIntakeMessage(tournamentLink.Id);
+                }
+                return totalSuccess;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+                return 0;
+            }
+        }
         public async Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
         {
             try
@@ -231,34 +264,39 @@ namespace SengokuProvider.Library.Services.Events
                     await conn.OpenAsync();
                     using (var transaction = await conn.BeginTransactionAsync())
                     {
+                        var insertQuery = new StringBuilder(@"INSERT INTO tournament_links (id, url_slug, game_id, event_id, entrants_num, last_updated) VALUES ");
+                        var queryParams = new List<NpgsqlParameter>();
+                        var valueCount = 0;
                         foreach (var tournament in currentBatch)
                         {
-                            var createInsertCommand = @"
-                            INSERT INTO tournament_links (id, url_slug, game_id, event_id, entrants_num, last_updated)
-                            VALUES (@Input, @UrlSlug, @Game, @EventId, @EntrantsNum, @LastUpdated)
-                            ON CONFLICT (id) DO UPDATE SET
-                                url_slug = EXCLUDED.url_slug,
-                                game_id = EXCLUDED.game_id,
-                                event_id = EXCLUDED.event_id,
-                                last_updated = EXCLUDED.last_updated,
-                                entrants_num = EXCLUDED.entrants_num;";
-                            using (var command = new NpgsqlCommand(createInsertCommand, conn))
+                            if (valueCount > 0)
                             {
-                                command.Transaction = transaction;
-                                command.Parameters.AddWithValue(@"Input", tournament.Id);
-                                command.Parameters.AddWithValue(@"UrlSlug", tournament.UrlSlug);
-                                command.Parameters.AddWithValue(@"Game", tournament.GameId);
-                                command.Parameters.AddWithValue(@"EventId", tournament.EventId);
-                                command.Parameters.AddWithValue(@"EntrantsNum", tournament.EntrantsNum);
-                                command.Parameters.AddWithValue(@"LastUpdated", tournament.LastUpdated);
+                                insertQuery.Append(", ");
+                            }
 
-                                var result = await command.ExecuteNonQueryAsync();
-                                if (result > 0)
-                                {
-                                    totalSuccess += result;
-                                    Console.WriteLine($"Current Success: {totalSuccess}");
-                                    Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Added");
-                                }
+                            insertQuery.Append($"(@Input{valueCount}, @UrlSlug{valueCount}, @Game{valueCount}, @EventId{valueCount}, @EntrantsNum{valueCount}, @LastUpdated{valueCount})");
+
+                            queryParams.Add(new NpgsqlParameter($"@Input{valueCount}", tournament.Id));
+                            queryParams.Add(new NpgsqlParameter($"@UrlSlug{valueCount}", tournament.UrlSlug));
+                            queryParams.Add(new NpgsqlParameter($"@Game{valueCount}", tournament.GameId));
+                            queryParams.Add(new NpgsqlParameter($"@EventId{valueCount}", tournament.EventId));
+                            queryParams.Add(new NpgsqlParameter($"@EntrantsNum{valueCount}", tournament.EntrantsNum));
+                            queryParams.Add(new NpgsqlParameter($"@LastUpdated{valueCount}", tournament.LastUpdated));
+
+                            Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Added");
+
+                            valueCount++;
+                        }
+                        insertQuery.Append(" ON CONFLICT (id) DO UPDATE SET url_slug = EXCLUDED.url_slug,game_id = EXCLUDED.game_id,event_id = EXCLUDED.event_id,last_updated = EXCLUDED.last_updated,entrants_num = EXCLUDED.entrants_num;");
+
+                        using (var cmd = new NpgsqlCommand(insertQuery.ToString(), conn))
+                        {
+                            cmd.Parameters.AddRange(queryParams.ToArray());
+                            var result = await cmd.ExecuteNonQueryAsync();
+                            if (result > 0)
+                            {
+                                totalSuccess = result;
+                                Console.WriteLine($"Current Success: {result}");
                             }
                         }
                         await transaction.CommitAsync();
@@ -298,6 +336,27 @@ namespace SengokuProvider.Library.Services.Events
                     };
                     tournamentBatch.Add(newTournamentData);
                 }
+            }
+            return tournamentBatch;
+        }
+        private List<TournamentData> BuildTournamentData(List<TournamentLinkGraphQLResult?> newEventData)
+        {
+            if (newEventData == null || newEventData.Count == 0) { throw new ArgumentNullException("Event Data cannot be Null"); }
+            var tournamentBatch = new List<TournamentData>();
+
+            foreach (var currentLink in newEventData)
+            {
+                if (currentLink?.TournamentLink == null) continue;
+                TournamentData newTournamentData = new TournamentData
+                {
+                    Id = currentLink.TournamentLink.Id,
+                    UrlSlug = currentLink.TournamentLink.UrlSlug ?? "",
+                    EventId = currentLink.TournamentLink?.EventLink?.Id ?? 0,
+                    GameId = currentLink.TournamentLink?.Videogame?.Id ?? 0,
+                    EntrantsNum = currentLink.TournamentLink?.NumEntrants ?? 0,
+                    LastUpdated = DateTime.UtcNow
+                };
+                tournamentBatch.Add(newTournamentData);
             }
             return tournamentBatch;
         }
@@ -849,6 +908,61 @@ namespace SengokuProvider.Library.Services.Events
                 Events = new EventResult { Nodes = allNodes }
             };
             return eventResult;
+        }
+        private async Task<TournamentLinkGraphQLResult?> QueryStartggTournamentDataByLinkId(int tournamentLink)
+        {
+            var tempQuery = @"query getEventById($id: ID) {
+                                        event(id: $id) { id slug numEntrants videogame { id } 
+                                            tournament { id, name, addrState, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug }}}";
+            var request = new GraphQLHttpRequest
+            {
+                Query = tempQuery,
+                Variables = new
+                {
+                    id = tournamentLink
+                }
+            };
+
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 1000;
+
+            while (!success && retryCount < maxRetries)
+            {
+                await _requestThrottler.WaitIfPaused();
+
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
+
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                    var eventData = JsonConvert.DeserializeObject<TournamentLinkGraphQLResult>(tempJson);
+
+                    success = true;
+                    return eventData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests(_client);
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    throw;
+                }
+            }
+            return null;
         }
         #endregion
 

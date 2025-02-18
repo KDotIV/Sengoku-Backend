@@ -8,6 +8,7 @@ namespace SengokuProvider.Library.Services.Events
         public Task<List<int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand);
         public Task<int> IntakeTournamentIdData(LinkTournamentByEventIdCommand command);
         public Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand);
+        public Task<int> IntakeTournamentsByLinkId(int[] tournamentLinks);
         public Task<bool> SendTournamentLinkEventMessage(int eventLinkId);
         public Task<bool> SendEventIntakeLocationMessage(IntakeEventsByLocationCommand command);
         public Task<bool> UpdateEventData(UpdateEventCommand command);

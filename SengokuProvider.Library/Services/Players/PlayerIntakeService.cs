@@ -235,19 +235,18 @@ namespace SengokuProvider.Library.Services.Players
         }
         private int CalculateLeaguePoints(CommonEntrantNode tempNode, int totalEntrants, bool isRookieEvent = false)
         {
-            int participationPoints = 5;
+            // Base participation points
+            int participationPoints = 10;
             double multiplier = 1.0;
 
             if (isRookieEvent)
             {
-                participationPoints = 2;
+                participationPoints = 5;
                 multiplier = CommonConstants.RookieMultiplier;
             }
 
-            // Start with participation points
             double totalPoints = participationPoints;
 
-            // Determine final standing
             int placement = tempNode.Standing?.Placement ?? int.MaxValue;
 
             // Apply main or rookie distribution
@@ -260,22 +259,21 @@ namespace SengokuProvider.Library.Services.Players
                 }
             }
 
-            //rookie multiplier if needed
             totalPoints *= multiplier;
 
-            //adjust from entrant num
-            totalPoints = totalPoints * Math.Sqrt(totalEntrants);
-
-            int finalPoints = (int)Math.Floor(totalPoints);
+            // Use a logarithmic scale to reduce the impact of large tournaments
+            double entrantFactor = Math.Log(totalEntrants + 1); // +1 to avoid log(1) = 0
+            totalPoints *= entrantFactor;
 
             // Ensure minimum points for participation
+            int finalPoints = (int)Math.Floor(totalPoints);
             if (finalPoints < participationPoints)
             {
                 finalPoints = participationPoints;
             }
+
             return finalPoints;
         }
-
         private async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;
