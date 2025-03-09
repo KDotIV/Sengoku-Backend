@@ -17,6 +17,19 @@ namespace SengokuProvider.Library.Models.User
                    !string.IsNullOrEmpty(Email);
         }
     }
+    public class SyncStartggToUserCommand : ICommand
+    {
+        public required string PlayerName { get; set; }
+        public required string UserSlug { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            return !string.IsNullOrEmpty(PlayerName) ||
+                !string.IsNullOrEmpty(UserSlug);
+        }
+    }
     public class DeleteUserCommand : ICommand
     {
         public required int UserId { get; set; }

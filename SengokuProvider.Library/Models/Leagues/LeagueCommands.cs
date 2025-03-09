@@ -15,6 +15,25 @@ namespace SengokuProvider.Library.Models.Leagues
             return false;
         }
     }
+    public class OnboardUserToLeagueCommand : ICommand
+    {
+        public required int PlayerId { get; set; }
+        public required string PlayerName { get; set; }
+        public required string PlayerEmail { get; set; }
+        public required int LeagueId { get; set; }
+        public required int[] GameIds { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+
+        public bool Validate()
+        {
+            return PlayerId > 0 &&
+                LeagueId > 0 &&
+                !string.IsNullOrEmpty(PlayerName) &&
+                !string.IsNullOrEmpty(PlayerEmail) &&
+                GameIds.Length > 0;
+        }
+    }
     public class OnboardPlayerToLeagueCommand : ICommand
     {
         public required int[] PlayerIds { get; set; }

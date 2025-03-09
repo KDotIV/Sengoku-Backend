@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Players;
+using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using System.Net;
@@ -147,7 +148,8 @@ namespace SengokuProvider.Library.Services.Players
                                 playerResults.Add(ParseStandingsRecords(reader));
                             }
                         }
-                    };
+                    }
+                    ;
                 }
                 return playerResults;
             }
@@ -158,6 +160,206 @@ namespace SengokuProvider.Library.Services.Players
             catch (Exception ex)
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<UserPlayerData> GetUserDataByUserLink(int userLink)
+        {
+            return await QueryUserDataByUserLink(userLink);
+        }
+        public async Task<UserPlayerData> GetUserDataByUserSlug(string userSlug)
+        {
+            var result = new UserPlayerData
+            {
+                PlayerId = 0,
+                PlayerEmail = "",
+                PlayerName = "",
+                userLink = 0,
+                GameIds = []
+            };
+            try
+            {
+                var queryResult = await QueryStartggUserData(userSlug);
+                if (queryResult == null) return result;
+
+                return MapUserPlayerData(result, queryResult);
+            }
+            catch (Exception)
+            {
+
+                throw;
+            }
+        }
+        public Task<UserPlayerData> GetUserDataByPlayerName(string playerName)
+        {
+            throw new NotImplementedException();
+        }
+        public async Task<PlayerData> GetPlayerByName(string playerName)
+        {
+            var result = new PlayerData
+            {
+                Id = 0,
+                PlayerName = "",
+                PlayerLinkID = 0,
+                UserLink = 0,
+                LastUpdate = DateTime.UtcNow
+            };
+            return await QueryPlayersByPlayerName(playerName, result);
+        }
+        private async Task<PlayerData> QueryPlayersByPlayerName(string playerName, PlayerData result)
+        {
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                const string sql = @"SELECT * FROM public.players where player_name like '%@PlayerName%';";
+                using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@PlayerName", playerName);
+
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        if (!reader.HasRows) return result;
+
+                        result.Id = reader.GetInt32(reader.GetOrdinal("id"));
+                        result.PlayerName = reader.GetString(reader.GetOrdinal("player_name"));
+                        result.PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link"));
+                        result.UserLink = reader.GetInt32(reader.GetOrdinal("user_link"));
+                        result.LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"));
+                    }
+                    return result;
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+
+        private static UserPlayerData MapUserPlayerData(UserPlayerData result, UserGraphQLResult queryResult)
+        {
+            if (queryResult.UserNode.Player == null) return result;
+            result.PlayerId = queryResult.UserNode.Player.Id;
+            result.PlayerName = queryResult.UserNode.Player.GamerTag ?? "";
+            result.userLink = queryResult.UserNode.Id;
+
+            return result;
+        }
+        private async Task<UserGraphQLResult?> QueryStartggUserData(string userSlug)
+        {
+            var query = @"query UserQuery($userSlug: String) { 
+                            user(slug: $userSlug) { 
+                                id name slug player { id gamerTag m}}}";
+
+            var request = new GraphQLHttpRequest
+            {
+                Query = query,
+                Variables = new { userSlug }
+            };
+
+            var jsonSerializerSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Include,
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
+            };
+            bool success = false;
+            int retryCount = 0;
+            const int maxRetries = 3;
+            const int delay = 3000;
+
+            while (!success && retryCount < maxRetries)
+            {
+                await _requestThrottler.WaitIfPaused();
+
+                try
+                {
+                    var response = await _client.SendQueryAsync<JObject>(request);
+
+                    if (response.Errors != null && response.Errors.Any())
+                    {
+                        throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                    }
+
+                    if (response.Data == null)
+                    {
+                        throw new ApplicationException("Failed to retrieve standing data");
+                    }
+
+                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                    var userData = JsonConvert.DeserializeObject<UserGraphQLResult>(tempJson, jsonSerializerSettings);
+                    success = true;
+                    return userData;
+                }
+                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
+                {
+                    var errorContent = ex.Content;
+                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                    retryCount++;
+                    if (retryCount >= maxRetries)
+                    {
+                        Console.WriteLine("Max retries reached. Pausing further requests.");
+                        await _requestThrottler.PauseRequests(_client);
+                    }
+                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                    await Task.Delay(delay);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    return null;
+                }
+            }
+            throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
+        }
+        private async Task<UserPlayerData> QueryUserDataByUserLink(int userLink)
+        {
+            var result = new UserPlayerData
+            {
+                PlayerId = 0,
+                PlayerEmail = "",
+                PlayerName = "",
+                userLink = 0,
+                GameIds = []
+            };
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                const string sql = @"SELECT users.user_name, users.email, users.user_link, player_id, p.player_name FROM users 
+                                        JOIN players p ON users.player_id = p.id 
+                                        WHERE users.user_link = @UserLink;";
+
+                using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@UserLink", userLink);
+
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        if (!reader.HasRows) return result;
+
+                        result.PlayerId = reader.GetInt32(reader.GetOrdinal("player_link"));
+                        result.PlayerEmail = reader.GetString(reader.GetOrdinal("email"));
+                        result.PlayerName = reader.GetString(reader.GetOrdinal("player_name"));
+                        result.userLink = reader.GetInt32(reader.GetOrdinal("user_link"));
+                    }
+                    return result;
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
         private PlayerStandingResult ParseStandingsRecords(NpgsqlDataReader reader)

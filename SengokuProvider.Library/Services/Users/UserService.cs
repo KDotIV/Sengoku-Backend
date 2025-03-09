@@ -2,18 +2,21 @@
 using Npgsql;
 using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Players;
 
 namespace SengokuProvider.Library.Services.Users
 {
     public class UserService : IUserService
     {
+        private readonly IPlayerQueryService _playerQueryService;
         private readonly string _connectionString;
         private readonly IntakeValidator _validator;
         private readonly Random _rand = new Random();
-        public UserService(string connectionString, IntakeValidator validator)
+        public UserService(string connectionString, IntakeValidator validator, IPlayerQueryService playerQuery)
         {
             _connectionString = connectionString;
             _validator = validator;
+            _playerQueryService = playerQuery;
         }
         public async Task<int> CreateUser(string username, string email, string password)
         {
@@ -62,7 +65,8 @@ namespace SengokuProvider.Library.Services.Users
                 var result = await conn.QueryFirstOrDefaultAsync(newQuery, new { Input = userId });
 
                 return result != null;
-            };
+            }
+            ;
         }
         public async Task<bool> CheckUserById(int userId)
         {
@@ -100,6 +104,44 @@ namespace SengokuProvider.Library.Services.Users
                     var queryResult = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = newId });
                     if (newId != queryResult || queryResult == 0) return newId;
                 }
+            }
+        }
+        public async Task<UserPlayerDataResponse> SyncStartggDataToUserData(string playerName, string userSlug)
+        {
+            var currentResponse = new UserPlayerDataResponse { Response = "" };
+            try
+            {
+                if (!string.IsNullOrEmpty(userSlug))
+                {
+                    currentResponse.Data = await _playerQueryService.GetUserDataByUserSlug(userSlug);
+
+                    if (currentResponse.Data.PlayerId == 0) { currentResponse.Response = "Failed to Retrieve User"; return currentResponse; }
+                    else
+                    {
+                        currentResponse.Response = "Successfully Retrieved User";
+                        return currentResponse;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(playerName))
+                {
+                    currentResponse.Data = await _playerQueryService.GetUserDataByPlayerName(playerName);
+                    if (currentResponse.Data.PlayerId == 0) { currentResponse.Response = "Failed to Retrieve User"; return currentResponse; }
+                    else
+                    {
+                        currentResponse.Response = "Successfully Retrieved User";
+                        return currentResponse;
+                    }
+                }
+                else
+                {
+                    currentResponse.Response = "Failed to find Player Data";
+                    return currentResponse;
+                }
+            }
+            catch (Exception)
+            {
+
+                throw;
             }
         }
     }

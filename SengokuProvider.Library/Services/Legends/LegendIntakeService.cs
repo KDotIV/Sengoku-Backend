@@ -280,6 +280,184 @@ namespace SengokuProvider.Library.Services.Legends
             var newResults = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueIds, 2);
             return await UpdateCurrentLeaderboardResults(previousResults, newResults);
         }
+        public async Task<bool> AddUserToLeague(int playerId, string playerName, string playerEmail, int leagueId, int[] gameIds)
+        {
+            int result = 0;
+            var addResult = await AddPlayerToLeague(new int[1] { playerId }, leagueId);
+
+            if (addResult.Successful.Count > 0)
+            {
+                result = await _userService.CreateUser(playerName, playerEmail, GenerateHashedPassword());
+                if (result > 0) return true;
+                return false;
+            }
+            else
+            {
+                return false;
+            }
+        }
+        private string GenerateHashedPassword()
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-";
+
+            while (true)
+            {
+                // Generate a random 10-character password
+                string password = new string(Enumerable.Range(0, 10)
+                    .Select(_ => chars[_rand.Next(chars.Length)])
+                    .ToArray());
+
+                // Ensure at least one letter, one digit, and one special character
+                if (Regex.IsMatch(password, @"^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()_-]).{10}$"))
+                {
+                    return password;
+                }
+            }
+        }
+        public async Task<int> InsertNewLegendData(LegendData newLegend)
+        {
+            if (newLegend == null) { throw new ArgumentNullException(nameof(newLegend)); }
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO legends (id, legend_name, player_name, player_id, player_link_id, standings, last_updated) 
+                    VALUES (@Id, @LegendName, @PlayerName, @PlayerId, @PlayerLink, @Standings, @LastUpdated)
+                    ON CONFLICT (id) DO NOTHING RETURNING id", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@Id", newLegend.Id);
+                        cmd.Parameters.AddWithValue("@LegendName", newLegend.LegendName);
+                        cmd.Parameters.AddWithValue("@PlayerName", newLegend.PlayerName);
+                        cmd.Parameters.AddWithValue("@PlayerId", newLegend.PlayerId);
+                        cmd.Parameters.AddWithValue("@PlayerLink", newLegend.PlayerLinkId);
+                        if (newLegend.Standings != null && newLegend.Standings.Count > 0)
+                        {
+                            cmd.Parameters.Add(CreateDBIntArrayType("@Standings", newLegend.Standings.ToArray()));
+                        }
+                        else { cmd.Parameters.Add(CreateDBIntArrayType("@Standings", Array.Empty<int>())); }
+                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                        var result = await cmd.ExecuteScalarAsync();
+                        return result != null ? Convert.ToInt32(result) : 0;
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<LeagueByOrgResults> InsertNewLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "")
+        {
+            LeagueByOrgResults result = new LeagueByOrgResults { LeagueId = 0, LeagueName = "default", OrgId = orgId, StartDate = startDate, EndDate = endDate, LastUpdate = DateTime.UtcNow, IsActive = false };
+
+            if (orgId < 0) return result;
+            bool hasLeague = await CheckExistingLeagues(orgId, leagueName);
+
+            if (hasLeague) return result;
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO leagues (id, name, org_id, start_date, end_date, description, game, last_updated) 
+                                                        VALUES (@LeagueId, @LeagueName, @OrgId, @StartDate, @EndDate, @Description, @Game, @LastUpdated) 
+                                                        ON CONFLICT (id) DO UPDATE SET
+                                                            name = EXCLUDED.name,
+                                                            org_id = EXCLUDED.org_id,
+                                                            start_date = EXCLUDED.start_date,
+                                                            end_date = EXCLUDED.end_date,
+                                                            description = EXCLUDED.description,
+                                                            game = EXCLUDED.game,
+                                                            last_updated = EXCLUDED.last_updated;", conn))
+                    {
+                        var tempId = await GenerateNewLeagueId();
+                        cmd.Parameters.AddWithValue(@"LeagueId", tempId);
+                        cmd.Parameters.AddWithValue(@"Leaguename", leagueName);
+                        cmd.Parameters.AddWithValue(@"OrgId", orgId);
+                        cmd.Parameters.AddWithValue(@"StartDate", startDate);
+                        cmd.Parameters.AddWithValue(@"EndDate", endDate);
+                        cmd.Parameters.AddWithValue(@"Description", description);
+                        cmd.Parameters.AddWithValue(@"Game", gameId);
+                        cmd.Parameters.AddWithValue(@"LastUpdated", DateTime.UtcNow);
+
+                        var insertResult = await cmd.ExecuteNonQueryAsync();
+                        if (insertResult > 0)
+                        {
+                            result.LeagueId = tempId;
+                            result.LeagueName = leagueName;
+                            result.OrgId = orgId;
+                            result.StartDate = startDate;
+                            result.EndDate = endDate;
+                            result.Game = gameId;
+                            result.LastUpdate = DateTime.UtcNow;
+                            result.Response = "Successful";
+                        }
+                    }
+                }
+                return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<bool> AddLeagueToUser(int leagueId, int userId)
+        {
+            if (leagueId < 0 || userId < 0) { throw new ArgumentException($"LeagueId and UserId must be valid {nameof(leagueId)} - {nameof(userId)}"); }
+
+            try
+            {
+                var currentUserData = await _userService.GetUserById(userId);
+                var tempList = await _legendQueryService.GetLeagueByLeagueIds([leagueId]);
+                if (tempList.Count == 0) { throw new ArgumentNullException($"League Results were empty {nameof(tempList)}"); }
+                var currentLeagueData = tempList.First(x => x.LeagueId == leagueId);
+
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    try
+                    {
+                        using (var cmd = new NpgsqlCommand(@"INSERT INTO user_leagues (user_id, user_name, league_id, league_name, last_updated) VALUES (@UserInput, @UserName, @LeagueInput, @LeagueName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
+                        {
+                            cmd.Parameters.AddWithValue("@UserInput", userId);
+                            cmd.Parameters.AddWithValue("@UserName", currentUserData.UserName);
+                            cmd.Parameters.AddWithValue("@LeagueName", currentLeagueData.LeagueName);
+                            cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
+                            cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
+
+                            var result = await cmd.ExecuteNonQueryAsync();
+                            if (result > 0)
+                            {
+                                return true;
+                            }
+                            else { return false; }
+                        }
+                    }
+                    catch (NpgsqlException ex)
+                    {
+                        throw new ApplicationException("Database error occurred: ", ex);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
         private async Task<UpdateLeaderboardResponse> UpdateCurrentLeaderboardResults(List<LeaderboardData> previousResults, List<LeaderboardData> newResults)
         {
             if (newResults.Count == 0) throw new ArgumentException($"New Results cannot be empty {nameof(newResults)}.");
@@ -454,150 +632,6 @@ namespace SengokuProvider.Library.Services.Legends
             catch (Exception ex)
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
-        }
-        public async Task<int> InsertNewLegendData(LegendData newLegend)
-        {
-            if (newLegend == null) { throw new ArgumentNullException(nameof(newLegend)); }
-            try
-            {
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"INSERT INTO legends (id, legend_name, player_name, player_id, player_link_id, standings, last_updated) 
-                    VALUES (@Id, @LegendName, @PlayerName, @PlayerId, @PlayerLink, @Standings, @LastUpdated)
-                    ON CONFLICT (id) DO NOTHING RETURNING id", conn))
-                    {
-                        cmd.Parameters.AddWithValue("@Id", newLegend.Id);
-                        cmd.Parameters.AddWithValue("@LegendName", newLegend.LegendName);
-                        cmd.Parameters.AddWithValue("@PlayerName", newLegend.PlayerName);
-                        cmd.Parameters.AddWithValue("@PlayerId", newLegend.PlayerId);
-                        cmd.Parameters.AddWithValue("@PlayerLink", newLegend.PlayerLinkId);
-                        if (newLegend.Standings != null && newLegend.Standings.Count > 0)
-                        {
-                            cmd.Parameters.Add(CreateDBIntArrayType("@Standings", newLegend.Standings.ToArray()));
-                        }
-                        else { cmd.Parameters.Add(CreateDBIntArrayType("@Standings", Array.Empty<int>())); }
-                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-
-                        var result = await cmd.ExecuteScalarAsync();
-                        return result != null ? Convert.ToInt32(result) : 0;
-                    }
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
-        }
-        public async Task<LeagueByOrgResults> InsertNewLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "")
-        {
-            LeagueByOrgResults result = new LeagueByOrgResults { LeagueId = 0, LeagueName = "default", OrgId = orgId, StartDate = startDate, EndDate = endDate, LastUpdate = DateTime.UtcNow, IsActive = false };
-
-            if (orgId < 0) return result;
-            bool hasLeague = await CheckExistingLeagues(orgId, leagueName);
-
-            if (hasLeague) return result;
-            try
-            {
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"INSERT INTO leagues (id, name, org_id, start_date, end_date, description, game, last_updated) 
-                                                        VALUES (@LeagueId, @LeagueName, @OrgId, @StartDate, @EndDate, @Description, @Game, @LastUpdated) 
-                                                        ON CONFLICT (id) DO UPDATE SET
-                                                            name = EXCLUDED.name,
-                                                            org_id = EXCLUDED.org_id,
-                                                            start_date = EXCLUDED.start_date,
-                                                            end_date = EXCLUDED.end_date,
-                                                            description = EXCLUDED.description,
-                                                            game = EXCLUDED.game,
-                                                            last_updated = EXCLUDED.last_updated;", conn))
-                    {
-                        var tempId = await GenerateNewLeagueId();
-                        cmd.Parameters.AddWithValue(@"LeagueId", tempId);
-                        cmd.Parameters.AddWithValue(@"Leaguename", leagueName);
-                        cmd.Parameters.AddWithValue(@"OrgId", orgId);
-                        cmd.Parameters.AddWithValue(@"StartDate", startDate);
-                        cmd.Parameters.AddWithValue(@"EndDate", endDate);
-                        cmd.Parameters.AddWithValue(@"Description", description);
-                        cmd.Parameters.AddWithValue(@"Game", gameId);
-                        cmd.Parameters.AddWithValue(@"LastUpdated", DateTime.UtcNow);
-
-                        var insertResult = await cmd.ExecuteNonQueryAsync();
-                        if (insertResult > 0)
-                        {
-                            result.LeagueId = tempId;
-                            result.LeagueName = leagueName;
-                            result.OrgId = orgId;
-                            result.StartDate = startDate;
-                            result.EndDate = endDate;
-                            result.Game = gameId;
-                            result.LastUpdate = DateTime.UtcNow;
-                            result.Response = "Successful";
-                        }
-                    }
-                }
-                return result;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
-        }
-        public async Task<bool> AddLeagueToUser(int leagueId, int userId)
-        {
-            if (leagueId < 0 || userId < 0) { throw new ArgumentException($"LeagueId and UserId must be valid {nameof(leagueId)} - {nameof(userId)}"); }
-
-            try
-            {
-                var currentUserData = await _userService.GetUserById(userId);
-                var tempList = await _legendQueryService.GetLeagueByLeagueIds([leagueId]);
-                if (tempList.Count == 0) { throw new ArgumentNullException($"League Results were empty {nameof(tempList)}"); }
-                var currentLeagueData = tempList.First(x => x.LeagueId == leagueId);
-
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    try
-                    {
-                        using (var cmd = new NpgsqlCommand(@"INSERT INTO user_leagues (user_id, user_name, league_id, league_name, last_updated) VALUES (@UserInput, @UserName, @LeagueInput, @LeagueName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
-                        {
-                            cmd.Parameters.AddWithValue("@UserInput", userId);
-                            cmd.Parameters.AddWithValue("@UserName", currentUserData.UserName);
-                            cmd.Parameters.AddWithValue("@LeagueName", currentLeagueData.LeagueName);
-                            cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
-                            cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-
-                            var result = await cmd.ExecuteNonQueryAsync();
-                            if (result > 0)
-                            {
-                                return true;
-                            }
-                            else { return false; }
-                        }
-                    }
-                    catch (NpgsqlException ex)
-                    {
-                        throw new ApplicationException("Database error occurred: ", ex);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new ApplicationException("Unexpected Error Occurred: ", ex);
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                throw;
             }
         }
         private async Task<LegendData?> BuildLegendData(StandingsQueryResult? currentData, string playerName)

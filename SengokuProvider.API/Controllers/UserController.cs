@@ -9,12 +9,12 @@ namespace SengokuProvider.API.Controllers
     [Route("api/user/")]
     public class UserController : Controller
     {
-        private readonly ILogger<UserController> _logger;
+        private readonly ILogger<UserController> _log;
         private readonly IUserService _userService;
         private readonly CommandProcessor _commandProcessor;
         public UserController(ILogger<UserController> logger, IUserService userService, CommandProcessor commandProcessor)
         {
-            _logger = logger;
+            _log = logger;
             _userService = userService;
             _commandProcessor = commandProcessor;
         }
@@ -29,14 +29,14 @@ namespace SengokuProvider.API.Controllers
         {
             if (command == null)
             {
-                _logger.LogError("CreateTable command is null.");
+                _log.LogError("CreateTable command is null.");
                 return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
             }
 
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
             {
-                _logger.LogError($"Request parsing failed: {parsedRequest.Response}");
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);
             }
 
@@ -45,15 +45,33 @@ namespace SengokuProvider.API.Controllers
                 var result = await _userService.CreateUser(parsedRequest.UserName, parsedRequest.Email, parsedRequest.Password);
                 if (result > 0) return new OkObjectResult($"User {parsedRequest.UserName} created successfully.");
 
-                _logger.LogError("Create User execution failed.");
+                _log.LogError("Create User execution failed.");
                 return new ObjectResult("Error message") { StatusCode = StatusCodes.Status500InternalServerError };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating user.");
+                _log.LogError(ex, "Error creating user.");
                 return new ObjectResult("Error message") { StatusCode = StatusCodes.Status500InternalServerError };
 
             }
+        }
+        [HttpPost("SyncStartggDataToPlayer")]
+        public async Task<IActionResult> SyncStartggDataToUserData([FromBody] SyncStartggToUserCommand cmd)
+        {
+            if (cmd == null)
+            {
+                _log.LogError("Command is null");
+                return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
+            }
+            var parsedRequest = await _commandProcessor.ParseRequest(cmd);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+
+            UserPlayerDataResponse result = await _userService.SyncStartggDataToUserData(cmd.PlayerName, cmd.UserSlug);
+            return Ok(result);
         }
     }
 }

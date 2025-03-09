@@ -16,5 +16,6 @@ namespace SengokuProvider.Library.Services.Legends
         public Task<List<TournamentBoardResult>> AddTournamentsToRunnerBoard(int userId, int orgId, List<int> tournamentIds);
         public Task<bool> AddLeagueToUser(int leagueId, int userId);
         public Task<LeaderboardOnboardIntakeResult> IntakeTournamentStandingsByEventLink(int[] tournamentLinks, string eventLinkSlug, int[] gameIds, int leagueId, bool open = false);
+        public Task<bool> AddUserToLeague(int playerId, string playerName, string playerEmail, int leagueId, int[] gameIds);
     }
 }
