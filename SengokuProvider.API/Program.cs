@@ -53,7 +53,8 @@ builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(provid
 builder.Services.AddScoped<IUserService, UserService>(provider =>
 {
     var intakeValidator = provider.GetRequiredService<IntakeValidator>();
-    return new UserService(connectionString, intakeValidator);
+    var playerQuery = provider.GetService<IPlayerQueryService>();
+    return new UserService(connectionString, intakeValidator, playerQuery);
 });
 builder.Services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>(provider =>
 {
