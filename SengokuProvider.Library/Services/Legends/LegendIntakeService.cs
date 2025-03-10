@@ -289,7 +289,7 @@ namespace SengokuProvider.Library.Services.Legends
             {
                 try
                 {
-                    result = await _userService.CreateUser(playerName, playerEmail, GenerateHashedPassword());
+                    result = await _userService.CreateUser(playerName, playerEmail, GenerateHashedPassword(), playerId);
                     if (result > 0) return "Successfully Registered!";
                     return "User already registered";
                 }

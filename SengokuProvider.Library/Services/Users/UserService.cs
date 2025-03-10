@@ -18,7 +18,7 @@ namespace SengokuProvider.Library.Services.Users
             _validator = validator;
             _playerQueryService = playerQuery;
         }
-        public async Task<int> CreateUser(string username, string email, string password)
+        public async Task<int> CreateUser(string username, string email, string password, int playerId = 0)
         {
             if (!_validator.IsValidIdentifier(username) || !_validator.IsValidIdentifier(email) || !_validator.IsValidIdentifier(password))
                 throw new ArgumentException("Invalid input data");
@@ -30,13 +30,15 @@ namespace SengokuProvider.Library.Services.Users
 
                     if (CheckDuplicatedUser(email)) { throw new ArgumentException("Email is already in use"); }
 
-                    var createNewUserCommand = @"INSERT INTO users (id, user_name, email, password) VALUES (@UserId, @Username, @Email, @Password) ON CONFLICT(id, email) DO NOTHING";
+                    var createNewUserCommand = @"INSERT INTO users (id, user_name, email, password, player_id, user_link) VALUES (@UserId, @Username, @Email, @Password, @PlayerId, @UserLink) ON CONFLICT(email) DO NOTHING";
                     using (var command = new NpgsqlCommand(createNewUserCommand, conn))
                     {
                         command.Parameters.AddWithValue("@UserId", await GenerateNewUserId());
                         command.Parameters.AddWithValue("@Username", username);
                         command.Parameters.AddWithValue("@Email", email);
                         command.Parameters.AddWithValue("@Password", password);
+                        command.Parameters.AddWithValue("@PlayerId", playerId);
+                        command.Parameters.AddWithValue("@UserLink", 0);
                         var result = await command.ExecuteNonQueryAsync();
                         if (result > 0)
                             return result;
