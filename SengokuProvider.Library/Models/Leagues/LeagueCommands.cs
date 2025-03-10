@@ -30,8 +30,7 @@ namespace SengokuProvider.Library.Models.Leagues
             return PlayerId > 0 &&
                 LeagueId > 0 &&
                 !string.IsNullOrEmpty(PlayerName) &&
-                !string.IsNullOrEmpty(PlayerEmail) &&
-                GameIds.Length > 0;
+                !string.IsNullOrEmpty(PlayerEmail);
         }
     }
     public class OnboardPlayerToLeagueCommand : ICommand

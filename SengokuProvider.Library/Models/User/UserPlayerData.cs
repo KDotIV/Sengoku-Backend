@@ -10,7 +10,7 @@
     }
     public class UserPlayerDataResponse
     {
-        public UserPlayerData? Data { get; set; }
+        public UserPlayerData Data { get; set; }
         public required string Response { get; set; }
     }
 }

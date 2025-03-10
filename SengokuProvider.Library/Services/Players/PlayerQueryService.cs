@@ -181,7 +181,7 @@ namespace SengokuProvider.Library.Services.Players
                 var queryResult = await QueryStartggUserData(userSlug);
                 if (queryResult == null) return result;
 
-                return MapUserPlayerData(result, queryResult);
+                return await MapUserPlayerDataAsync(result, queryResult);
             }
             catch (Exception)
             {
@@ -241,20 +241,56 @@ namespace SengokuProvider.Library.Services.Players
             }
         }
 
-        private static UserPlayerData MapUserPlayerData(UserPlayerData result, UserGraphQLResult queryResult)
+        private async Task<UserPlayerData> MapUserPlayerDataAsync(UserPlayerData result, UserGraphQLResult queryResult)
         {
             if (queryResult.UserNode.Player == null) return result;
-            result.PlayerId = queryResult.UserNode.Player.Id;
+
+            int existing = await CheckExistingPlayerbase(queryResult.UserNode.Player.Id);
+
+            if (existing > 0) { result.PlayerId = existing; }
+            else { result.PlayerId = queryResult.UserNode.Player.Id; }
             result.PlayerName = queryResult.UserNode.Player.GamerTag ?? "";
             result.userLink = queryResult.UserNode.Id;
 
             return result;
         }
+
+        private async Task<int> CheckExistingPlayerbase(int playerLinkId)
+        {
+            using var conn = new NpgsqlConnection(_connectionString);
+            try
+            {
+                await conn.OpenAsync();
+
+                using var cmd = new NpgsqlCommand(@"SELECT * FROM players where startgg_link = @Input", conn);
+                cmd.Parameters.AddWithValue("@Input", playerLinkId);
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        if (!reader.HasRows) return 0;
+
+                        return reader.GetInt32(reader.GetOrdinal("id"));
+                    }
+                }
+                return 0;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+
+        }
+
         private async Task<UserGraphQLResult?> QueryStartggUserData(string userSlug)
         {
             var query = @"query UserQuery($userSlug: String) { 
                             user(slug: $userSlug) { 
-                                id name slug player { id gamerTag m}}}";
+                                id name slug player { id gamerTag }}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -332,7 +368,7 @@ namespace SengokuProvider.Library.Services.Players
                 using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
 
-                const string sql = @"SELECT users.user_name, users.email, users.user_link, player_id, p.player_name FROM users 
+                const string sql = @"SELECT users.user_name, users.email, users.user_link, p.id, p.player_name FROM users 
                                         JOIN players p ON users.player_id = p.id 
                                         WHERE users.user_link = @UserLink;";
 
@@ -345,7 +381,7 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         if (!reader.HasRows) return result;
 
-                        result.PlayerId = reader.GetInt32(reader.GetOrdinal("player_link"));
+                        result.PlayerId = reader.GetInt32(reader.GetOrdinal("id"));
                         result.PlayerEmail = reader.GetString(reader.GetOrdinal("email"));
                         result.PlayerName = reader.GetString(reader.GetOrdinal("player_name"));
                         result.userLink = reader.GetInt32(reader.GetOrdinal("user_link"));

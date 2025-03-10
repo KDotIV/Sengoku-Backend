@@ -177,7 +177,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                bool result = await _legendIntakeService.AddUserToLeague(cmd.PlayerId, cmd.PlayerName, cmd.PlayerEmail, cmd.LeagueId, cmd.GameIds);
+                string result = await _legendIntakeService.AddUserToLeague(cmd.PlayerId, cmd.PlayerName, cmd.PlayerEmail, cmd.LeagueId, cmd.GameIds);
                 return Ok(result);
             }
             catch (Exception ex)

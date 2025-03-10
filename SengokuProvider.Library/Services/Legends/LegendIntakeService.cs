@@ -280,40 +280,56 @@ namespace SengokuProvider.Library.Services.Legends
             var newResults = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueIds, 2);
             return await UpdateCurrentLeaderboardResults(previousResults, newResults);
         }
-        public async Task<bool> AddUserToLeague(int playerId, string playerName, string playerEmail, int leagueId, int[] gameIds)
+        public async Task<string> AddUserToLeague(int playerId, string playerName, string playerEmail, int leagueId, int[] gameIds)
         {
             int result = 0;
             var addResult = await AddPlayerToLeague(new int[1] { playerId }, leagueId);
 
             if (addResult.Successful.Count > 0)
             {
-                result = await _userService.CreateUser(playerName, playerEmail, GenerateHashedPassword());
-                if (result > 0) return true;
-                return false;
+                try
+                {
+                    result = await _userService.CreateUser(playerName, playerEmail, GenerateHashedPassword());
+                    if (result > 0) return "Successfully Registered!";
+                    return "User already registered";
+                }
+                catch (Exception ex)
+                {
+                    return ex.Message;
+                }
             }
             else
             {
-                return false;
+                return "This player is already registered...";
             }
         }
         private string GenerateHashedPassword()
         {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_-";
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_@.";
+
+            // This regex enforces:
+            //  - At least one letter:       (?=.*[A-Za-z])
+            //  - At least one digit:        (?=.*\d)
+            //  - At least one "special":    (?=.*[@_.])
+            //  - Exactly 10 chars total, all from [A-Za-z0-9@_.]
+            var pattern = new Regex(@"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@_.])[A-Za-z0-9@_.]{10}$");
 
             while (true)
             {
-                // Generate a random 10-character password
-                string password = new string(Enumerable.Range(0, 10)
-                    .Select(_ => chars[_rand.Next(chars.Length)])
-                    .ToArray());
+                // Generate a random 10-character password using the restricted chars
+                string password = new string(
+                    Enumerable.Range(0, 10)
+                        .Select(_ => chars[_rand.Next(chars.Length)])
+                        .ToArray()
+                );
 
-                // Ensure at least one letter, one digit, and one special character
-                if (Regex.IsMatch(password, @"^(?=.*[A-Za-z])(?=.*\d)(?=.*[!@#$%^&*()_-]).{10}$"))
+                if (pattern.IsMatch(password))
                 {
                     return password;
                 }
             }
         }
+
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {
             if (newLegend == null) { throw new ArgumentNullException(nameof(newLegend)); }
