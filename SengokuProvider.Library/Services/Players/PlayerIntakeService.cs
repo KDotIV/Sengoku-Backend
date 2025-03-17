@@ -322,46 +322,38 @@ namespace SengokuProvider.Library.Services.Players
                                 Console.WriteLine("Player does not exist. Sending request to intake player");
                                 continue;
                             }
-
                             if (valueCount > 0)
                             {
                                 insertQuery.Append(", ");
-
-                                insertQuery.Append($"(@EntrantInput{valueCount}, @PlayerId{valueCount}, @TournamentLink{valueCount}, @PlacementInput{valueCount}, @NumEntrants{valueCount}, @IsActive{valueCount}, @NewPoints{valueCount}, @LastUpdated{valueCount})");
-
-                                queryParams.Add(new NpgsqlParameter($"@EntrantInput{valueCount}", data.TournamentLinks.EntrantId));
-                                queryParams.Add(new NpgsqlParameter($"@PlayerId{valueCount}", exists));
-                                queryParams.Add(new NpgsqlParameter($"@TournamentLink{valueCount}", data.StandingDetails.TournamentId));
-                                queryParams.Add(new NpgsqlParameter($"@PlacementInput{valueCount}", data.StandingDetails.Placement));
-                                queryParams.Add(new NpgsqlParameter($"@NumEntrants{valueCount}", data.EntrantsNum));
-                                queryParams.Add(new NpgsqlParameter($"@IsActive{valueCount}", data.StandingDetails.IsActive));
-                                queryParams.Add(new NpgsqlParameter($"@NewPoints{valueCount}", data.StandingDetails.LeaguePoints));
-                                queryParams.Add(new NpgsqlParameter($"@LastUpdated{valueCount}", data.LastUpdated));
-
-                                valueCount++;
-
-                                insertQuery.Append(" ON CONFLICT (entrant_id) DO UPDATE SET player_id = EXCLUDED.player_id, tournament_link = EXCLUDED.tournament_link, placement = EXCLUDED.placement, entrants_num = EXCLUDED.entrants_num, active = EXCLUDED.active, gained_points = EXCLUDED.gained_points, last_updated = EXCLUDED.last_updated;");
-
-                                using (var cmd = new NpgsqlCommand(insertQuery.ToString(), conn))
-                                {
-                                    cmd.Transaction = transaction;
-                                    cmd.Parameters.AddRange(queryParams.ToArray());
-                                    var result = await cmd.ExecuteNonQueryAsync();
-                                    if (result > 0)
-                                    {
-                                        totalSuccess = result;
-                                        Console.WriteLine($"Current Success: {result}");
-                                    }
-                                }
-
-                                await transaction.CommitAsync();
                             }
-                            else
+                            insertQuery.Append($"(@EntrantInput{valueCount}, @PlayerId{valueCount}, @TournamentLink{valueCount}, @PlacementInput{valueCount}, @NumEntrants{valueCount}, @IsActive{valueCount}, @NewPoints{valueCount}, @LastUpdated{valueCount})");
+
+                            queryParams.Add(new NpgsqlParameter($"@EntrantInput{valueCount}", data.TournamentLinks.EntrantId));
+                            queryParams.Add(new NpgsqlParameter($"@PlayerId{valueCount}", exists));
+                            queryParams.Add(new NpgsqlParameter($"@TournamentLink{valueCount}", data.StandingDetails.TournamentId));
+                            queryParams.Add(new NpgsqlParameter($"@PlacementInput{valueCount}", data.StandingDetails.Placement));
+                            queryParams.Add(new NpgsqlParameter($"@NumEntrants{valueCount}", data.EntrantsNum));
+                            queryParams.Add(new NpgsqlParameter($"@IsActive{valueCount}", data.StandingDetails.IsActive));
+                            queryParams.Add(new NpgsqlParameter($"@NewPoints{valueCount}", data.StandingDetails.LeaguePoints));
+                            queryParams.Add(new NpgsqlParameter($"@LastUpdated{valueCount}", data.LastUpdated));
+
+                            valueCount++;
+                        }
+                        insertQuery.Append(" ON CONFLICT (entrant_id) DO UPDATE SET player_id = EXCLUDED.player_id, tournament_link = EXCLUDED.tournament_link, placement = EXCLUDED.placement, entrants_num = EXCLUDED.entrants_num, active = EXCLUDED.active, gained_points = EXCLUDED.gained_points, last_updated = EXCLUDED.last_updated;");
+
+                        using (var cmd = new NpgsqlCommand(insertQuery.ToString(), conn))
+                        {
+                            cmd.Transaction = transaction;
+                            cmd.Parameters.AddRange(queryParams.ToArray());
+                            var result = await cmd.ExecuteNonQueryAsync();
+                            if (result > 0)
                             {
-                                Console.WriteLine("No Standings Data found for Player");
-                                continue;
+                                totalSuccess = result;
+                                Console.WriteLine($"Current Success: {result}");
                             }
                         }
+
+                        await transaction.CommitAsync();
                     }
                 }
             }

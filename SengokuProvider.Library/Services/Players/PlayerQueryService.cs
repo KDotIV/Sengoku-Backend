@@ -240,7 +240,6 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-
         private async Task<UserPlayerData> MapUserPlayerDataAsync(UserPlayerData result, UserGraphQLResult queryResult)
         {
             if (queryResult.UserNode.Player == null) return result;
@@ -254,7 +253,6 @@ namespace SengokuProvider.Library.Services.Players
 
             return result;
         }
-
         private async Task<int> CheckExistingPlayerbase(int playerLinkId)
         {
             using var conn = new NpgsqlConnection(_connectionString);
@@ -285,7 +283,6 @@ namespace SengokuProvider.Library.Services.Players
             }
 
         }
-
         private async Task<UserGraphQLResult?> QueryStartggUserData(string userSlug)
         {
             var query = @"query UserQuery($userSlug: String) { 

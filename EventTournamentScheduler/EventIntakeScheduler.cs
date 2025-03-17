@@ -15,9 +15,14 @@ namespace EventTournamentScheduler
         {
             _httpClient = httpClient;
         }
+        [Function("TournamentStandingsUpdate")]
+        public async Task RunTournamentUpdate([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
+        {
+            Console.WriteLine("Beginning TournamentStandingUpdate");
 
+        }
         [Function("EventIntakeScheduler")]
-        public async Task Run([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
+        public async Task RunEventIntakeScheduler([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
         {
             Console.WriteLine("Beginning Scheduled Event Intake");
             var tempStartDate = DateTime.Today;

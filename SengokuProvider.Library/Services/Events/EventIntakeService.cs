@@ -703,7 +703,6 @@ namespace SengokuProvider.Library.Services.Events
             return newParameters;
         }
         #endregion
-
         #region Query Commands
         private async Task<EventGraphQLResult?> QueryStartggTournamentDataByEventLink(int eventLinkId)
         {

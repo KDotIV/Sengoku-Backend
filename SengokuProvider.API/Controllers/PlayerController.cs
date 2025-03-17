@@ -61,8 +61,8 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _playerIntakeService.SendPlayerIntakeMessage(command.TournamentLink);
-                if (result) { return new OkObjectResult($"Player Intake Successful"); }
+                var result = await _playerIntakeService.IntakePlayerData(command);
+                if (result > 0) { return new OkObjectResult($"Player Intake Successful"); }
                 else { return new ObjectResult($"Failed to Intake Player with TournamentLink: {command.TournamentLink}"); }
             }
             catch (Exception ex)
