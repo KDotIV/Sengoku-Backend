@@ -100,7 +100,7 @@ namespace SengokuProvider.Library.Services.Players
 
                 Console.WriteLine($"{standingsSuccess} total standings added for player");
 
-                return playerSuccess;
+                return standingsSuccess;
             }
             catch (Exception ex)
             {
