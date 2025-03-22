@@ -50,7 +50,7 @@ namespace SengokuProvider.Library.Models.Common
                             FROM 
                                 events e
                             JOIN addresses a ON e.address_id = a.id
-                            JOIN tournament_links tl ON e.link_id = tl.event_id
+                            JOIN tournament_links tl ON e.link_id = tl.event_link
                             WHERE
                                 e.region = ANY(@RegionIds)
                                 AND e.closing_registration_date >= CURRENT_DATE
@@ -71,7 +71,7 @@ namespace SengokuProvider.Library.Models.Common
                             FROM 
                                 events e
                             JOIN addresses a ON e.address_id = a.id
-                            JOIN tournament_links tl ON e.link_id = tl.event_id
+                            JOIN tournament_links tl ON e.link_id = tl.event_link
                             WHERE
                                 e.region = ANY(@RegionIds)
                                 AND e.closing_registration_date >= CURRENT_DATE
@@ -91,7 +91,7 @@ namespace SengokuProvider.Library.Models.Common
                                 FROM 
                                     events e
                                 JOIN addresses a ON e.address_id = a.id
-                                JOIN tournament_links tl ON e.link_id = tl.event_id
+                                JOIN tournament_links tl ON e.link_id = tl.event_link
                                 WHERE
                                     e.region = ANY(@RegionIds)
                                     AND e.closing_registration_date >= CURRENT_DATE

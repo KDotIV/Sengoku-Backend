@@ -69,7 +69,7 @@ namespace SengokuProvider.Library.Services.Players
                     await conn.OpenAsync();
                     using (var cmd = new NpgsqlCommand(@"SELECT standings.entrant_id, standings.player_id, standings.tournament_link, 
                                                         standings.placement, standings.entrants_num, standings.active, standings.last_updated,
-                                                        players.player_name, tournament_links.event_id, tournament_links.id, tournament_links.url_slug, 
+                                                        players.player_name, tournament_links.event_link, tournament_links.id, tournament_links.url_slug, 
                                                         events.event_name
                                                         FROM standings
                                                         JOIN players ON standings.player_id = players.id
@@ -117,12 +117,12 @@ namespace SengokuProvider.Library.Services.Players
                     await conn.OpenAsync();
                     using (var cmd = new NpgsqlCommand(@"SELECT standings.entrant_id, standings.player_id, standings.tournament_link, 
                                                         standings.placement, standings.entrants_num,
-                                                        players.player_name, tournament_links.event_id,
+                                                        players.player_name, tournament_links.event_link,
                                                         tournament_links.url_slug, events.event_name, events.end_time, standings.last_updated
                                                         FROM standings
                                                         JOIN players ON standings.player_id = players.id
                                                         JOIN tournament_links ON standings.tournament_link = tournament_links.id
-                                                        JOIN events ON events.link_id = tournament_links.event_id
+                                                        JOIN events ON events.link_id = tournament_links.event_link
                                                         WHERE standings.player_id = @PlayerArray 
                                                         and tournament_links.game_id = @TournamentsArray
                                                         and start_time = @StartTimeInput
@@ -404,7 +404,7 @@ namespace SengokuProvider.Library.Services.Players
                     IsActive = reader.IsDBNull(reader.GetOrdinal("active")) ? false : reader.GetBoolean(reader.GetOrdinal("active")),
                     Placement = reader.IsDBNull(reader.GetOrdinal("placement")) ? 0 : reader.GetInt32(reader.GetOrdinal("placement")),
                     GamerTag = reader.IsDBNull(reader.GetOrdinal("player_name")) ? "" : reader.GetString(reader.GetOrdinal("player_name")),
-                    EventId = reader.IsDBNull(reader.GetOrdinal("event_id")) ? 0 : reader.GetInt32(reader.GetOrdinal("event_id")),
+                    EventId = reader.IsDBNull(reader.GetOrdinal("event_link")) ? 0 : reader.GetInt32(reader.GetOrdinal("event_link")),
                     EventName = reader.IsDBNull(reader.GetOrdinal("event_name")) ? "" : reader.GetString(reader.GetOrdinal("event_name")),
                     TournamentId = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32(reader.GetOrdinal("id")),
                     TournamentName = reader.IsDBNull(reader.GetOrdinal("url_slug")) ? "" : reader.GetString(reader.GetOrdinal("url_slug"))

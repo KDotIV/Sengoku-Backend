@@ -241,7 +241,7 @@ namespace SengokuProvider.Library.Services.Events
                 {
                     await conn.OpenAsync();
 
-                    var linkQuery = @"Select id FROM tournament_links WHERE url_slug IS NULL OR last_updated IS NULL OR event_id IS NULL OR last_updated >= NOW() - INTERVAL '1 HOURS'";
+                    var linkQuery = @"Select id FROM tournament_links WHERE url_slug IS NULL OR last_updated IS NULL OR event_link IS NULL OR last_updated >= NOW() - INTERVAL '1 HOURS'";
                     using (var reader = await conn.ExecuteReaderAsync(linkQuery))
                     {
                         if (!reader.HasRows) return linksToProcess;

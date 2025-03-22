@@ -17,5 +17,8 @@ namespace SengokuProvider.Library.Services.Legends
         public Task<LegendData?> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand getLegendsByPlayerLinkCommand);
         public Task<StandingsQueryResult?> QueryStandingsByPlayerId(int playerId);
         public Task<List<LeagueByOrgResults>> GetAvailableLeagues();
+        public Task<List<LeagueRegionsResult>> GetLeagueRegions(int[] leagueIds);
+        public Task<List<LeagueRegionsResult>> GetAllActiveLeagueRegions();
+
     }
 }

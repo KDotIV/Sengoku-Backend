@@ -1,6 +1,7 @@
 ﻿using Dapper;
 using Npgsql;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -44,6 +45,34 @@ namespace SengokuProvider.Library.Services.Common
             newParameters.NpgsqlDbType = NpgsqlTypes.NpgsqlDbType.Numeric;
 
             return newParameters;
+        }
+        public string[] SanitizeStringArray(string[] input, bool trimQuotes = true)
+        {
+            if (input == null || input.Length == 0)
+                return Array.Empty<string>();
+
+            return input.Select(r =>
+            {
+                var cleaned = r.Trim();
+                return trimQuotes ? cleaned.Trim('\'') : cleaned;
+            }).ToArray();
+        }
+        public async Task<T> MeasureExecutionTimeAsync<T>(Func<Task<T>> func, string operationName)
+        {
+            var sw = Stopwatch.StartNew();
+            try
+            {
+                var result = await func();
+                sw.Stop();
+                Console.WriteLine($"{operationName} executed in {sw.ElapsedMilliseconds}ms");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                Console.WriteLine($"{operationName} failed after {sw.ElapsedMilliseconds}ms");
+                throw;
+            }
         }
         public string CleanUrlSlugName(string urlSlug)
         {

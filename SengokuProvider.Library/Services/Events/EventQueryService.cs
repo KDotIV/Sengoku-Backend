@@ -2,6 +2,7 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
+using NpgsqlTypes;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
@@ -275,7 +276,7 @@ namespace SengokuProvider.Library.Services.Events
                                 newTournamentLink.Id = reader.GetInt32(reader.GetOrdinal("id"));
                                 newTournamentLink.UrlSlug = reader.GetString(reader.GetOrdinal("url_slug"));
                                 newTournamentLink.GameId = reader.GetInt32(reader.GetOrdinal("game_id"));
-                                newTournamentLink.EventId = reader.GetInt32(reader.GetOrdinal("event_id"));
+                                newTournamentLink.EventId = reader.GetInt32(reader.GetOrdinal("event_link"));
                                 newTournamentLink.EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num"));
                                 newTournamentLink.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
                                 tournamentResults.Add(newTournamentLink);
@@ -284,6 +285,47 @@ namespace SengokuProvider.Library.Services.Events
                     }
                 }
                 return tournamentResults;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        public async Task<List<TournamentData>> GetTournamentsByEventIds(int[] eventIds)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                using (var cmd = new NpgsqlCommand(@"Select * FROM tournament_links WHERE event_link = ANY(@Input)", connection))
+                {
+                    cmd.Parameters.AddWithValue("@Input", eventIds);
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        if (!reader.HasRows) return new List<TournamentData>();
+                        else
+                        {
+                            var tournamentResults = new List<TournamentData>();
+                            while (await reader.ReadAsync())
+                            {
+                                var newTournamentLink = new TournamentData { Id = 0, UrlSlug = string.Empty, EventId = 0, LastUpdated = DateTime.MinValue };
+                                newTournamentLink.Id = reader.GetInt32(reader.GetOrdinal("id"));
+                                newTournamentLink.UrlSlug = reader.GetString(reader.GetOrdinal("url_slug"));
+                                newTournamentLink.GameId = reader.GetInt32(reader.GetOrdinal("game_id"));
+                                newTournamentLink.EventId = reader.GetInt32(reader.GetOrdinal("event_link"));
+                                newTournamentLink.EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num"));
+                                newTournamentLink.LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"));
+                                tournamentResults.Add(newTournamentLink);
+                            }
+                            return tournamentResults;
+                        }
+                    }
+                }
             }
             catch (NpgsqlException ex)
             {
@@ -366,6 +408,7 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 sortedAddresses.Add(new AddressEventResult
                                 {
+                                    EventId = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32(reader.GetOrdinal("id")),
                                     Address = reader.IsDBNull(reader.GetOrdinal("address")) ? string.Empty : reader.GetString(reader.GetOrdinal("address")),
                                     Latitude = reader.IsDBNull(reader.GetOrdinal("latitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("latitude")),
                                     Longitude = reader.IsDBNull(reader.GetOrdinal("longitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("longitude")),
@@ -398,7 +441,7 @@ namespace SengokuProvider.Library.Services.Events
         public async Task<EventGraphQLResult?> QueryStartggEventByEventId(int eventId)
         {
             var tempQuery = @"query TournamentQuery($tournamentId: ID!) 
-                            {tournaments(query: {
+                            { tournaments(query: {
                             filter: {
                                 id: $tournamentId
                                     }}) {
@@ -510,6 +553,64 @@ namespace SengokuProvider.Library.Services.Events
                 }
             }
             return null;
+        }
+        public async Task<List<AddressEventResult>> GetLocalEventsByLeagueRegions(int[] leagueIds, string[] regions, int page)
+        {
+            try
+            {
+                await using var connection = new NpgsqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var sql = @"SELECT * FROM get_nearby_events_for_leagues(@LeagueIds, @RegionIds, @PerPage)";
+                await using var sqlcmd = new NpgsqlCommand(sql, connection);
+                Console.WriteLine("RegionIds Type: " + regions.GetType().Name);
+                Console.WriteLine("RegionIds Count: " + regions.Length);
+
+                var cleanedRegions = _commonServices.SanitizeStringArray(regions);
+
+                sqlcmd.Parameters.AddWithValue("LeagueIds", NpgsqlDbType.Array | NpgsqlDbType.Integer, leagueIds);
+                sqlcmd.Parameters.AddWithValue("RegionIds", NpgsqlDbType.Array | NpgsqlDbType.Varchar, cleanedRegions);
+                sqlcmd.Parameters.AddWithValue("PerPage", NpgsqlDbType.Integer, page);
+
+                using (var reader = await sqlcmd.ExecuteReaderAsync())
+                {
+                    var results = new List<AddressEventResult>();
+                    while (await reader.ReadAsync())
+                    {
+                        results.Add(
+                            new AddressEventResult
+                            {
+                                EventId = reader.IsDBNull(reader.GetOrdinal("event_id")) ? 0 : reader.GetInt32(reader.GetOrdinal("event_id")),
+                                Address = reader.IsDBNull(reader.GetOrdinal("address")) ? string.Empty : reader.GetString(reader.GetOrdinal("address")),
+                                Latitude = reader.IsDBNull(reader.GetOrdinal("latitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("latitude")),
+                                Longitude = reader.IsDBNull(reader.GetOrdinal("longitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("longitude")),
+                                Distance = reader.IsDBNull(reader.GetOrdinal("distance")) ? 0.0 : Math.Round(reader.GetDouble(reader.GetOrdinal("distance")), 4),
+                                EventName = reader.IsDBNull(reader.GetOrdinal("event_name")) ? string.Empty : reader.GetString(reader.GetOrdinal("event_name")),
+                                EventDescription = reader.IsDBNull(reader.GetOrdinal("event_description")) ? string.Empty : reader.GetString(reader.GetOrdinal("event_description")),
+                                Region = reader.IsDBNull(reader.GetOrdinal("region")) ? string.Empty : reader.GetString(reader.GetOrdinal("region")),
+                                StartTime = reader.IsDBNull(reader.GetOrdinal("start_time")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("start_time")),
+                                EndTime = reader.IsDBNull(reader.GetOrdinal("end_time")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("end_time")),
+                                LinkId = reader.IsDBNull(reader.GetOrdinal("link_id")) ? 0 : reader.GetInt32(reader.GetOrdinal("link_id")),
+                                ClosingRegistration = reader.IsDBNull(reader.GetOrdinal("closing_registration_date")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("closing_registration_date")),
+                                UrlSlug = reader.IsDBNull(reader.GetOrdinal("url_slug")) ? string.Empty : reader.GetString(reader.GetOrdinal("url_slug")),
+                                IsOnline = reader.IsDBNull(reader.GetOrdinal("online_tournament")) ? false : reader.GetBoolean(reader.GetOrdinal("online_tournament"))
+                            });
+                    }
+                    return results;
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"NpgsqlException: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                throw;
+            }
         }
         private async Task<List<TournamentData>> VerifyEventLinkExists(string eventLinkSlug, int[]? gameIds = null)
         {

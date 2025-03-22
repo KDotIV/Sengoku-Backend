@@ -1,6 +1,6 @@
-﻿namespace EventTournamentScheduler
+﻿namespace SengokuProvider.Library.Models.Leagues
 {
-    internal class TournamentSchedulerResult
+    public class TournamentSchedulerResult
     {
         public required Dictionary<string, string> Success { get; set; }
         public required Dictionary<string, string> Errors { get; set; }

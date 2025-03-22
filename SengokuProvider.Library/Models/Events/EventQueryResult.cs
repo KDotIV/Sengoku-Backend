@@ -2,6 +2,7 @@
 {
     public class AddressEventResult
     {
+        public required int EventId { get; set; }
         public required string Address { get; set; }
         public required double Latitude { get; set; }
         public required double Longitude { get; set; }
