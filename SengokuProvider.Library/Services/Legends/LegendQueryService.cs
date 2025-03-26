@@ -354,7 +354,7 @@ namespace SengokuProvider.Library.Services.Legends
 
                 using var cmd = new NpgsqlCommand(sql, conn);
                 cmd.Parameters.AddWithValue("@LeagueIds", leagueIds);
-                cmd.Parameters.AddWithValue("@TopN", 2);
+                cmd.Parameters.AddWithValue("@TopN", 3);
 
                 using var reader = await cmd.ExecuteReaderAsync();
                 while (await reader.ReadAsync())
@@ -552,6 +552,5 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-
     }
 }

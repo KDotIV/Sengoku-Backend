@@ -4,6 +4,7 @@ using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Services.Players;
 using System.Text;
 using System.Text.Json;
 using TimerInfo = Microsoft.Azure.Functions.Worker.TimerInfo;
@@ -14,25 +15,41 @@ namespace EventTournamentScheduler
     public class EventIntakeScheduler
     {
         private readonly HttpClient _httpClient;
-        private readonly TimerInfo _timerInfo;
         private readonly IEventQueryService _eventQueryService;
         private readonly ILegendQueryService _legendQueryService;
         private readonly ILegendIntakeService _legendIntakeService;
-        public EventIntakeScheduler(HttpClient httpClient, IEventQueryService eventQuery, ILegendQueryService legendQuery, ILegendIntakeService legendIntake)
+        private readonly IPlayerIntakeService _playerIntakeService;
+        public EventIntakeScheduler(HttpClient httpClient, IEventQueryService eventQuery, ILegendQueryService legendQuery, ILegendIntakeService legendIntake,
+            IPlayerIntakeService playerIntake)
         {
             _httpClient = httpClient;
             _eventQueryService = eventQuery;
             _legendQueryService = legendQuery;
             _legendIntakeService = legendIntake;
+            _playerIntakeService = playerIntake;
         }
         [Function("TournamentStandingsUpdate")]
-        public async Task RunTournamentUpdate([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
+        public async Task RunTournamentUpdate([TimerTrigger("0 */6 * * *", RunOnStartup = true)] TimerInfo schedule)
         {
-            Console.WriteLine("Beginning TournamentStandingUpdate");
+            Console.WriteLine("Beginning TournamentStandingsUpdate");
+            var currentResults = await _legendQueryService.GetAvailableLeagues();
 
+            var tempLeagueArr = new int[currentResults.Count];
+            for (int i = 0; i < currentResults.Count; i++)
+            {
+                tempLeagueArr[i] = currentResults[i].LeagueId;
+            }
+
+            var currentTournaments = await _eventQueryService.GetTournamentsByLeagueIds(tempLeagueArr);
+            int totalSuccess = 0;
+            foreach (var tournament in currentTournaments)
+            {
+                totalSuccess += await _playerIntakeService.IntakePlayerData(tournament.Id);
+            }
+            Console.WriteLine($"TournamentStandingsUpdate complete with {totalSuccess} Players Data Inserted");
         }
         [Function("CircuitScheduleUpdate")]
-        public async Task RunCircuitScheduleUpdate([TimerTrigger("00 02,13 * * *", RunOnStartup = true)] TimerInfo schedule)
+        public async Task RunCircuitScheduleUpdate([TimerTrigger("00 02,13 * * *")] TimerInfo schedule)
         {
             Console.WriteLine("Beginning CircuitScheduleUpdate");
             var tempStartRange = DateTime.Today;

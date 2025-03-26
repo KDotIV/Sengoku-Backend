@@ -82,11 +82,11 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-        public async Task<int> IntakePlayerData(IntakePlayersByTournamentCommand command)
+        public async Task<int> IntakePlayerData(int tournamentLink)
         {
             try
             {
-                PlayerGraphQLResult? newPlayerData = await _queryService.QueryPlayerDataFromStartgg(command);
+                PlayerGraphQLResult? newPlayerData = await _queryService.QueryPlayerDataFromStartgg(tournamentLink);
                 if (newPlayerData == null) { return 0; }
 
                 _eventCache.Add(newPlayerData.TournamentLink.EventLink.Id);
@@ -197,11 +197,6 @@ namespace SengokuProvider.Library.Services.Players
             Dictionary<int, int> entrantsRegistry = new Dictionary<int, int>();
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
-                if (entrantsRegistry.TryGetValue(tempNode.Id, out _))
-                {
-                    Console.WriteLine($"Found Duplicate Entrant from Tournament: {data.TournamentLink.EventLink.Id} , {data.TournamentLink.EventLink.Name} - EntrantID: {tempNode.Id} ");
-                    continue;
-                }
                 if (tempNode.Standing == null) continue;
                 int numEntrants = data.TournamentLink.NumEntrants ?? 0;
                 try
@@ -231,8 +226,16 @@ namespace SengokuProvider.Library.Services.Players
                             PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
                         }
                     };
-                    mappedResult.Add(newStandings);
-                    entrantsRegistry.Add(tempNode.Id, 1);
+                    if (entrantsRegistry.TryGetValue(tempNode.Id, out int existingIndex))
+                    {
+                        Console.WriteLine($"Found Duplicate Entrant — replacing entry: {tempNode.Id}");
+                        mappedResult[existingIndex] = newStandings; // Replace the previous data
+                    }
+                    else
+                    {
+                        mappedResult.Add(newStandings);
+                        entrantsRegistry[tempNode.Id] = mappedResult.Count - 1; // Track index in list
+                    }
                 }
                 catch (Exception ex)
                 {

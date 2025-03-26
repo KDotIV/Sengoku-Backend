@@ -17,6 +17,6 @@ namespace SengokuProvider.Library.Services.Events
         public Task<TournamentsBySlugGraphQLResult?> QueryStartggTournamentLinksByUrl(string eventLinkSlug);
         public Task<List<AddressEventResult>> GetLocalEventsByLeagueRegions(int[] leagueIds, string[] regions, int page);
         public Task<List<TournamentData>> GetTournamentsByEventIds(int[] eventIds);
-
+        public Task<List<TournamentData>> GetTournamentsByLeagueIds(int[] leagueIds);
     }
 }

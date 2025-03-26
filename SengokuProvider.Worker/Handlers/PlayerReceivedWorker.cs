@@ -132,7 +132,7 @@ namespace SengokuProvider.Worker.Handlers
             var currentIntake = _playerFactory.CreateIntakeHandler();
             if (currentMessage.Command is IntakePlayersByTournamentCommand intakeCommand)
             {
-                var successfulPlayers = await currentIntake.IntakePlayerData(intakeCommand);
+                var successfulPlayers = await currentIntake.IntakePlayerData(intakeCommand.TournamentLink);
 
                 return successfulPlayers;
             }

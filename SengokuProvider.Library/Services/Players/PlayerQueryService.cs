@@ -38,9 +38,9 @@ namespace SengokuProvider.Library.Services.Players
 
             return result;
         }
-        public async Task<PlayerGraphQLResult?> QueryPlayerDataFromStartgg(IntakePlayersByTournamentCommand queryCommand)
+        public async Task<PlayerGraphQLResult?> QueryPlayerDataFromStartgg(int tournamentLink)
         {
-            return await QueryStartggPlayerData(queryCommand);
+            return await QueryStartggPlayerData(tournamentLink);
         }
         public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
         {
@@ -454,7 +454,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(IntakePlayersByTournamentCommand command, int perPage = 40)
+        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 10)
         {
             var tempQuery = @"query EventEntrants($perPage: Int!, $eventId: ID!) {
                     event(id: $eventId) {
@@ -498,7 +498,7 @@ namespace SengokuProvider.Library.Services.Players
                     Variables = new
                     {
                         perPage,
-                        eventId = command.TournamentLink,
+                        eventId = tournamentLink,
                         pageNum = currentPage
                     }
                 };
@@ -582,7 +582,7 @@ namespace SengokuProvider.Library.Services.Players
             {
                 TournamentLink = new CommonEventNode
                 {
-                    Id = command.TournamentLink,
+                    Id = tournamentLink,
                     Name = currentTournamentLinkName,
                     Slug = currentTournamentLinkSlug,
                     NumEntrants = currentEntrantsNum,

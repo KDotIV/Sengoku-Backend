@@ -612,6 +612,56 @@ namespace SengokuProvider.Library.Services.Events
                 throw;
             }
         }
+        public async Task<List<TournamentData>> GetTournamentsByLeagueIds(int[] leagueIds)
+        {
+            try
+            {
+                var result = new List<TournamentData>();
+                await using var connection = new NpgsqlConnection(_connectionString);
+                await connection.OpenAsync();
+
+                var sql = @"select tl.id, tl.url_slug, tl.game_id, tl.event_link, tl.entrants_num, tl.last_updated 
+                            FROM tournament_leagues l 
+                            JOIN tournament_links tl ON l.tournament_id = tl.id 
+                            WHERE league_id = ANY(@LeagueIds)";
+                await using var sqlcmd = new NpgsqlCommand(sql, connection);
+
+                sqlcmd.Parameters.AddWithValue("LeagueIds", leagueIds);
+                using (var reader = await sqlcmd.ExecuteReaderAsync())
+                {
+                    if (!reader.HasRows)
+                    {
+                        Console.WriteLine("No tournaments were found with given LeagueIds");
+                        return result;
+                    }
+                    while (await reader.ReadAsync())
+                    {
+                        result.Add(new TournamentData
+                        {
+                            Id = reader.GetInt32(0),
+                            UrlSlug = reader.GetString(1),
+                            GameId = reader.GetInt32(2),
+                            EventId = reader.GetInt32(3),
+                            EntrantsNum = reader.GetInt32(4),
+                            LastUpdated = reader.GetDateTime(5)
+                        });
+                    }
+                    return result;
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                Console.WriteLine($"NpgsqlException: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                throw;
+            }
+        }
         private async Task<List<TournamentData>> VerifyEventLinkExists(string eventLinkSlug, int[]? gameIds = null)
         {
             try
@@ -645,10 +695,10 @@ namespace SengokuProvider.Library.Services.Events
                                     LastUpdated = reader.GetDateTime(5)
                                 });
                             }
+                            return result;
                         }
                     }
                 }
-                return result;
             }
             catch (NpgsqlException ex)
             {

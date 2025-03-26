@@ -17,12 +17,19 @@ using System.Net.Http.Headers;
 
 var host = new HostBuilder()
     .ConfigureFunctionsWebApplication()
-    .ConfigureServices(services =>
+    .ConfigureAppConfiguration((ctx, ConfigurationBuilder) =>
     {
-        string connectionString = Environment.GetEnvironmentVariable("ConnectionStrings:AlexandriaConnectionString");
-        string graphQLUrl = Environment.GetEnvironmentVariable("ConnectionStrings:Endpoint");
-        string bearerToken = Environment.GetEnvironmentVariable("Bearer");
-        string serviceBusConnection = Environment.GetEnvironmentVariable("AzureWebJobsServiceBus");
+        ConfigurationBuilder.AddJsonFile("local.settings.json", optional: true, reloadOnChange: true);
+        ConfigurationBuilder.AddEnvironmentVariables();
+    })
+    .ConfigureServices((ctx, services) =>
+    {
+        IConfiguration config = ctx.Configuration;
+
+        string connectionString = config["ConnectionStrings:AlexandriaConnectionString"];
+        string graphQLUrl = config["Endpoint"];
+        string bearerToken = config["Bearer"];
+        string serviceBusConnection = config["AzureWebJobsServiceBus"];
 
         services.AddTransient<CommandProcessor>();
         services.AddSingleton<IntakeValidator>();

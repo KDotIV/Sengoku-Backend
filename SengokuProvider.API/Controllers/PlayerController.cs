@@ -61,7 +61,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _playerIntakeService.IntakePlayerData(command);
+                var result = await _playerIntakeService.IntakePlayerData(command.TournamentLink);
                 if (result == 0) { return new OkObjectResult($"No New Standings to Add for Tournament: {command.TournamentLink}"); }
                 if (result > 0) { return new OkObjectResult($"{result} Successful Player Stadings Added"); }
                 else { return new ObjectResult($"Failed to Intake Player with TournamentLink: {command.TournamentLink}"); }
