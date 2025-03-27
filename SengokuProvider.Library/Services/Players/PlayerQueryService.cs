@@ -454,7 +454,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 10)
+        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 40)
         {
             var tempQuery = @"query EventEntrants($perPage: Int!, $eventId: ID!) {
                     event(id: $eventId) {
