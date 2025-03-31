@@ -105,7 +105,7 @@ namespace EventTournamentScheduler
         public async Task RunEventIntakeScheduler([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
         {
             Console.WriteLine("Beginning Scheduled Event Intake");
-            var tempStartDate = DateTime.Today;
+            var tempStartDate = DateTime.Today.AddDays(-2);
             var tempEndDate = DateTime.Today.AddDays(10);
             int startTimestamp = (int)(tempStartDate.Subtract(DateTime.UnixEpoch)).TotalSeconds;
             int endTimestamp = (int)(tempEndDate.Subtract(DateTime.UnixEpoch)).TotalSeconds;
