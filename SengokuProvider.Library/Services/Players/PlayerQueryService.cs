@@ -483,6 +483,7 @@ namespace SengokuProvider.Library.Services.Players
 
             var allNodes = new List<CommonEntrantNode>();
             string currentEventLinkName = string.Empty;
+            int currentEventLinkId = 0;
             int currentPage = 1;
             int totalPages = int.MaxValue;
             string currentTournamentLinkName = string.Empty;
@@ -543,6 +544,7 @@ namespace SengokuProvider.Library.Services.Players
                         }
 
                         currentEventLinkName = playerData.TournamentLink.EventLink?.Name ?? string.Empty;
+                        currentEventLinkId = playerData.TournamentLink.EventLink?.Id ?? 0;
                         currentTournamentLinkName = playerData.TournamentLink.Name ?? string.Empty;
                         currentTournamentLinkSlug = playerData.TournamentLink?.Slug ?? string.Empty;
                         currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
@@ -592,8 +594,8 @@ namespace SengokuProvider.Library.Services.Players
                     },
                     EventLink = new CommonTournament
                     {
-                        Id = currentTournamentLinkId,
-                        Name = currentTournamentLinkName
+                        Id = currentEventLinkId,
+                        Name = currentEventLinkName
                     }
                 }
             };

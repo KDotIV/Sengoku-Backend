@@ -329,7 +329,6 @@ namespace SengokuProvider.Library.Services.Legends
                 }
             }
         }
-
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {
             if (newLegend == null) { throw new ArgumentNullException(nameof(newLegend)); }

@@ -306,7 +306,7 @@ namespace SengokuProvider.Library.Services.Players
                         {
                             var tempArrInput = new int[] { data.StandingDetails.TournamentId };
                             var checkTournamentLink = await _eventQueryService.GetTournamentLinksById(tempArrInput);
-                            if (checkTournamentLink.First().Id == 0)
+                            if (checkTournamentLink.Count == 0 || checkTournamentLink.FirstOrDefault()?.Id == 0)
                             {
                                 Console.WriteLine($"TournamentLink does not exist for this Standing Data. Sending TournamentLink: {data.StandingDetails.TournamentId} to EventQueue");
                                 await SendTournamentLinkEventMessage(data.StandingDetails.EventId);
