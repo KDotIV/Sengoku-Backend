@@ -25,8 +25,9 @@ var host = new HostBuilder()
     .ConfigureServices((ctx, services) =>
     {
         IConfiguration config = ctx.Configuration;
+        services.AddSingleton<IConfiguration>(config);
 
-        string connectionString = config["ConnectionStrings:AlexandriaConnectionString"];
+        string connectionString = config["AlexandriaConnectionString"];
         string graphQLUrl = config["Endpoint"];
         string bearerToken = config["Bearer"];
         string serviceBusConnection = config["AzureWebJobsServiceBus"];
