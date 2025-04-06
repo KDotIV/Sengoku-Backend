@@ -9,6 +9,7 @@
         public required int TournamentId { get; set; }
         public required string UrlSlug { get; set; }
         public string LeagueName { get; set; } = "";
+        public int CurrentScore { get; set; }
         public int ScoreChange { get; set; }
         public int TournamentCount { get; set; }
         public int GameId { get; set; }

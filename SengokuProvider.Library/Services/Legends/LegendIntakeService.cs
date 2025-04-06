@@ -490,7 +490,9 @@ namespace SengokuProvider.Library.Services.Legends
                     PlayerId = updatedResult.PlayerId,
                     PlayerName = updatedResult.PlayerName,
                     LeagueId = updatedResult.LeagueId,
-                    CurrentScore = updatedResult.CurrentScore,
+                    GainedPoints = updatedResult.GainedPoints,
+                    TournamentId = updatedResult.TournamentId,
+                    UrlSlug = updatedResult.UrlSlug,
                     TournamentCount = updatedResult.TournamentCount,
                     ScoreChange = 0, // Default, will be updated
                     LastUpdated = DateTime.UtcNow
