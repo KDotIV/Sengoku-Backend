@@ -5,7 +5,9 @@
         public required int PlayerId { get; set; }
         public required int LeagueId { get; set; }
         public required string PlayerName { get; set; }
-        public required int CurrentScore { get; set; }
+        public required int GainedPoints { get; set; }
+        public required int TournamentId { get; set; }
+        public required string UrlSlug { get; set; }
         public string LeagueName { get; set; } = "";
         public int ScoreChange { get; set; }
         public int TournamentCount { get; set; }
