@@ -5,6 +5,12 @@ on:
     - master
     - 'dev/**'
     - 'features/**'
+    - Release
+
+permissions:
+  id-token: write
+  contents: read
+
 env:
   AZURE_WEBAPP_NAME: sengoku-alexandria-qa
   AZURE_WEBAPP_PACKAGE_PATH: .\publish
@@ -42,6 +48,13 @@ jobs:
       with:
         name: webapp
         path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+    - name: Azure Login (OIDC)
+      uses: azure/login@v2
+      with:
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        auth-type: OIDC
     - name: Deploy to Azure WebApp
       uses: azure/webapps-deploy@v2
       with:
