@@ -408,7 +408,6 @@ namespace SengokuProvider.Library.Services.Events
                             {
                                 sortedAddresses.Add(new AddressEventResult
                                 {
-                                    EventId = reader.IsDBNull(reader.GetOrdinal("id")) ? 0 : reader.GetInt32(reader.GetOrdinal("id")),
                                     Address = reader.IsDBNull(reader.GetOrdinal("address")) ? string.Empty : reader.GetString(reader.GetOrdinal("address")),
                                     Latitude = reader.IsDBNull(reader.GetOrdinal("latitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("latitude")),
                                     Longitude = reader.IsDBNull(reader.GetOrdinal("longitude")) ? 0.0 : reader.GetDouble(reader.GetOrdinal("longitude")),
