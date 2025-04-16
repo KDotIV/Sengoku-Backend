@@ -66,7 +66,9 @@ namespace SengokuProvider.Library.Services.Legends
                                     PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
                                     PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
                                     LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
-                                    CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
+                                    GainedPoints = reader.GetInt32(reader.GetOrdinal("gained_points")),
+                                    TournamentId = reader.GetInt32(reader.GetOrdinal("tournament_id")),
+                                    UrlSlug = reader.GetString(reader.GetOrdinal("urlSlug")),
                                     ScoreChange = reader.GetInt32(reader.GetOrdinal("score_change")),
                                     LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
                                 };
@@ -365,7 +367,9 @@ namespace SengokuProvider.Library.Services.Legends
                         PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
                         LeagueId = reader.GetInt32(reader.GetOrdinal("league_id")),
                         PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
-                        CurrentScore = reader.GetInt32(reader.GetOrdinal("current_score")),
+                        GainedPoints = reader.GetInt32(reader.GetOrdinal("gained_points")),
+                        TournamentId = reader.GetInt32(reader.GetOrdinal("tournament_id")),
+                        UrlSlug = reader.GetString(reader.GetOrdinal("urlSlug")),
                         LeagueName = reader.GetString(reader.GetOrdinal("league_name")),
                         ScoreChange = reader.GetInt32(reader.GetOrdinal("score_difference")),
                         TournamentCount = reader.GetInt32(reader.GetOrdinal("tournament_count")),
