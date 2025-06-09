@@ -45,11 +45,10 @@ namespace SengokuProvider.Library.Services.Players
         {
             return await QueryStartggPlayerData(tournamentLink);
         }
-        public async Task<PhaseGroupGraphQL> QueryPhaseGroupDataFromStartgg(short phaseGroupId)
+        public async Task<PhaseGroupGraphQL> QueryPhaseGroupDataFromStartgg(int phaseGroupId)
         {
             return await QueryPhaseGroupDataByID(phaseGroupId);
         }
-
         public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
         {
             try
@@ -511,7 +510,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-        private async Task<PhaseGroupGraphQL> QueryPhaseGroupDataByID(short phaseGroupId)
+        private async Task<PhaseGroupGraphQL> QueryPhaseGroupDataByID(int phaseGroupId, int perPage = 20)
         {
             var tempQuery = @"query PhaseGroupSets($phaseGroupId: ID!, $page: Int!, $perPage: Int!) {
                                   phaseGroup(id: $phaseGroupId) { id, displayIdentifier, 
@@ -527,14 +526,107 @@ namespace SengokuProvider.Library.Services.Players
                 DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
             };
 
-            var allNodes = new List<PhaseGroupGraphQL>();
+            var allNodes = new List<SetNode>();
+            int currentPhaseId = 0;
+            string poolIdentifier = string.Empty;
             int currentPage = 1;
-            short totalPages = short.MaxValue;
+            int totalPages = int.MaxValue;
 
             for (int i = 0; i <= totalPages; i++)
             {
+                var request = new GraphQLHttpRequest
+                {
+                    Query = tempQuery,
+                    Variables = new
+                    {
+                        perPage,
+                        phaseGroupId,
+                        pageNum = currentPage
+                    }
+                };
+                bool success = false;
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int delay = 1000;
 
+                while (!success && retryCount < maxRetries)
+                {
+                    await _requestThrottler.WaitIfPaused();
+
+                    try
+                    {
+                        var response = await _client.SendQueryAsync<JObject>(request);
+
+                        if (response.Errors != null && response.Errors.Any())
+                        {
+                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                        }
+
+                        if (response.Data == null)
+                        {
+                            throw new ApplicationException("Failed to retrieve player data");
+                        }
+
+                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                        var playerData = JsonConvert.DeserializeObject<PhaseGroupGraphQL>(tempJson, jsonSerializerSettings);
+
+                        if (playerData == null || playerData.PhaseGroup == null)
+                        {
+                            Console.WriteLine("Failed to retrieve player data");
+                            totalPages = 0;
+                            break;
+                        }
+
+                        if (playerData.PhaseGroup.Sets.Nodes != null)
+                        {
+                            allNodes.AddRange(playerData.PhaseGroup.Sets.Nodes);
+                            Console.WriteLine("Tournament Node Added");
+                        }
+
+                        currentPhaseId = playerData.PhaseGroup?.Id ?? 0;
+                        poolIdentifier = playerData.PhaseGroup?.DisplayIdentifier ?? string.Empty;
+
+                        // Update pagination info for the next iteration
+                        var pageInfo = playerData?.PhaseGroup?.Sets?.PageInfo;
+                        if (pageInfo != null)
+                        {
+                            totalPages = pageInfo?.TotalPages ?? 1;
+                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
+                        }
+                        success = true;
+                    }
+                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        var errorContent = ex.Content;
+                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            Console.WriteLine("Max retries reached. Pausing further requests.");
+                            await _requestThrottler.PauseRequests(_client);
+                        }
+                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                        await Task.Delay(delay);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                    }
+                }
             }
+            var result = new PhaseGroupGraphQL
+            {
+                PhaseGroup = new PhaseGroup
+                {
+                    Id = currentPhaseId,
+                    DisplayIdentifier = poolIdentifier,
+                    Sets = new Sets
+                    {
+                        Nodes = allNodes
+                    }
+                }
+            };
+            return result;
         }
         private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 40)
         {

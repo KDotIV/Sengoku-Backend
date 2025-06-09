@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
+using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
@@ -128,6 +129,48 @@ namespace SengokuProvider.Library.Services.Players
             {
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
+        }
+        public async Task<PlayerOnboardResult> OnboardBracketRunnerByBracketSlug(string bracketSlug, int playerId)
+        {
+            var onboardResult = new PlayerOnboardResult { Response = "Open" };
+
+            if (string.IsNullOrEmpty(bracketSlug) || playerId <= 0)
+            {
+                onboardResult.Response = "FAILED: BracketSlug or PlayerId cannot be null or empty";
+                return onboardResult;
+            }
+            string[] slugParts;
+            (bool flowControl, PlayerOnboardResult value, string[] returnedSlug) = await VerifyBracketSlug(bracketSlug, onboardResult);
+            if (!flowControl)
+            {
+                return value;
+            }
+            return onboardResult;
+        }
+
+        private async Task<(bool flowControl, PlayerOnboardResult value, string[] returnedSlug)> VerifyBracketSlug(string bracketSlug, PlayerOnboardResult onboardResult)
+        {
+            if (!Uri.TryCreate(bracketSlug, UriKind.Absolute, out var uri))
+            {
+                onboardResult.Response = "FAILED: bracketSlug is not a valid URL";
+                return (false, onboardResult, Array.Empty<string>());
+            }
+            var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+            // Find "brackets" marker
+            var bracketIndex = Array.IndexOf(segments, "brackets");
+            // we need at least two IDs after it
+            if (bracketIndex < 0 || segments.Length < bracketIndex + 3)
+            {
+                onboardResult.Response = "FAILED: URL must contain '/brackets/{id1}/{id2}'";
+                return (false, onboardResult, Array.Empty<string>());
+            }
+
+            var firstPart = string.Join("/", segments.Take(bracketIndex));
+            var id1 = segments[bracketIndex + 1];
+            var id2 = segments[bracketIndex + 2];
+
+            return (flowControl: true, value: onboardResult, returnedSlug: new[] { firstPart, id1, id2 });
         }
         private List<PlayerStandingResult> MapPreviousTournamentData(PastEventPlayerData? playerData)
         {

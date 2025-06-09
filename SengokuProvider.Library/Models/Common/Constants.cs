@@ -106,6 +106,8 @@ namespace SengokuProvider.Library.Models.Common
                                     closing_registration_date ASC
                                 LIMIT @PerPage;";
         public const string NationalPriority = @"";
+        public const string InternationalPriority = @"";
+        public const string BaseStartggUrl = "https://www.start.gg";
     }
     public struct GeoConstants
     {

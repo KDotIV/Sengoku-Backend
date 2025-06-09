@@ -14,6 +14,19 @@ namespace SengokuProvider.Library.Models.Players
             return false;
         }
     }
+    public class OnboardBracketRunnerByBracketSlug : ICommand
+    {
+        public required string BracketSlug { get; set; }
+        public required int PlayerId { get; set; }
+        public CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+        public bool Validate()
+        {
+            if (!string.IsNullOrEmpty(BracketSlug) && PlayerId > 0)
+                return true;
+            return false;
+        }
+    }
     public class IntakePlayersByTournamentCommand : ICommand
     {
         public required int TournamentLink { get; set; }

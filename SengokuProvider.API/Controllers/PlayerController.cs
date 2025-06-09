@@ -134,5 +134,25 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpPost("OnboardBracketRunnerByBracketSlug")]
+        public async Task<IActionResult> OnboardBracketRunnerByBracketSlug([FromBody] OnboardBracketRunnerByBracketSlug command)
+        {
+            var parsedRequest = await _commandProcessor.ParseRequest(command);
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            {
+                _log.LogError($"Request parsing failed: {parsedRequest.Response}");
+                return new BadRequestObjectResult(parsedRequest.Response);
+            }
+            try
+            {
+                var result = await _playerIntakeService.OnboardBracketRunnerByBracketSlug(command.BracketSlug, command.PlayerId);
+                return new OkObjectResult($"Total Successful Entrants Data Inserted: {result}");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
     }
 }
