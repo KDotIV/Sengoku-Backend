@@ -1,8 +1,11 @@
-﻿using GraphQL.Client.Http;
+﻿using Dapper;
+using GraphQL.Client.Http;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
+using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
@@ -42,6 +45,11 @@ namespace SengokuProvider.Library.Services.Players
         {
             return await QueryStartggPlayerData(tournamentLink);
         }
+        public async Task<PhaseGroupGraphQL> QueryPhaseGroupDataFromStartgg(short phaseGroupId)
+        {
+            return await QueryPhaseGroupDataByID(phaseGroupId);
+        }
+
         public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
         {
             try
@@ -161,6 +169,55 @@ namespace SengokuProvider.Library.Services.Players
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
+        }
+        public async Task<List<PlayerTournamentCard>> GetTournamentCardsByPlayerIDs(int[] playerIds)
+        {
+            if (playerIds.Length < 1) throw new ArgumentException("playerIds cannot be empty or invalid array");
+
+            var playerCards = new List<PlayerTournamentCard>();
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    const string sql = @"SELECT * FROM get_player_standings(@PlayerIds)";
+
+                    var flatRows = await conn.QueryAsync<FlatPlayerStandings>(sql, new { PlayerIds = playerIds });
+
+                    playerCards = flatRows.GroupBy(r => r.PlayerID)
+                        .Select(g =>
+                        {
+                            var firstRecord = g.First();
+                            return new PlayerTournamentCard
+                            {
+                                PlayerID = g.Key,
+                                PlayerName = firstRecord.PlayerName,
+                                PlayerResults = g.Take(10) //takes the top 10 from player
+                                .Select(r => new PlayerStandingResult
+                                {
+                                    StandingDetails = new StandingDetails
+                                    {
+                                        GamerTag = firstRecord.PlayerName,
+                                        TournamentId = r.Tournament_Link,
+                                        Placement = r.Placement
+                                    },
+                                    LastUpdated = r.LastUpdated,
+                                    EntrantsNum = r.EntrantsNum,
+                                }).ToList()
+                            };
+                        }).ToList();
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+
+            return playerCards;
         }
         public async Task<UserPlayerData> GetUserDataByUserLink(int userLink)
         {
@@ -453,6 +510,31 @@ namespace SengokuProvider.Library.Services.Players
                 mappedResult.Add(newStandings);
             }
             return mappedResult;
+        }
+        private async Task<PhaseGroupGraphQL> QueryPhaseGroupDataByID(short phaseGroupId)
+        {
+            var tempQuery = @"query PhaseGroupSets($phaseGroupId: ID!, $page: Int!, $perPage: Int!) {
+                                  phaseGroup(id: $phaseGroupId) { id, displayIdentifier, 
+                                    sets(page: $page, perPage: $perPage, sortType: STANDARD) {
+                                      pageInfo { total }
+                                        nodes { id, slots { id, entrant { id, name }}}
+                                        pageInfo { total totalPages page perPage sortBy filter}}}}";
+
+            var jsonSerializerSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Include,
+                MissingMemberHandling = MissingMemberHandling.Ignore,
+                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
+            };
+
+            var allNodes = new List<PhaseGroupGraphQL>();
+            int currentPage = 1;
+            short totalPages = short.MaxValue;
+
+            for (int i = 0; i <= totalPages; i++)
+            {
+
+            }
         }
         private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 40)
         {

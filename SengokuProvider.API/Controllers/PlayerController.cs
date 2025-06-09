@@ -118,5 +118,21 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpGet("GetTournamentCardsByPlayerIDs")]
+        public async Task<IActionResult> GetTournamentCardsByPlayerIDs([FromQuery] int[] playerIds)
+        {
+            if (playerIds.Length < 1) return new OkObjectResult("Must have at least 1 playerId to get Tournament Cards");
+
+            try
+            {
+                var result = await _playerQueryService.GetTournamentCardsByPlayerIDs(playerIds);
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
     }
 }

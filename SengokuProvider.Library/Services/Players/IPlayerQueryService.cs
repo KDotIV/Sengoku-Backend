@@ -13,5 +13,6 @@ namespace SengokuProvider.Library.Services.Players
         public Task<UserPlayerData> GetUserDataByUserLink(int userLink);
         public Task<UserPlayerData> GetUserDataByUserSlug(string userSlug);
         public Task<UserPlayerData> GetUserDataByPlayerName(string playerName);
+        public Task<List<PlayerTournamentCard>> GetTournamentCardsByPlayerIDs(int[] playerIds);
     }
 }
