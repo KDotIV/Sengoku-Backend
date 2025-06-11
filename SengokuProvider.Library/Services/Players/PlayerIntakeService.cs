@@ -196,7 +196,8 @@ namespace SengokuProvider.Library.Services.Players
         private async Task<List<EntrantSetCard>> ReduceBracketDataForEntrantsCards(List<SetNode> nodes, int playerId, int entrantId)
         {
             List<EntrantSetCard> entrantSetCards = new List<EntrantSetCard>();
-            ConcurrentDictionary<int, int> entrantsRegistry = [];
+            ConcurrentDictionary<int, int> entrantsRegistry = new ConcurrentDictionary<int, int>();
+
             foreach (var set in nodes)
             {
                 if (set.Slots == null || set.Slots.Count < 2) continue;
@@ -232,16 +233,19 @@ namespace SengokuProvider.Library.Services.Players
 
             foreach (var entrantCard in entrantSetCards)
             {
-                int currentEntrantId = entrantCard.EntrantOneID != entrantId ? entrantCard.EntrantOneID : entrantCard.EntrantTwoID;
-                entrantsRegistry.TryUpdate(currentEntrantId, playerIds.First(x => x.PlayerId == currentEntrantId).PlayerId, 0);
+                Links? currentLink = entrantCard.EntrantOneID != entrantId
+                    ? playerIds.FirstOrDefault(x => x.EntrantId == entrantCard.EntrantOneID)
+                    : playerIds.FirstOrDefault(x => x.EntrantId == entrantCard.EntrantTwoID);
 
-                if (entrantCard.EntrantOneID == entrantId)
+                if (currentLink == null || currentLink.EntrantId == 0) continue;
+
+                if (currentLink.EntrantId == entrantCard.EntrantOneID)
                 {
-                    entrantCard.PlayerOneID = entrantsRegistry[currentEntrantId];
+                    entrantCard.PlayerOneID = currentLink.PlayerId;
                 }
                 else
                 {
-                    entrantCard.PlayerTwoID = entrantsRegistry[currentEntrantId];
+                    entrantCard.PlayerTwoID = currentLink.PlayerId;
                 }
             }
             // Remove duplicates based on Entrant IDs

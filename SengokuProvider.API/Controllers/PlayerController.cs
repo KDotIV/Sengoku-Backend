@@ -146,7 +146,7 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _playerIntakeService.OnboardBracketRunnerByBracketSlug(command.BracketSlug, command.PlayerId);
-                return new OkObjectResult($"Total Successful Entrants Data Inserted: {result}");
+                return Ok(result);
             }
             catch (Exception ex)
             {

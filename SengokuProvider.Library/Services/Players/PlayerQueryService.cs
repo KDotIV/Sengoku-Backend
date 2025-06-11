@@ -281,9 +281,9 @@ namespace SengokuProvider.Library.Services.Players
             {
                 using var conn = new NpgsqlConnection(_connectionString);
                 await conn.OpenAsync();
-                using (var cmd = new NpgsqlCommand("SELECT player_id, entrant_id FROM standings WHERE entrant_id = ANY(@entrantID)"))
+                using (var cmd = new NpgsqlCommand(@"SELECT player_id, entrant_id FROM standings WHERE entrant_id = ANY(@entrantIds)", conn))
                 {
-                    cmd.Parameters.AddWithValue("@entrantID", entrantIds);
+                    cmd.Parameters.AddWithValue("entrantIds", entrantIds);
                     using (var reader = await cmd.ExecuteReaderAsync())
                     {
                         if (!reader.HasRows)
