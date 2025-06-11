@@ -190,7 +190,7 @@ namespace SengokuProvider.Library.Services.Events
                     using (var cmd = new NpgsqlCommand(@"SELECT id, name, latitude, longitude, province FROM regions WHERE id = ANY(@Input)", conn))
                     {
                         // Passing the list as an array parameter
-                        var param = new NpgsqlParameter("@Input", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Text)
+                        var param = new NpgsqlParameter("@Input", NpgsqlDbType.Array | NpgsqlDbType.Text)
                         {
                             Value = regionIds.ToArray()
                         };
@@ -500,6 +500,12 @@ namespace SengokuProvider.Library.Services.Events
 
             return await VerifyEventLinkExists(eventLinkSlug);
         }
+        public async Task<TournamentData> GetTournamentLinkbyUrl(string tournamentLinkSlug)
+        {
+            var result = new TournamentData { Id = 0, UrlSlug = string.Empty, EventId = 0, LastUpdated = DateTime.MinValue };
+            if (string.IsNullOrEmpty(tournamentLinkSlug)) return result;
+            return await VerifyTournamentLinkExists(tournamentLinkSlug);
+        }
         public async Task<TournamentsBySlugGraphQLResult?> QueryStartggTournamentLinksByUrl(string eventLinkSlug)
         {
             var tempQuery = @"query TournamentEvents($tourneySlug: String!) { tournament(slug: $tourneySlug) {
@@ -697,6 +703,51 @@ namespace SengokuProvider.Library.Services.Events
                             return result;
                         }
                     }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        private async Task<TournamentData> VerifyTournamentLinkExists(string tournamentLinkSlug)
+        {
+            try
+            {
+                var result = new TournamentData { Id = 0, UrlSlug = string.Empty, EventId = 0, LastUpdated = DateTime.MinValue };
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand("SELECT id, url_slug, game_id, event_link, last_updated, entrants_num FROM public.tournament_links where url_slug like @urlTextInput;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("@urlTextInput", tournamentLinkSlug);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows)
+                            {
+                                Console.WriteLine("No tournaments were found with that Url");
+                                return result;
+                            }
+                            while (await reader.ReadAsync())
+                            {
+                                var foundResult = new TournamentData
+                                {
+                                    Id = reader.GetInt32(0),
+                                    UrlSlug = reader.GetString(1),
+                                    GameId = reader.GetInt32(2),
+                                    EventId = reader.GetInt32(3),
+                                    EntrantsNum = reader.GetInt32(5),
+                                    LastUpdated = reader.GetDateTime(4)
+                                };
+                                return foundResult;
+                            }
+                        }
+                    }
+                    return result;
                 }
             }
             catch (NpgsqlException ex)

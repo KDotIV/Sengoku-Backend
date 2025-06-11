@@ -45,9 +45,13 @@ namespace SengokuProvider.Library.Services.Players
         {
             return await QueryStartggPlayerData(tournamentLink);
         }
-        public async Task<PhaseGroupGraphQL> QueryPhaseGroupDataFromStartgg(int phaseGroupId)
+        public async Task<PhaseGroupGraphQL> QueryBracketDataFromStartggByBracketId(int bracketId)
         {
-            return await QueryPhaseGroupDataByID(phaseGroupId);
+            return await QueryPhaseGroupDataByID(bracketId);
+        }
+        public async Task<List<PlayerStandingResult>> GetStandingsDataByPlayerIds(int[] playerIds, int[] tournamentIds)
+        {
+            return await QueryStandingsByPlayerIds(playerIds, tournamentIds);
         }
         public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
         {
@@ -260,6 +264,115 @@ namespace SengokuProvider.Library.Services.Players
                 LastUpdate = DateTime.UtcNow
             };
             return await QueryPlayersByPlayerName(playerName, result);
+        }
+        public async Task<List<Links>> GetPlayersByEntrantLinks(int[] entrantId)
+        {
+            return await QueryPlayersByEntrantLinks(entrantId);
+        }
+        private async Task<List<Links>> QueryPlayersByEntrantLinks(int[] entrantIds)
+        {
+            if (entrantIds.Length < 1)
+            {
+                Console.WriteLine("Entrant IDs cannot be empty or invalid array");
+                return new List<Links>();
+            }
+            var result = new List<Links>();
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+                using (var cmd = new NpgsqlCommand("SELECT player_id, entrant_id FROM standings WHERE entrant_id = ANY(@entrantID)"))
+                {
+                    cmd.Parameters.AddWithValue("@entrantID", entrantIds);
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        if (!reader.HasRows)
+                        {
+                            Console.WriteLine("No player found for the provided entrant ID.");
+                            return result;
+                        }
+                        while (await reader.ReadAsync())
+                        {
+                            result.Add(new Links
+                            {
+                                PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
+                                EntrantId = reader.GetInt32(reader.GetOrdinal("entrant_id"))
+                            });
+                        }
+                    }
+                }
+                return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        private async Task<List<PlayerStandingResult>> QueryStandingsByPlayerIds(int[] playerIds, int[] tournamentIds)
+        {
+            if (playerIds.Length < 1 || tournamentIds.Length < 1)
+            {
+                Console.WriteLine("Player or Tournament Ids cannot be empty or invalid array");
+                return new List<PlayerStandingResult>();
+            }
+            var playerResults = new List<PlayerStandingResult>();
+
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM standings 
+                                                            WHERE player_id = ANY(@playerIds) 
+                                                            AND tournament_link = ANY(@tournamentIds);", conn))
+                    {
+                        cmd.Parameters.AddWithValue("playerIds", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer, playerIds);
+                        cmd.Parameters.AddWithValue("tournamentIds", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer, tournamentIds);
+
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows)
+                            {
+                                Console.WriteLine("No standings found for the provided player IDs and tournament IDs.");
+                                return playerResults;
+                            }
+                            while (await reader.ReadAsync())
+                            {
+                                playerResults.Add(new PlayerStandingResult
+                                {
+                                    EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+
+                                    StandingDetails = new StandingDetails
+                                    {
+                                        IsActive = reader.GetBoolean(reader.GetOrdinal("active")),
+                                        Placement = reader.GetInt32(reader.GetOrdinal("placement")),
+                                        TournamentId = reader.GetInt32(reader.GetOrdinal("tournament_link"))
+                                    },
+                                    TournamentLinks = new Links
+                                    {
+                                        EntrantId = reader.GetInt32(reader.GetOrdinal("entrant_id")),
+                                        PlayerId = reader.GetInt32(reader.GetOrdinal("player_id"))
+                                    },
+                                    LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                });
+                            }
+                            return playerResults;
+                        }
+                    }
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
         }
         private async Task<PlayerData> QueryPlayersByPlayerName(string playerName, PlayerData result)
         {
@@ -510,7 +623,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return mappedResult;
         }
-        private async Task<PhaseGroupGraphQL> QueryPhaseGroupDataByID(int phaseGroupId, int perPage = 20)
+        private async Task<PhaseGroupGraphQL> QueryPhaseGroupDataByID(int phaseGroupId, int perPage = 50)
         {
             var tempQuery = @"query PhaseGroupSets($phaseGroupId: ID!, $page: Int!, $perPage: Int!) {
                                   phaseGroup(id: $phaseGroupId) { id, displayIdentifier, 
@@ -541,7 +654,7 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         perPage,
                         phaseGroupId,
-                        pageNum = currentPage
+                        page = currentPage
                     }
                 };
                 bool success = false;
@@ -611,6 +724,7 @@ namespace SengokuProvider.Library.Services.Players
                     catch (Exception ex)
                     {
                         Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                        throw;
                     }
                 }
             }
@@ -628,16 +742,16 @@ namespace SengokuProvider.Library.Services.Players
             };
             return result;
         }
-        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 40)
+        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 80)
         {
-            var tempQuery = @"query EventEntrants($perPage: Int!, $eventId: ID!) {
+            var tempQuery = @"query EventEntrants($perPage: Int!, $pageNum: Int!, $eventId: ID!) {
                     event(id: $eventId) {
                         id
                         name
                         tournament { id, name }
                         slug
                         numEntrants
-                        entrants(query: {perPage: $perPage, filter: {}}) {
+                        entrants(query: {perPage: $perPage, page: $pageNum filter: {}}) {
                             nodes { id, paginatedSets(sortType: ROUND) {
                                             nodes { round, displayScore, winnerId }},
                                         participants { 
@@ -776,11 +890,11 @@ namespace SengokuProvider.Library.Services.Players
 
             return result;
         }
-        private async Task<PlayerGraphQLResult?> QueryStartggEventStandings(int tournamentLink)
+        private async Task<PlayerGraphQLResult?> QueryStartggEventStandings(int tournamentLink, int perPage = 50)
         {
-            var tempQuery = @"query EventEntrants($eventId: ID!) {
+            var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!) {
                                 event(id: $eventId) { id name numEntrants slug tournament {
-                                  id name } entrants(query: {}) {
+                                  id name } entrants(query: {perPage: $perPage}) {
                                       nodes { id participants {
                                           id player { id gamerTag }} standing { id placement isFinal }}
                                     pageInfo { total totalPages page perPage sortBy filter }}}}";
@@ -790,7 +904,8 @@ namespace SengokuProvider.Library.Services.Players
                 Query = tempQuery,
                 Variables = new
                 {
-                    tournamentLink
+                    tournamentLink,
+                    perPage
                 }
             };
 

@@ -139,13 +139,117 @@ namespace SengokuProvider.Library.Services.Players
                 onboardResult.Response = "FAILED: BracketSlug or PlayerId cannot be null or empty";
                 return onboardResult;
             }
-            string[] slugParts;
             (bool flowControl, PlayerOnboardResult value, string[] returnedSlug) = await VerifyBracketSlug(bracketSlug, onboardResult);
             if (!flowControl)
             {
                 return value;
             }
+
+            int tempBracketId = Convert.ToInt32(returnedSlug[2]);
+            int tempGroupPhaseId = Convert.ToInt32(returnedSlug[1]);
+            int tempTournamentId = Convert.ToInt32(returnedSlug[3]);
+            var bracketData = await _queryService.QueryBracketDataFromStartggByBracketId(tempBracketId);
+            PlayerTournamentCard processedData = await ProcessNewBracketData(bracketData, playerId, tempTournamentId);
+
             return onboardResult;
+        }
+
+        private async Task<PlayerTournamentCard> ProcessNewBracketData(PhaseGroupGraphQL bracketData, int playerId, int tournamentId)
+        {
+            var result = new PlayerTournamentCard
+            {
+                PlayerID = playerId,
+                PlayerName = "Unknown",
+                PlayerResults = new List<PlayerStandingResult>()
+            };
+            if (bracketData == null || bracketData.PhaseGroup == null || bracketData.PhaseGroup.Sets.Nodes == null || bracketData.PhaseGroup.Id == 0 || bracketData.PhaseGroup.Sets.Nodes.Count == 0)
+            {
+                throw new ApplicationException("No Data to process");
+            }
+            try
+            {
+                var tempPlayerArr = new int[] { playerId };
+                var tempTournamentArr = new int[] { tournamentId };
+                List<PlayerStandingResult> playerStanding = await _queryService.GetStandingsDataByPlayerIds(tempPlayerArr, tempTournamentArr);
+                if (playerStanding == null || playerStanding.Count == 0)
+                {
+                    throw new ApplicationException("No Player Standing Data to process");
+                }
+                PlayerStandingResult? firstRecord = playerStanding.FirstOrDefault(x => x.TournamentLinks?.PlayerId == playerId);
+                if (firstRecord == null || firstRecord.TournamentLinks == null || firstRecord.TournamentLinks.EntrantId == 0)
+                {
+                    throw new ApplicationException("No Player Standing Data found for the provided PlayerId");
+                }
+                List<EntrantSetCard> entrantSetCards = await ReduceBracketDataForEntrantsCards(bracketData.PhaseGroup.Sets.Nodes, playerId,
+                    firstRecord.TournamentLinks.EntrantId);
+
+                if (entrantSetCards == null || entrantSetCards.Count == 0) { throw new ApplicationException("Unable to Reduce Bracket data from Dataset with provided PlayerId"); }
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("BracketRunner error occurred: ", ex);
+                throw;
+            }
+        }
+
+        private async Task<List<EntrantSetCard>> ReduceBracketDataForEntrantsCards(List<SetNode> nodes, int playerId, int entrantId)
+        {
+            List<EntrantSetCard> entrantSetCards = new List<EntrantSetCard>();
+            ConcurrentDictionary<int, int> entrantsRegistry = [];
+            foreach (var set in nodes)
+            {
+                if (set.Slots == null || set.Slots.Count < 2) continue;
+                var entrantOne = set.Slots[0].Entrant;
+                var entrantTwo = set.Slots[1].Entrant;
+                if (entrantOne == null || entrantTwo == null) continue;
+                if (entrantOne.Id == entrantId || entrantTwo.Id == entrantId)
+                {
+                    if (entrantOne.Id == entrantTwo.Id)
+                    {
+                        Console.WriteLine($"Entrant One and Two are the same: {entrantOne.Name} - {entrantOne.Id}");
+                        continue;
+                    }
+                    EntrantSetCard newCard = new EntrantSetCard
+                    {
+                        EntrantOneID = entrantOne.Id,
+                        EntrantOneName = entrantOne.Name ?? "Unknown",
+                        EntrantTwoID = entrantTwo.Id,
+                        EntrantTwoName = entrantTwo.Name ?? "Unknown",
+                        SetID = set.Id
+                    };
+                    entrantSetCards.Add(newCard);
+                    entrantsRegistry.TryAdd(entrantOne.Id != entrantId ? entrantOne.Id : entrantTwo.Id, 0);
+                }
+            }
+            if (entrantSetCards.Count == 0)
+            {
+                Console.WriteLine("No Entrant Set Cards found for the provided PlayerId");
+                return entrantSetCards;
+            }
+            List<Links> playerIds = await _queryService.GetPlayersByEntrantLinks(entrantsRegistry.Keys.ToArray());
+            if (playerIds.Count == 0) throw new ApplicationException("No Player IDs found for the provided Entrant IDs");
+
+            foreach (var entrantCard in entrantSetCards)
+            {
+                int currentEntrantId = entrantCard.EntrantOneID != entrantId ? entrantCard.EntrantOneID : entrantCard.EntrantTwoID;
+                entrantsRegistry.TryUpdate(currentEntrantId, playerIds.First(x => x.PlayerId == currentEntrantId).PlayerId, 0);
+
+                if (entrantCard.EntrantOneID == entrantId)
+                {
+                    entrantCard.PlayerOneID = entrantsRegistry[currentEntrantId];
+                }
+                else
+                {
+                    entrantCard.PlayerTwoID = entrantsRegistry[currentEntrantId];
+                }
+            }
+            // Remove duplicates based on Entrant IDs
+            entrantSetCards = entrantSetCards
+                .GroupBy(x => new { x.EntrantOneID, x.EntrantTwoID })
+                .Select(g => g.First())
+                .ToList();
+            return entrantSetCards;
         }
 
         private async Task<(bool flowControl, PlayerOnboardResult value, string[] returnedSlug)> VerifyBracketSlug(string bracketSlug, PlayerOnboardResult onboardResult)
@@ -170,7 +274,13 @@ namespace SengokuProvider.Library.Services.Players
             var id1 = segments[bracketIndex + 1];
             var id2 = segments[bracketIndex + 2];
 
-            return (flowControl: true, value: onboardResult, returnedSlug: new[] { firstPart, id1, id2 });
+            TournamentData tournamentLink = await _eventQueryService.GetTournamentLinkbyUrl(firstPart);
+            if (tournamentLink == null || tournamentLink.Id == 0)
+            {
+                onboardResult.Response = "FAILED: Tournament Link not found for the provided URL";
+                return (false, onboardResult, Array.Empty<string>());
+            }
+            return (flowControl: true, value: onboardResult, returnedSlug: new[] { firstPart, id1, id2, tournamentLink.Id.ToString() });
         }
         private List<PlayerStandingResult> MapPreviousTournamentData(PastEventPlayerData? playerData)
         {
@@ -237,6 +347,26 @@ namespace SengokuProvider.Library.Services.Players
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
 
+            var allIds = data.TournamentLink.Entrants.Nodes
+                           .Select(n => n.Id);
+
+            var duplicates = allIds
+                .GroupBy(id => id)
+                .Where(g => g.Count() > 1)
+                .Select(g => new { EntrantId = g.Key, Count = g.Count() })
+                .ToList();
+
+            if (duplicates.Any())
+            {
+                Console.WriteLine("Found duplicate entrant IDs:");
+                foreach (var dup in duplicates)
+                    Console.WriteLine($"  • {dup.EntrantId} appears {dup.Count} times");
+            }
+            else
+            {
+                Console.WriteLine("No duplicate entrant IDs detected.");
+            }
+
             Dictionary<int, int> entrantsRegistry = new Dictionary<int, int>();
             foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
             {
@@ -269,16 +399,8 @@ namespace SengokuProvider.Library.Services.Players
                             PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
                         }
                     };
-                    if (entrantsRegistry.TryGetValue(tempNode.Id, out int existingIndex))
-                    {
-                        Console.WriteLine($"Found Duplicate Entrant — replacing entry: {tempNode.Id}");
-                        mappedResult[existingIndex] = newStandings; // Replace the previous data
-                    }
-                    else
-                    {
-                        mappedResult.Add(newStandings);
-                        entrantsRegistry[tempNode.Id] = mappedResult.Count - 1; // Track index in list
-                    }
+                    mappedResult.Add(newStandings);
+                    entrantsRegistry[tempNode.Id] = mappedResult.Count - 1; // Track index in list
                 }
                 catch (Exception ex)
                 {
@@ -345,7 +467,13 @@ namespace SengokuProvider.Library.Services.Players
                         var queryParams = new List<NpgsqlParameter>();
                         var valueCount = 0;
 
-                        foreach (var data in currentStandings)
+                        var uniqueStandings = currentStandings
+                            .GroupBy(s => s.TournamentLinks!.EntrantId)
+                            .Select(g => g.OrderBy(x => x.StandingDetails.Placement)
+                            .First())
+                            .ToList();
+
+                        foreach (var data in uniqueStandings)
                         {
                             var tempArrInput = new int[] { data.StandingDetails.TournamentId };
                             var checkTournamentLink = await _eventQueryService.GetTournamentLinksById(tempArrInput);
