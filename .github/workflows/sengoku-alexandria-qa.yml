@@ -17,9 +17,6 @@ env:
   CONFIGURATION: Release
   DOTNET_CORE_VERSION: 8.0.x
   WORKING_DIRECTORY: SengokuProvider.API/SengokuProvider.API.sln
-  AZURE_CLIENT_ID: 1e2199d3-ee38-4e79-8012-34c9b1d65ebc
-  AZURE_TENANT_ID: 22d4bb2e-1538-4fc1-a991-586254084c2e
-  AZURE_SUBSCRIPTION_ID: f98989bc-3627-4a59-bd58-7b5521899139
 jobs:
   build:
     runs-on: windows-latest
@@ -54,9 +51,9 @@ jobs:
     - name: Azure Login (OIDC)
       uses: azure/login@v2
       with:
-        client-id: ${{ env.AZURE_CLIENT_ID }}
-        tenant-id: ${{ env.AZURE_TENANT_ID}}
-        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        tenant-id: ${{ secrets.AZURE_TENANT_ID}}
+        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
     - name: Deploy to Azure WebApp
       uses: azure/webapps-deploy@v2
       with:
