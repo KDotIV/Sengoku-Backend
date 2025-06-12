@@ -1,4 +1,4 @@
-name: QA-Deploy
+name: API QA-Deploy
 on:
   push:
     branches:
