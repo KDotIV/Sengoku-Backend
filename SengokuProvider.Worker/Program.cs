@@ -88,11 +88,12 @@ IHost host = Host.CreateDefaultBuilder(args)
         });
         services.AddSingleton<IPlayerIntakeService, PlayerIntakeService>(provider =>
         {
+            var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
             var playerQueryService = provider.GetRequiredService<IPlayerQueryService>();
             var legendQueryService = provider.GetRequiredService<ILegendQueryService>();
             var eventQueryService = provider.GetRequiredService<IEventQueryService>();
             var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, eventQueryService, serviceBus);
+            return new PlayerIntakeService(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus);
 
         });
         services.AddSingleton<IPlayerQueryService, PlayerQueryService>(provider =>
