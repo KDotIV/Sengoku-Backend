@@ -103,11 +103,12 @@ var host = new HostBuilder()
         services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
         {
             var configuration = provider.GetService<IConfiguration>();
+            var commonServices = provider.GetService<ICommonDatabaseService>();
             var playerQueryService = provider.GetService<IPlayerQueryService>();
             var legendQueryService = provider.GetService<ILegendQueryService>();
             var eventQueryService = provider.GetService<IEventQueryService>();
             var serviceBus = provider.GetService<IAzureBusApiService>();
-            return new PlayerIntakeService(connectionString, configuration, playerQueryService, legendQueryService, eventQueryService, serviceBus);
+            return new PlayerIntakeService(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus);
         });
         services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {

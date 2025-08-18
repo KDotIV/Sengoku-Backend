@@ -326,7 +326,8 @@ namespace SengokuProvider.Library.Services.Players
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM standings 
+                    using (var cmd = new NpgsqlCommand(@"SELECT s.entrant_id, s.player_id, s.tournament_link, s.placement, s.entrants_num, s.active, tl.url_slug, tl.event_link, s.last_updated
+                                                            FROM standings s JOIN tournament_links tl ON s.tournament_link = tl.id 
                                                             WHERE player_id = ANY(@playerIds) 
                                                             AND tournament_link = ANY(@tournamentIds);", conn))
                     {
@@ -350,7 +351,9 @@ namespace SengokuProvider.Library.Services.Players
                                     {
                                         IsActive = reader.GetBoolean(reader.GetOrdinal("active")),
                                         Placement = reader.GetInt32(reader.GetOrdinal("placement")),
-                                        TournamentId = reader.GetInt32(reader.GetOrdinal("tournament_link"))
+                                        TournamentId = reader.GetInt32(reader.GetOrdinal("tournament_link")),
+                                        TournamentName = _commonDatabaseServices.CleanUrlSlugName(reader.GetString(reader.GetOrdinal("url_slug"))),
+                                        EventId = reader.GetInt32(reader.GetOrdinal("event_link"))
                                     },
                                     TournamentLinks = new Links
                                     {
