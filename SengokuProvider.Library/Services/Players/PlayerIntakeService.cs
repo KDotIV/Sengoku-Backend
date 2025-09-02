@@ -157,7 +157,6 @@ namespace SengokuProvider.Library.Services.Players
 
             return onboardResult;
         }
-
         private async Task<PlayerOnboardResult> SaveVictoryPathData(BracketVictoryPathData processedData)
         {
             if (processedData == null || processedData.EntrantSetCards == null || processedData.EntrantSetCards.Count == 0)
@@ -213,7 +212,6 @@ namespace SengokuProvider.Library.Services.Players
                 }
             }
         }
-
         private async Task<PlayerOnboardResult> SaveTournamentSetData(List<EntrantSetCard> entrantsData)
         {
             var onboardResult = new PlayerOnboardResult { Response = "Open" };
