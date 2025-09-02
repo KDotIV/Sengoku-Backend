@@ -17,3 +17,5 @@ SengokuProvider.Worker/appsettings.Development.json
 /SengokuProvider.Worker/bin/Release/net8.0
 /SengokuProvider.Worker/SengokuProvider.Worker.csproj.user
 /SengokuProvider.Worker/Settings.job
+/ExcluSightsLibrary/bin/Debug/net8.0
+/ExcluSightsLibrary/obj

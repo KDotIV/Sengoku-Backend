@@ -1,4 +1,5 @@
 using Azure.Messaging.ServiceBus;
+using ExcluSightsLibrary.DiscordServices;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
@@ -18,6 +19,8 @@ var connectionString = builder.Configuration["ConnectionStrings:AlexandriaConnec
 var graphQLUrl = builder.Configuration["GraphQLSettings:Endpoint"];
 var bearerToken = builder.Configuration["GraphQLSettings:Bearer"];
 var serviceBusConnection = builder.Configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
+var customerPoolConnection = builder.Configuration["DiscordSettings:CustomerPoolConnectionString"];
+var exclusiveInsightsBotToken = builder.Configuration["DiscordSettings:DiscordBotToken"];
 
 //Singletons
 builder.Services.AddTransient<CommandProcessor>();
@@ -46,6 +49,14 @@ builder.Services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new New
     HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
 });
 
+builder.Services.AddScoped<ISocketEngine, DiscordSocketEngine>(provider =>
+{
+    var config = provider.GetService<IConfiguration>();
+    var logger = provider.GetService<ILogger<DiscordSocketEngine>>();
+    var customerIntake = provider.GetService<ICustomerIntakeService>();
+    var customerQuery = provider.GetService<ICustomerQueryService>();
+    return new DiscordSocketEngine(exclusiveInsightsBotToken, customerPoolConnection, logger, customerIntake, customerQuery);
+});
 builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(provider =>
 {
     return new CommonDatabaseService(connectionString);
@@ -130,6 +141,18 @@ builder.Services.AddScoped<ILegendIntakeService, LegendIntakeService>(provider =
     var playerQueryService = provider.GetService<IPlayerQueryService>();
     var commonServices = provider.GetService<ICommonDatabaseService>();
     return new LegendIntakeService(connectionString, config, queryService, eventQueryService, eventIntakeService, userQueryService, playerQueryService, serviceBus, commonServices);
+});
+builder.Services.AddScoped<ICustomerQueryService, CustomerQueryService>(provider =>
+{
+    var logger = provider.GetService<ILogger<CustomerQueryService>>();
+    return new CustomerQueryService(connectionString, logger);
+});
+builder.Services.AddScoped<ICustomerIntakeService, CustomerIntakeService>(provider =>
+{
+    var config = provider.GetService<IConfiguration>();
+    var logger = provider.GetService<ILogger<CustomerIntakeService>>();
+    var customerQuery = provider.GetService<ICustomerQueryService>();
+    return new CustomerIntakeService(connectionString, logger, customerQuery);
 });
 
 builder.Services.AddControllers();

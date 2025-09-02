@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\ExclusiveInsightsAPI\ExcluSightsLibrary\ExcluSightsLibrary.csproj" />
+    <ProjectReference Include="..\ExcluSightsLibrary\ExcluSightsLibrary.csproj" />
     <ProjectReference Include="..\SengokuProvider.Library\SengokuProvider.Library.csproj" />
   </ItemGroup>
 

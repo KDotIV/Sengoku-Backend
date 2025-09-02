@@ -9,17 +9,13 @@ namespace SengokuProvider.API.Controllers
     public class ExclusiveInsightsController : Controller
     {
         private readonly ILogger<ExclusiveInsightsController> _log;
-        private readonly ICustomerIntakeService _customerIntakeService;
-        private readonly ICustomerQueryService _customerQueryService;
+        private readonly ISocketEngine _socketEngine;
         private readonly CommandProcessor _commandProcessor;
-        public ExclusiveInsightsController(ILogger<ExclusiveInsightsController> logger,
-            ICustomerIntakeService customerIntake, ICustomerQueryService customerQuery, CommandProcessor processor)
+        public ExclusiveInsightsController(ILogger<ExclusiveInsightsController> logger, ISocketEngine socketEngine, CommandProcessor processor)
         {
             _log = logger;
             _commandProcessor = processor;
-            _customerIntakeService = customerIntake;
-            _customerQueryService = customerQuery;
+            _socketEngine = socketEngine;
         }
-
     }
 }

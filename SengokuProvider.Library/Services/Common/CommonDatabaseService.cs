@@ -67,7 +67,7 @@ namespace SengokuProvider.Library.Services.Common
                 Console.WriteLine($"{operationName} executed in {sw.ElapsedMilliseconds}ms");
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 sw.Stop();
                 Console.WriteLine($"{operationName} failed after {sw.ElapsedMilliseconds}ms");
