@@ -11,13 +11,13 @@ namespace ExcluSightsLibrary.DiscordServices
         private readonly ILogger<ICustomerIntakeService> _log;
 
         private readonly ICustomerQueryService _customerQuery;
+        private static Random _rand = new Random();
         public CustomerIntakeService(string connectionString, ILogger<ICustomerIntakeService> logger, ICustomerQueryService customerQuery)
         {
             _connectionString = connectionString;
             _log = logger;
             _customerQuery = customerQuery;
         }
-
         public async Task<IReadOnlyList<int>> ApplyRoleDiffAsync(ulong guildId, ulong discordId, IEnumerable<long> added, IEnumerable<long> removed, CancellationToken ct = default)
         {
             var auditIds = new List<int>(8);
@@ -320,5 +320,20 @@ namespace ExcluSightsLibrary.DiscordServices
             }
         }
         private NpgsqlConnection CreateConnection() => new NpgsqlConnection(_connectionString);
+        public async Task<string> GenerateNewCustomerID()
+        {
+            using (var conn = new NpgsqlConnection(_connectionString))
+            {
+                await conn.OpenAsync();
+                while (true)
+                {
+                    var newId = _rand.Next(100000, 1000000).ToString();
+
+                    var newQuery = @"SELECT customer_id FROM customers where customer_id = @Input";
+                    var queryResult = await conn.QueryFirstOrDefaultAsync<string>(newQuery, new { Input = newId });
+                    if (newId != queryResult || string.IsNullOrEmpty(queryResult)) return newId;
+                }
+            }
+        }
     }
 }

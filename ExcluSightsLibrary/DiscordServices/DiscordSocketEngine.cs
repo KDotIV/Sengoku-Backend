@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.WebSocket;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace ExcluSightsLibrary.DiscordServices
@@ -9,8 +10,10 @@ namespace ExcluSightsLibrary.DiscordServices
         private readonly DiscordSocketClient _client;
         private readonly string _token;
         private readonly ILogger<DiscordSocketEngine> _log;
-        private readonly ICustomerIntakeService _customerIntake;
-        private readonly ICustomerQueryService _customerQuery;
+        private readonly IServiceScopeFactory _scopeFactory;
+        private ICustomerIntakeService _customerIntake => _scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ICustomerIntakeService>();
+        private ICustomerQueryService _customerQuery => _scopeFactory.CreateScope().ServiceProvider.GetRequiredService<ICustomerQueryService>();
+
 
         private int _started;
         private readonly SemaphoreSlim _gate = new(1, 1);
@@ -20,13 +23,12 @@ namespace ExcluSightsLibrary.DiscordServices
         private volatile bool _backfillStarted;   // avoid re-running on reconnect
         private volatile bool _backfillCompleted; // keeps initial guild state
 
-        public DiscordSocketEngine(string botToken, string connStr, ILogger<DiscordSocketEngine> log, ICustomerIntakeService customerIntake, ICustomerQueryService customerQuery)
+        public DiscordSocketEngine(string botToken, string connStr, ILogger<DiscordSocketEngine> log, IServiceScopeFactory scopeFactory)
         {
             _token = botToken!;
             _log = log;
             _client = CreateClient();
-            _customerIntake = customerIntake;
-            _customerQuery = customerQuery;
+            _scopeFactory = scopeFactory;
             WireEventHandlers();
         }
 
@@ -88,6 +90,16 @@ namespace ExcluSightsLibrary.DiscordServices
                 _log.LogError(ex, "WaitForInitialBackfillAsync failed.");
                 return false;
             }
+        }
+        public IReadOnlyList<(ulong GuildId, string GuildName)> GetConnectedGuilds() => _client.Guilds.Select(g => (g.Id, g.Name)).ToList();
+
+        public async Task<bool> DownloadGuildMembersAsync(ulong guildId)
+        {
+            var guild = _client.GetGuild(guildId);
+            if (guild is null) return false;
+
+            await guild.DownloadUsersAsync();
+            return true;
         }
         #endregion
         #region Event Handlers
@@ -212,7 +224,7 @@ namespace ExcluSightsLibrary.DiscordServices
         {
             try
             {
-                string newCustId = "CUST_678";
+                string newCustId = await _customerIntake.GenerateNewCustomerID();
                 if (!await _customerIntake.UpsertDiscordAccountAsync(after.Id, after.Username, after.Discriminator, newCustId))
                 {
                     _log.LogWarning("OnUserJoinedAsync: Failed to upsert Discord account for User: {User} ({Id})", after.Username, after.Id);
@@ -228,6 +240,8 @@ namespace ExcluSightsLibrary.DiscordServices
                 _log.LogError(ex, "OnUserJoinedAsync failed for User: {User} ({Id})", after.Username, after.Id);
             }
         }
+        #endregion
+        #region Helpers
         #endregion
     }
 }

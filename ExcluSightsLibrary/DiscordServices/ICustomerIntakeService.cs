@@ -11,6 +11,7 @@ namespace ExcluSightsLibrary.DiscordServices
         Task<bool> UpsertCustomerAsync(CustomerProfileData model, CancellationToken ct = default);
         Task<bool> UpsertDiscordAccountAsync(ulong discordId, string discordTag, string? discriminator, string customerId);
         Task UpsertMembershipAsync(ulong guildId, ulong discordId, DateTimeOffset? joinedAtUtc = null);
+        Task<string> GenerateNewCustomerID();
 
         // per-guild derivations from roles
         Task UpsertSolePlayFromRolesAsync(ulong guildId, ulong discordId, CancellationToken ct = default);

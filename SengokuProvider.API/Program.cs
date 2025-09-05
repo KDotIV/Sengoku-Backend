@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using ExcluSightsLibrary.DiscordServices;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
+using SengokuProvider.API;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Comms;
@@ -19,14 +20,33 @@ var connectionString = builder.Configuration["ConnectionStrings:AlexandriaConnec
 var graphQLUrl = builder.Configuration["GraphQLSettings:Endpoint"];
 var bearerToken = builder.Configuration["GraphQLSettings:Bearer"];
 var serviceBusConnection = builder.Configuration["ServiceBusSettings:AzureWebJobsServiceBus"];
-var customerPoolConnection = builder.Configuration["DiscordSettings:CustomerPoolConnectionString"];
-var exclusiveInsightsBotToken = builder.Configuration["DiscordSettings:DiscordBotToken"];
+var customerPoolConnection = builder.Configuration["ExclusiveInsightsSettings:CustomerPoolConnectionString"];
+var exclusiveInsightsBotToken = builder.Configuration["ExclusiveInsightsSettings:DiscordBotToken"];
 
 //Singletons
 builder.Services.AddTransient<CommandProcessor>();
 builder.Services.AddSingleton<IntakeValidator>();
 builder.Services.AddSingleton<RequestThrottler>();
 builder.Services.AddSingleton(provider => { return new ServiceBusClient(serviceBusConnection); });
+builder.Services.AddSingleton<IDiscordRegistry, DiscordRegistry>();
+
+builder.Services.AddSingleton<ISocketEngine>(sp =>
+{
+    var log = sp.GetRequiredService<ILogger<DiscordSocketEngine>>();
+    var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
+    return new DiscordSocketEngine(exclusiveInsightsBotToken!, customerPoolConnection!, log, scopeFactory);
+});
+
+builder.Services.AddSingleton<EventListenerManager>(provider =>
+{
+    var logger = provider.GetService<ILogger<EventListenerManager>>();
+    var socketEngine = provider.GetService<ISocketEngine>();
+    var discordRegistry = provider.GetService<IDiscordRegistry>();
+    return new EventListenerManager(logger!, socketEngine!, discordRegistry!);
+});
+
+// start socket at app boot
+builder.Services.AddHostedService<DiscordStartupService>();
 
 builder.Services.AddCors(options =>
 {
@@ -49,14 +69,6 @@ builder.Services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new New
     HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerToken) } }
 });
 
-builder.Services.AddScoped<ISocketEngine, DiscordSocketEngine>(provider =>
-{
-    var config = provider.GetService<IConfiguration>();
-    var logger = provider.GetService<ILogger<DiscordSocketEngine>>();
-    var customerIntake = provider.GetService<ICustomerIntakeService>();
-    var customerQuery = provider.GetService<ICustomerQueryService>();
-    return new DiscordSocketEngine(exclusiveInsightsBotToken, customerPoolConnection, logger, customerIntake, customerQuery);
-});
 builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(provider =>
 {
     return new CommonDatabaseService(connectionString);
@@ -156,6 +168,7 @@ builder.Services.AddScoped<ICustomerIntakeService, CustomerIntakeService>(provid
 });
 
 builder.Services.AddControllers();
+builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
