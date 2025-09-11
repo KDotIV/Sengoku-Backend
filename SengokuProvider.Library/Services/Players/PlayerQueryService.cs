@@ -815,7 +815,7 @@ namespace SengokuProvider.Library.Services.Players
 
                         if (response.Data == null)
                         {
-                            throw new ApplicationException("Failed to retrieve player data");
+                            throw new ApplicationException($"Failed to retrieve player data: {string.Join(", ", response.Errors.Select(e => e.Message))}");
                         }
 
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
