@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.WebSocket;
+using ExcluSightsLibrary.DiscordModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -151,8 +152,9 @@ namespace ExcluSightsLibrary.DiscordServices
                 _initialBackfillTcs.TrySetResult(true);
                 _log.LogInformation("Initial member backfill completed for {Count} guild(s).", _client.Guilds.Count);
 
-                //TODO: Iterate guild members and check against DB for any missing members or updated info
-                // await ReduceMembersAsync();
+                var whiteList = await _customerQuery.GetServerRoleWhiteList(_client.Guilds.First().Id);
+                List<SolePlayDTO> reducedMembers = await ReduceMembersAsync(guildId: null, null,
+                    customerIdFactory: () => _customerIntake.GenerateNewCustomerID(), ct: CancellationToken.None);
                 // await SaveGuildMemberChangesAsync();
             }
             catch (Exception ex)
@@ -161,6 +163,82 @@ namespace ExcluSightsLibrary.DiscordServices
                 _initialBackfillTcs.TrySetException(ex);
             }
         }
+
+        private async Task<List<SolePlayDTO>> ReduceMembersAsync(
+            ulong? guildId,
+            IReadOnlyCollection<RoleMapping> whitelist,
+            Func<Task<string>> customerIdFactory,
+            CancellationToken ct = default)
+        {
+            // Select the guild set
+            IEnumerable<SocketGuild> guilds = guildId.HasValue
+                ? new[] { _client.GetGuild(guildId.Value) }.Where(g => g != null)!
+                : _client.Guilds;
+
+            // Build a fast lookup: per-guild → (roleId → mapping)
+            var mapByGuild = whitelist
+                .GroupBy(m => m.GuildId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.ToDictionary(m => m.RoleId, m => m)
+                );
+
+            var result = new List<SolePlayDTO>(capacity: 1024);
+
+            foreach (var g in guilds)
+            {
+                if (g is null) continue;
+                if (!mapByGuild.TryGetValue(g.Id, out var roleMap)) continue; // no relevant roles for this guild
+
+                foreach (var user in g.Users)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    if (user.IsBot) continue;
+
+                    int? gender = null;
+                    double? shoe = null;
+                    var interests = Interests.None;
+
+                    // Merge attributes from all matched roles
+                    foreach (var role in user.Roles)
+                    {
+                        if (!roleMap.TryGetValue(role.Id, out var m)) continue;
+
+                        if (m.Gender.HasValue && !gender.HasValue)
+                            gender = m.Gender.Value;
+
+                        if (m.ShoeSize.HasValue)
+                            shoe = shoe.HasValue ? Math.Max(shoe.Value, m.ShoeSize.Value) : m.ShoeSize.Value;
+
+                        if (m.Interests.HasValue)
+                            interests |= m.Interests.Value;
+                    }
+
+                    // Skip users with no relevant roles
+                    if (!gender.HasValue && !shoe.HasValue && interests == Interests.None)
+                        continue;
+
+                    // Generate/link a CustomerId (or pass a factory that returns "UNLINKED" if you want to defer)
+                    var customerId = await customerIdFactory().ConfigureAwait(false);
+
+                    result.Add(new SolePlayDTO
+                    {
+                        CustomerId = customerId,
+                        DiscordId = user.Id,
+                        DiscordTag = $"{user.Username}#{user.Discriminator}",
+                        CustomerFirstName = null,
+                        CustomerLastName = null,
+                        ShoeSize = shoe ?? 0,
+                        Interests = interests,
+                        Gender = gender ?? 0,
+                        LastUpdated = DateTime.UtcNow
+                    });
+                }
+            }
+
+            return result;
+        }
+
         private async Task OnGuildMemberUpdateAsync(Cacheable<SocketGuildUser, ulong> before, SocketGuildUser after)
         {
             try

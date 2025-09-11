@@ -53,6 +53,46 @@ namespace ExcluSightsLibrary.DiscordServices
                 throw;
             }
         }
+        public async Task<List<(ulong guildId, ulong roleId, string roleName)>> GetServerRoleWhiteList(ulong guildId)
+        {
+            if (guildId <= 0) throw new ArgumentOutOfRangeException(nameof(guildId));
+            try
+            {
+                var results = new List<(ulong guildId, ulong roleId, string roleName)>();
+                const string sql = @"SELECT * FROM role_map_profile WHERE guild_id = @gid;";
+                using var conn = CreateConnection();
+                await conn.OpenAsync();
+
+                using var cmd = new NpgsqlCommand(sql, conn)
+                {
+                    Parameters =
+                    {
+                        new NpgsqlParameter("gid", (long)guildId)
+                    }
+                };
+
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (!reader.HasRows)
+                {
+                    Console.WriteLine("No rows found.");
+                    return results; // no roles found
+                }
+                while (await reader.ReadAsync())
+                {
+                    var gId = (ulong)reader.GetInt64(0);
+                    var rId = (ulong)reader.GetInt64(1);
+                    var rName = reader.GetString(2);
+                    results.Add((gId, rId, rName));
+                }
+
+                return results;
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "GetServerWhiteList failed for Guild: {GuildId}", guildId);
+                throw;
+            }
+        }
         private NpgsqlConnection CreateConnection() => new NpgsqlConnection(_connectionString);
     }
 }
