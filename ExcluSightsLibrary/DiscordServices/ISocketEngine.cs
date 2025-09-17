@@ -1,4 +1,6 @@
-﻿namespace ExcluSightsLibrary.DiscordServices
+﻿using ExcluSightsLibrary.DiscordModels;
+
+namespace ExcluSightsLibrary.DiscordServices
 {
     public interface ISocketEngine
     {
@@ -6,5 +8,6 @@
         IReadOnlyList<(ulong GuildId, string GuildName)> GetConnectedGuilds();
         public Task<bool> WaitForInitialBackfillAsync(TimeSpan timeout);
         Task<bool> DownloadGuildMembersAsync(ulong guildId);
+        public IReadOnlyList<DiscordRoleData> GetRolesForConnectedGuild(ulong guildId);
     }
 }

@@ -1,6 +1,6 @@
 ﻿namespace ExcluSightsLibrary.DiscordModels
 {
-    public class SolePlayDTO : CustomerProfileData
+    public sealed class SolePlayDTO : CustomerProfileData
     {
         public required double ShoeSize { get; set; }
         public required Interests Interests { get; set; }

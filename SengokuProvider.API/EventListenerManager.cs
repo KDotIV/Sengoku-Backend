@@ -27,6 +27,7 @@ namespace SengokuProvider.API
                 {
                     ServerGuildId = id,
                     ServerName = name,
+                    Roles = new List<DiscordRoleData>(),
                     LastUpdatedUTC = DateTimeOffset.UtcNow
                 });
             }
@@ -59,6 +60,24 @@ namespace SengokuProvider.API
             // Consider streaming via Channels to a background writer if large.
 
             return true;
+        }
+        public async Task<List<DiscordRoleData>> GetGuildRoles(ulong guildId, CancellationToken ct = default)
+        {
+            if (guildId <= 0) throw new ArgumentOutOfRangeException(nameof(guildId));
+
+            var rolesResult = new List<DiscordRoleData>();
+
+            await _socketEngine.EnsureStartedAsync();
+
+            var ok = await _socketEngine.DownloadGuildMembersAsync(guildId);
+            if (!ok)
+            {
+                _log.LogWarning("Bot is not in guild {GuildId}", guildId);
+                return rolesResult;
+            }
+
+            rolesResult = _socketEngine.GetRolesForConnectedGuild(guildId).ToList();
+            return rolesResult;
         }
     }
 }

@@ -93,7 +93,17 @@ namespace ExcluSightsLibrary.DiscordServices
             }
         }
         public IReadOnlyList<(ulong GuildId, string GuildName)> GetConnectedGuilds() => _client.Guilds.Select(g => (g.Id, g.Name)).ToList();
-
+        public IReadOnlyList<DiscordRoleData> GetRolesForConnectedGuild(ulong guildId)
+        {
+            var guild = _client.GetGuild(guildId);
+            if (guild is null) return Array.Empty<DiscordRoleData>();
+            return guild.Roles.Select(r => new DiscordRoleData
+            {
+                RoleId = r.Id,
+                RoleName = r.Name,
+                IsManaged = r.IsManaged,
+            }).ToList();
+        }
         public async Task<bool> DownloadGuildMembersAsync(ulong guildId)
         {
             var guild = _client.GetGuild(guildId);
@@ -152,10 +162,22 @@ namespace ExcluSightsLibrary.DiscordServices
                 _initialBackfillTcs.TrySetResult(true);
                 _log.LogInformation("Initial member backfill completed for {Count} guild(s).", _client.Guilds.Count);
 
+                // process all role changes
+                // NOTE: this is a potentially large operation, consider streaming via Channels to a background writer
+                Task[] roleChanges = _client.Guilds.Select(g =>
+                {
+                    _log.LogInformation("Processing role changes for Guild: {Name} ({Id})", g.Name, g.Id);
+                    return _customerIntake.UpsertGuildRoleChangesAsync(g.Id, g.Roles);
+                }).ToArray();
+
+                await Task.WhenAll(roleChanges);
+
+                // process all members in all guilds
                 var whiteList = await _customerQuery.GetServerRoleWhiteList(_client.Guilds.First().Id);
-                List<SolePlayDTO> reducedMembers = await ReduceMembersAsync(guildId: null, null,
+                List<SolePlayDTO> reducedMembers = await ReduceMembersAsync(guildId: null, whiteList,
                     customerIdFactory: () => _customerIntake.GenerateNewCustomerID(), ct: CancellationToken.None);
-                // await SaveGuildMemberChangesAsync();
+
+                int results = await _customerIntake.SaveGuildMemberChangesAsync(reducedMembers);
             }
             catch (Exception ex)
             {
@@ -175,20 +197,13 @@ namespace ExcluSightsLibrary.DiscordServices
                 ? new[] { _client.GetGuild(guildId.Value) }.Where(g => g != null)!
                 : _client.Guilds;
 
-            // Build a fast lookup: per-guild → (roleId → mapping)
-            var mapByGuild = whitelist
-                .GroupBy(m => m.GuildId)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.ToDictionary(m => m.RoleId, m => m)
-                );
+            var roleDict = whitelist.ToDictionary(r => r.RoleId, r => r);
 
             var result = new List<SolePlayDTO>(capacity: 1024);
 
             foreach (var g in guilds)
             {
                 if (g is null) continue;
-                if (!mapByGuild.TryGetValue(g.Id, out var roleMap)) continue; // no relevant roles for this guild
 
                 foreach (var user in g.Users)
                 {
@@ -202,23 +217,21 @@ namespace ExcluSightsLibrary.DiscordServices
                     // Merge attributes from all matched roles
                     foreach (var role in user.Roles)
                     {
-                        if (!roleMap.TryGetValue(role.Id, out var m)) continue;
+                        if (!roleDict.TryGetValue(role.Id, out var found))
+                            continue;
 
-                        if (m.Gender.HasValue && !gender.HasValue)
-                            gender = m.Gender.Value;
+                        gender = found.RoleName.Equals("Men", StringComparison.OrdinalIgnoreCase) ? 1 : gender;
+                        gender = found.RoleName.Equals("Ladies", StringComparison.OrdinalIgnoreCase) ? 2 : gender;
 
-                        if (m.ShoeSize.HasValue)
-                            shoe = shoe.HasValue ? Math.Max(shoe.Value, m.ShoeSize.Value) : m.ShoeSize.Value;
-
-                        if (m.Interests.HasValue)
-                            interests |= m.Interests.Value;
+                        if (double.TryParse(found.RoleName, out var shoeSize))
+                            shoe = shoe.HasValue ? Math.Max(shoe.Value, shoeSize) : shoeSize;
                     }
 
                     // Skip users with no relevant roles
                     if (!gender.HasValue && !shoe.HasValue && interests == Interests.None)
                         continue;
 
-                    // Generate/link a CustomerId (or pass a factory that returns "UNLINKED" if you want to defer)
+                    // Use factory delegate to get/generate customer ID
                     var customerId = await customerIdFactory().ConfigureAwait(false);
 
                     result.Add(new SolePlayDTO
@@ -226,7 +239,7 @@ namespace ExcluSightsLibrary.DiscordServices
                         CustomerId = customerId,
                         DiscordId = user.Id,
                         DiscordTag = $"{user.Username}#{user.Discriminator}",
-                        CustomerFirstName = null,
+                        CustomerFirstName = user.DisplayName,
                         CustomerLastName = null,
                         ShoeSize = shoe ?? 0,
                         Interests = interests,
@@ -238,7 +251,6 @@ namespace ExcluSightsLibrary.DiscordServices
 
             return result;
         }
-
         private async Task OnGuildMemberUpdateAsync(Cacheable<SocketGuildUser, ulong> before, SocketGuildUser after)
         {
             try

@@ -1,23 +1,39 @@
 ﻿using Dapper;
+using Discord.WebSocket;
 using ExcluSightsLibrary.DiscordModels;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using System.Text;
 
 namespace ExcluSightsLibrary.DiscordServices
 {
     public class CustomerIntakeService : ICustomerIntakeService
     {
-        private readonly string _connectionString;
+        //private readonly string _connectionString;
+        private static readonly SemaphoreSlim DbGate = new(initialCount: 8, maxCount: 8); // limit to 8 concurrent DB operations
         private readonly ILogger<ICustomerIntakeService> _log;
-
+        private readonly NpgsqlDataSource _dataSource;
         private readonly ICustomerQueryService _customerQuery;
         private static Random _rand = new Random();
-        public CustomerIntakeService(string connectionString, ILogger<ICustomerIntakeService> logger, ICustomerQueryService customerQuery)
+        public CustomerIntakeService(NpgsqlDataSource dataSource, ILogger<ICustomerIntakeService> logger, ICustomerQueryService customerQuery)
         {
-            _connectionString = connectionString;
+            _dataSource = dataSource ?? throw new ArgumentNullException(nameof(dataSource));
             _log = logger;
             _customerQuery = customerQuery;
         }
+        private async Task<T> WithDbGate<T>(Func<Task<T>> operation)
+        {
+            await DbGate.WaitAsync();
+            try
+            {
+                return await operation();
+            }
+            finally
+            {
+                DbGate.Release();
+            }
+        }
+        private async Task<NpgsqlConnection> OpenAsync(CancellationToken ct = default) => await _dataSource.OpenConnectionAsync(ct);
         public async Task<IReadOnlyList<int>> ApplyRoleDiffAsync(ulong guildId, ulong discordId, IEnumerable<long> added, IEnumerable<long> removed, CancellationToken ct = default)
         {
             var auditIds = new List<int>(8);
@@ -35,32 +51,35 @@ namespace ExcluSightsLibrary.DiscordServices
                 VALUES (@gid, @did, @rid, 'removed')
                 RETURNING id;";
 
-            using var conn = CreateConnection();
-            await conn.OpenAsync(ct);
-            using var tx = await conn.BeginTransactionAsync(ct);
-
-            try
+            await WithDbGate(async () =>
             {
-                foreach (var r in added)
+                await using var conn = await OpenAsync(ct);
+                await using var tx = await conn.BeginTransactionAsync(ct);
+
+                try
                 {
-                    var id = await conn.ExecuteScalarAsync<int?>(addSql, new { gid = (long)guildId, did = (long)discordId, rid = r }, tx);
-                    if (id.HasValue) auditIds.Add(id.Value);
+                    foreach (var r in added)
+                    {
+                        var id = await conn.ExecuteScalarAsync<int?>(addSql, new { gid = (long)guildId, did = (long)discordId, rid = r }, tx);
+                        if (id.HasValue) auditIds.Add(id.Value);
+                    }
+                    foreach (var r in removed)
+                    {
+                        var id = await conn.ExecuteScalarAsync<int?>(remSql, new { gid = (long)guildId, did = (long)discordId, rid = r }, tx);
+                        if (id.HasValue) auditIds.Add(id.Value);
+                    }
+
+                    await tx.CommitAsync(ct);
                 }
-                foreach (var r in removed)
+                catch (Exception ex)
                 {
-                    var id = await conn.ExecuteScalarAsync<int?>(remSql, new { gid = (long)guildId, did = (long)discordId, rid = r }, tx);
-                    if (id.HasValue) auditIds.Add(id.Value);
+                    await tx.RollbackAsync(ct);
+                    _log.LogError(ex, "ApplyRoleDiff failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
+                    throw;
                 }
 
-                await tx.CommitAsync(ct);
-            }
-            catch (Exception ex)
-            {
-                await tx.RollbackAsync(ct);
-                _log.LogError(ex, "ApplyRoleDiff failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
-                throw;
-            }
-
+                return auditIds;
+            });
             return auditIds;
         }
         public async Task SyncCustomerInterestsFromRolesAsync(ulong guildId, ulong discordId, CancellationToken ct = default)
@@ -82,53 +101,60 @@ namespace ExcluSightsLibrary.DiscordServices
                 SELECT (SELECT customer_id FROM acc) AS customer_id,
                        ARRAY(SELECT interest_id FROM derived ORDER BY interest_id) AS interest_ids;";
 
-            using var conn = CreateConnection();
-            var x = await conn.QuerySingleOrDefaultAsync<(string? customer_id, int[]? interest_ids)>(
+            try
+            {
+                await using var conn = await OpenAsync(ct);
+                var x = await conn.QuerySingleOrDefaultAsync<(string? customer_id, int[]? interest_ids)>(
                 sql, new { gid = (long)guildId, did = (long)discordId });
 
-            if (x.customer_id is null) return;
+                if (x.customer_id is null) return;
 
-            var cid = x.customer_id!;
-            var derived = x.interest_ids ?? Array.Empty<int>();
+                var cid = x.customer_id!;
+                var derived = x.interest_ids ?? Array.Empty<int>();
 
-            // existing across ALL sources for this customer (we only touch 'discord' rows)
-            const string getExisting = @"SELECT interest_id FROM customer_interests WHERE customer_id=@cid AND source='discord';";
-            var existing = (await conn.QueryAsync<int>(getExisting, new { cid })).ToHashSet();
+                // existing across ALL sources for this customer (we only touch 'discord' rows)
+                const string getExisting = @"SELECT interest_id FROM customer_interests WHERE customer_id=@cid AND source='discord';";
+                var existing = (await conn.QueryAsync<int>(getExisting, new { cid })).ToHashSet();
 
-            var toAdd = derived.Except(existing).ToArray();
-            var toRem = existing.Except(derived).ToArray();
+                var toAdd = derived.Except(existing).ToArray();
+                var toRem = existing.Except(derived).ToArray();
 
-            if (toAdd.Length == 0 && toRem.Length == 0) return;
+                if (toAdd.Length == 0 && toRem.Length == 0) return;
 
-            const string insertSql = @"
+                const string insertSql = @"
                 INSERT INTO customer_interests (customer_id, interest_id, source)
                 VALUES (@cid, @iid, 'discord')
                 ON CONFLICT DO NOTHING;
                 INSERT INTO customer_interest_audit (customer_id, interest_id, action, source)
                 VALUES (@cid, @iid, 'added', 'discord');";
 
-            const string deleteSql = @"
+                const string deleteSql = @"
                 DELETE FROM customer_interests WHERE customer_id=@cid AND interest_id=@iid AND source='discord';
                 INSERT INTO customer_interest_audit (customer_id, interest_id, action, source)
                 VALUES (@cid, @iid, 'removed', 'discord');";
 
-            using var conn2 = CreateConnection();
-            await conn2.OpenAsync(ct);
-            using var tx = await conn2.BeginTransactionAsync(ct);
+                await using var conn2 = await OpenAsync(ct);
+                using var tx = await conn2.BeginTransactionAsync(ct);
 
-            try
-            {
-                foreach (var iid in toAdd)
-                    await conn2.ExecuteAsync(insertSql, new { cid, iid }, tx);
+                try
+                {
+                    foreach (var iid in toAdd)
+                        await conn2.ExecuteAsync(insertSql, new { cid, iid }, tx);
 
-                foreach (var iid in toRem)
-                    await conn2.ExecuteAsync(deleteSql, new { cid, iid }, tx);
+                    foreach (var iid in toRem)
+                        await conn2.ExecuteAsync(deleteSql, new { cid, iid }, tx);
 
-                await tx.CommitAsync(ct);
+                    await tx.CommitAsync(ct);
+                }
+                catch (Exception ex)
+                {
+                    await tx.RollbackAsync(ct);
+                    _log.LogError(ex, "SyncCustomerInterestsFromRoles failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
+                    throw;
+                }
             }
             catch (Exception ex)
             {
-                await tx.RollbackAsync(ct);
                 _log.LogError(ex, "SyncCustomerInterestsFromRoles failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
                 throw;
             }
@@ -153,8 +179,7 @@ namespace ExcluSightsLibrary.DiscordServices
                    SET customer_id = @cid, updated_at = now()
                  WHERE discord_id  = @did;";
 
-            using var conn = CreateConnection();
-            await conn.OpenAsync(ct);
+            await using var conn = await OpenAsync(ct);
             using var tx = await conn.BeginTransactionAsync(ct);
 
             try
@@ -195,7 +220,7 @@ namespace ExcluSightsLibrary.DiscordServices
                 return false;
             }
         }
-        public async Task<bool> UpsertDiscordAccountAsync(ulong discordId, string discordTag, string? discriminator, string customerId)
+        public async Task<bool> UpsertDiscordAccountAsync(ulong discordId, string discordTag, string? discriminator, string customerId, CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(customerId) || string.IsNullOrEmpty(discordTag))
                 throw new ArgumentException("DiscordTag or CustomerId cannot be null or whitespace.", nameof(customerId));
@@ -205,16 +230,15 @@ namespace ExcluSightsLibrary.DiscordServices
             try
             {
                 const string sql = @"
-                INSERT INTO discord_accounts (discord_id, discord_tag, username, discriminator, customer_id)
+                INSERT INTO discord_accounts (discord_id, discord_tag, discriminator, customer_id)
                 VALUES (@did, @tag, @disc, @cust)
                 ON CONFLICT (discord_id) DO UPDATE SET
                   discord_tag  = EXCLUDED.discord_tag,
-                  username     = EXCLUDED.username,
                   discriminator= EXCLUDED.discriminator,
+                  customer_id  = EXCLUDED.customer_id,    
                   updated_at   = now();";
 
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+                await using var conn = await OpenAsync(ct);
                 var result = await conn.ExecuteAsync(sql, new
                 {
                     did = (long)discordId,
@@ -254,8 +278,8 @@ namespace ExcluSightsLibrary.DiscordServices
                     INSERT INTO discord_memberships (guild_id, discord_id, joined_at)
                     VALUES (@gid, @did, @joined)
                     ON CONFLICT (guild_id, discord_id) DO NOTHING;";
-                using var conn = CreateConnection();
-                await conn.OpenAsync();
+
+                await using var conn = await OpenAsync();
                 var result = await conn.ExecuteAsync(sql, new
                 {
                     gid = (long)guildId,
@@ -286,8 +310,7 @@ namespace ExcluSightsLibrary.DiscordServices
 
             try
             {
-                var conn = CreateConnection();
-                await conn.OpenAsync(ct);
+                await using var conn = await OpenAsync(ct);
 
                 var row = await _customerQuery.VerifyCustomerFromRoleMap(guildId, discordId);
                 if (string.IsNullOrEmpty(row.customer_id))
@@ -319,21 +342,179 @@ namespace ExcluSightsLibrary.DiscordServices
                 throw;
             }
         }
-        private NpgsqlConnection CreateConnection() => new NpgsqlConnection(_connectionString);
-        public async Task<string> GenerateNewCustomerID()
+        public async Task<string> GenerateNewCustomerID(CancellationToken ct = default)
         {
-            using (var conn = new NpgsqlConnection(_connectionString))
+            for (var i = 0; i < 5; i++)
             {
-                await conn.OpenAsync();
-                while (true)
-                {
-                    var newId = _rand.Next(100000, 1000000).ToString();
+                var newId = Random.Shared.Next(100000, 1000000).ToString();
 
-                    var newQuery = @"SELECT customer_id FROM customers where customer_id = @Input";
-                    var queryResult = await conn.QueryFirstOrDefaultAsync<string>(newQuery, new { Input = newId });
-                    if (newId != queryResult || string.IsNullOrEmpty(queryResult)) return newId;
+                const string sql = @"INSERT INTO customers (customer_id) VALUES (@cid)
+                             ON CONFLICT (customer_id) DO NOTHING;";
+
+                await using var conn = await OpenAsync(ct);
+                var rows = await conn.ExecuteAsync(sql, new { cid = newId });
+                if (rows > 0) return newId;
+
+                _log.LogWarning("Collision generating CustomerId {CustomerId}, retrying...", newId);
+                i++;
+            }
+            throw new InvalidOperationException("Could not generate unique CustomerId after 5 attempts.");
+        }
+        public async Task<int> SaveGuildMemberChangesAsync(List<SolePlayDTO> reducedMembers, CancellationToken ct = default)
+        {
+            if (reducedMembers == null || reducedMembers.Count == 0)
+                throw new ArgumentException("reducedMembers cannot be null or empty.", nameof(reducedMembers));
+
+            var expectedResult = reducedMembers.Count;
+
+            await WithDbGate(async () =>
+            {
+                try
+                {
+                    await using var conn = await OpenAsync(ct);
+
+                    using (var transaction = await conn.BeginTransactionAsync())
+                    {
+                        var insertSql = new StringBuilder(@"INSERT INTO customer_profile_soleplay (customer_id, discord_id, shoe_size, gender, updated_at) VALUES ");
+                        var insertParams = new List<NpgsqlParameter>();
+                        var valueCount = 0;
+
+                        foreach (var data in reducedMembers)
+                        {
+                            if (!await VerifyCustomer(data))
+                            {
+                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId} /n/ Skipping...");
+                                continue;
+                            }
+
+                            if (valueCount > 0) insertSql.Append(", ");
+                            insertSql.Append($"(@cid{valueCount}, @did{valueCount}, @shoe{valueCount}, @gender{valueCount}, now())");
+
+                            insertParams.Add(new NpgsqlParameter($"cid{valueCount}", data.CustomerId));
+                            insertParams.Add(new NpgsqlParameter($"did{valueCount}", (long)data.DiscordId));
+                            insertParams.Add(new NpgsqlParameter($"shoe{valueCount}", data.ShoeSize));
+                            insertParams.Add(new NpgsqlParameter($"gender{valueCount}", data.Gender));
+
+                            valueCount++;
+                        }
+                        insertSql.Append(" ON CONFLICT (customer_id) DO UPDATE SET discord_id = EXCLUDED.discord_id, shoe_size = EXCLUDED.shoe_size, updated_at = EXCLUDED.updated_at;");
+
+                        using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
+                        {
+                            cmd.Parameters.AddRange(insertParams.ToArray());
+                            var rowsAffected = await cmd.ExecuteNonQueryAsync();
+
+                            if (rowsAffected > 0)
+                            {
+                                Console.WriteLine($"Upserted {rowsAffected} customer profiles.");
+                                if (rowsAffected != expectedResult)
+                                {
+                                    Console.WriteLine($"Warning: Expected to upsert {expectedResult} profiles, but only {rowsAffected} were affected.");
+                                    expectedResult = rowsAffected;
+                                }
+                            }
+                        }
+                        await transaction.CommitAsync();
+                    }
+                    return expectedResult;
+                }
+                catch (NpgsqlException ex)
+                {
+                    throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+                    return 0;
+                }
+            });
+            return 0;
+        }
+        private async Task<bool> VerifyCustomer(SolePlayDTO data)
+        {
+            if (await _customerQuery.GetCustomerByID(data.CustomerId) == null)
+            {
+                Console.WriteLine($"CustomerID {data.CustomerId} does not exist. Creating Links...");
+
+                var newLink = await UpsertDiscordAccountAsync(data.DiscordId, data.DiscordTag, " ", data.CustomerId);
+                if (!newLink) return false;
+
+                Console.WriteLine($"Created DiscordAccount link for CustomerID {data.CustomerId} and DiscordID {data.DiscordId}");
+                Console.WriteLine($"Creating Customer Link for: {data.CustomerId}...");
+
+                var newCustomer = await UpsertCustomerAsync(new CustomerProfileData()
+                {
+                    CustomerId = data.CustomerId,
+                    CustomerFirstName = data.CustomerFirstName,
+                    CustomerLastName = data.CustomerLastName,
+                    DiscordId = data.DiscordId,
+                    DiscordTag = data.DiscordTag,
+                    LastUpdated = data.LastUpdated,
+                });
+
+                if (!newCustomer) return false;
+            }
+            return true;
+        }
+        public async Task UpsertGuildRoleChangesAsync(ulong guildId, IReadOnlyCollection<SocketRole> roles)
+        {
+            if (guildId <= 0)
+                throw new ArgumentException("Need a valid GuildID.", nameof(guildId));
+            if (roles == null || roles.Count == 0)
+                throw new ArgumentException("Roles cannot be null or empty.", nameof(roles));
+
+            Console.WriteLine("Beginning UpsertGuildRoleChanges....");
+
+            try
+            {
+                await using var conn = await OpenAsync();
+
+                using (var transaction = await conn.BeginTransactionAsync())
+                {
+                    var insertSql = new StringBuilder(@"INSERT INTO role_map_profile (guild_id, role_id, role_name) VALUES ");
+                    var insertParams = new List<NpgsqlParameter>();
+                    var valueCount = 0;
+
+                    var currentRoles = await conn.QueryAsync<(ulong, string)>(
+                        "SELECT role_id, role_name FROM role_map_profile WHERE guild_id = @gid;",
+                        new { gid = (long)guildId });
+
+                    if (currentRoles.Any())
+                    {
+                        Console.WriteLine($"Found {currentRoles.Count()} existing roles for guild {guildId}. Checking for updates...");
+                    }
+
+                    foreach (var roleData in roles)
+                    {
+                        if (valueCount > 0) insertSql.Append(", ");
+
+                        insertSql.Append($"(@gid, @rid{valueCount}, @rname{valueCount})");
+                        insertParams.Add(new NpgsqlParameter($"rid{valueCount}", (long)roleData.Id));
+                        insertParams.Add(new NpgsqlParameter($"rname{valueCount}", roleData.Name));
+                        valueCount++;
+                    }
+                    insertSql.Append(" ON CONFLICT (guild_id, role_id) DO UPDATE SET role_name = EXCLUDED.role_name;");
+
+                    using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
+                    {
+                        cmd.Parameters.Add(new NpgsqlParameter("gid", (long)guildId));
+                        cmd.Parameters.AddRange(insertParams.ToArray());
+                        var rowsAffected = await cmd.ExecuteNonQueryAsync();
+                        Console.WriteLine($"Upserted {rowsAffected} roles for guild {guildId}.");
+                    }
+
+                    await transaction.CommitAsync();
                 }
             }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+            }
+            return;
         }
     }
 }

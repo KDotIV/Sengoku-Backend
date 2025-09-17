@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using ExcluSightsLibrary.DiscordServices;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
+using Npgsql;
 using SengokuProvider.API;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
@@ -24,6 +25,16 @@ var customerPoolConnection = builder.Configuration["ExclusiveInsightsSettings:Cu
 var exclusiveInsightsBotToken = builder.Configuration["ExclusiveInsightsSettings:DiscordBotToken"];
 
 //Singletons
+builder.Services.AddSingleton(sp =>
+{
+    var sourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+    return sourceBuilder.Build();
+});
+builder.Services.AddSingleton(sp =>
+{
+    var sourceBuilder = new NpgsqlDataSourceBuilder(customerPoolConnection);
+    return sourceBuilder.Build();
+});
 builder.Services.AddTransient<CommandProcessor>();
 builder.Services.AddSingleton<IntakeValidator>();
 builder.Services.AddSingleton<RequestThrottler>();
@@ -157,14 +168,16 @@ builder.Services.AddScoped<ILegendIntakeService, LegendIntakeService>(provider =
 builder.Services.AddScoped<ICustomerQueryService, CustomerQueryService>(provider =>
 {
     var logger = provider.GetService<ILogger<CustomerQueryService>>();
-    return new CustomerQueryService(connectionString, logger);
+    var dataSource = provider.GetService<NpgsqlDataSource>();
+    return new CustomerQueryService(dataSource!, logger);
 });
 builder.Services.AddScoped<ICustomerIntakeService, CustomerIntakeService>(provider =>
 {
     var config = provider.GetService<IConfiguration>();
+    var dataSource = provider.GetService<NpgsqlDataSource>();
     var logger = provider.GetService<ILogger<CustomerIntakeService>>();
     var customerQuery = provider.GetService<ICustomerQueryService>();
-    return new CustomerIntakeService(connectionString, logger, customerQuery);
+    return new CustomerIntakeService(dataSource, logger, customerQuery);
 });
 
 builder.Services.AddControllers();

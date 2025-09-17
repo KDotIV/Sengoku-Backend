@@ -47,5 +47,23 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpGet("GetRolesByGuildId")]
+        public async Task<IActionResult> GetRolesByGuildId([FromQuery] ulong guildId)
+        {
+            try
+            {
+                var roles = await _eventManager.GetGuildRoles(guildId);
+                if (roles == null || !roles.Any())
+                {
+                    return NotFound($"No roles found for guild ID {guildId}.");
+                }
+                return Ok(roles);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error retrieving roles for guild ID {GuildId}.", guildId);
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
     }
 }
