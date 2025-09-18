@@ -865,7 +865,7 @@ namespace SengokuProvider.Library.Services.Players
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                        Console.WriteLine($"Failed to retrieve player data: {ex.Message + ": " + ex.StackTrace}");
                     }
                 }
             }

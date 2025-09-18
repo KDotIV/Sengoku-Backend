@@ -29,9 +29,8 @@ namespace SengokuProvider.Library.Models.Common
     }
     public struct BearerConstants
     {
-        public static readonly string[] BearerArray = ["ebb722cf581b7da68cc62f62b34fe8a4", "f56a03a0f8a7d2fedd2e637dc4e42cf4", "5c269fc514ee0de30bc6402a002e1b56",
-            "e0619c15501f38e176801fb1639a1903", "758d4c2a29fe920513d61550c54744b0", "85d0bf37972496fdea13addc7a2634b1","8d2fca149cf6f54fa6475197fef9721b",
-            "d83c0620a5f75a508963410f7b57d9de", "06e39ad2570e5b095889599fe9134f49","f763d7005921e3ce3429c5aebeb303d8", "fd44ced3386190f70c9b8b900947876f"];
+        public static readonly string[] BearerArray = ["4e76a0d061c9c8a99c2083146095552c", "bb228ea8c9ded56583d67519bc4906ab", "d35ead8324dce3507a87b901b0be46b5",
+            "6bf80b5ac9b1ced2815fe49d539d1f75"];
         public static readonly Queue<string> TokenQueue = new Queue<string>(BearerArray);
     }
     public struct StartggGameIds
