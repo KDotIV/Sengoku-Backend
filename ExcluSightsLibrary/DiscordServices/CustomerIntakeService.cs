@@ -3,6 +3,7 @@ using Discord.WebSocket;
 using ExcluSightsLibrary.DiscordModels;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using System;
 using System.Text;
 
 namespace ExcluSightsLibrary.DiscordServices
@@ -166,10 +167,18 @@ namespace ExcluSightsLibrary.DiscordServices
 
             if (model.DiscordId == 0) throw new ArgumentException("Must have valid DiscordId", nameof(model.DiscordId));
 
+            const string sqlDetachDiscord = @"
+                UPDATE customers
+                   SET discord_id = NULL,
+                       updated_at = now()
+                 WHERE discord_id  = @did
+                   AND customer_id <> @cid;";
+
             const string sqlCustomer = @"
-                INSERT INTO customers (customer_id, first_name, last_name)
-                VALUES (@cid, @fn, @ln)
+                INSERT INTO customers (customer_id, first_name, last_name, discord_id)
+                VALUES (@cid, @fn, @ln, @did)
                 ON CONFLICT (customer_id) DO UPDATE SET
+                  discord_id = EXCLUDED.discord_id,
                   first_name = EXCLUDED.first_name,
                   last_name  = EXCLUDED.last_name,
                   updated_at = now();";
@@ -184,11 +193,18 @@ namespace ExcluSightsLibrary.DiscordServices
 
             try
             {
+                await conn.ExecuteAsync(sqlDetachDiscord, new
+                {
+                    cid = model.CustomerId,
+                    did = (long)model.DiscordId
+                }, tx);
+
                 var insertResult = await conn.ExecuteAsync(sqlCustomer, new
                 {
                     cid = model.CustomerId,
                     fn = (object?)model.CustomerFirstName ?? DBNull.Value,
-                    ln = (object?)model.CustomerLastName ?? DBNull.Value
+                    ln = (object?)model.CustomerLastName ?? DBNull.Value,
+                    did = (long)model.DiscordId
                 }, tx);
 
                 if (insertResult <= 0)
@@ -365,70 +381,138 @@ namespace ExcluSightsLibrary.DiscordServices
             if (reducedMembers == null || reducedMembers.Count == 0)
                 throw new ArgumentException("reducedMembers cannot be null or empty.", nameof(reducedMembers));
 
-            var expectedResult = reducedMembers.Count;
+            // Filter out duplicates locally so the bulk upsert cannot violate the
+            // unique constraints on customer_id / discord_id.
+            var uniqueMembers = new List<SolePlayDTO>(reducedMembers.Count);
+            var seenCustomerIds = new HashSet<string>(StringComparer.Ordinal);
+            var seenDiscordIds = new HashSet<ulong>();
 
-            await WithDbGate(async () =>
+            for (var i = reducedMembers.Count - 1; i >= 0; i--)
             {
+                var member = reducedMembers[i];
+
+                if (!seenCustomerIds.Add(member.CustomerId))
+                {
+                    Console.WriteLine($"Skipping duplicate CustomerID {member.CustomerId} while preparing customer_profile_soleplay upsert payload.");
+                    continue;
+                }
+
+                if (!seenDiscordIds.Add(member.DiscordId))
+                {
+                    Console.WriteLine($"Skipping duplicate DiscordID {member.DiscordId} while preparing customer_profile_soleplay upsert payload.");
+                    continue;
+                }
+
+                uniqueMembers.Add(member);
+            }
+
+            uniqueMembers.Reverse();
+
+            if (uniqueMembers.Count == 0)
+            {
+                Console.WriteLine("No unique guild member rows to upsert after duplicate filtering.");
+                return 0;
+            }
+
+            var expectedResult = uniqueMembers.Count;
+
+            return await WithDbGate(async () =>
+            {
+                await using var conn = await OpenAsync(ct);
+                await using var transaction = await conn.BeginTransactionAsync(ct);
+
                 try
                 {
-                    await using var conn = await OpenAsync(ct);
 
-                    using (var transaction = await conn.BeginTransactionAsync())
+                    var insertSql = new StringBuilder(@"WITH incoming (customer_id, discord_id, shoe_size, gender) AS (VALUES ");
+                    var insertParams = new List<NpgsqlParameter>();
+                    var valueCount = 0;
+
+                    foreach (var data in uniqueMembers)
                     {
-                        var insertSql = new StringBuilder(@"INSERT INTO customer_profile_soleplay (customer_id, discord_id, shoe_size, gender, updated_at) VALUES ");
-                        var insertParams = new List<NpgsqlParameter>();
-                        var valueCount = 0;
-
-                        foreach (var data in reducedMembers)
+                        if (!await VerifyCustomer(data))
                         {
-                            if (!await VerifyCustomer(data))
-                            {
-                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId} /n/ Skipping...");
-                                continue;
-                            }
-
-                            if (valueCount > 0) insertSql.Append(", ");
-                            insertSql.Append($"(@cid{valueCount}, @did{valueCount}, @shoe{valueCount}, @gender{valueCount}, now())");
-
-                            insertParams.Add(new NpgsqlParameter($"cid{valueCount}", data.CustomerId));
-                            insertParams.Add(new NpgsqlParameter($"did{valueCount}", (long)data.DiscordId));
-                            insertParams.Add(new NpgsqlParameter($"shoe{valueCount}", data.ShoeSize));
-                            insertParams.Add(new NpgsqlParameter($"gender{valueCount}", data.Gender));
-
-                            valueCount++;
+                            Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId}\nSkipping...");
+                            continue;
                         }
-                        insertSql.Append(" ON CONFLICT (customer_id) DO UPDATE SET discord_id = EXCLUDED.discord_id, shoe_size = EXCLUDED.shoe_size, updated_at = EXCLUDED.updated_at;");
 
-                        using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
-                        {
-                            cmd.Parameters.AddRange(insertParams.ToArray());
-                            var rowsAffected = await cmd.ExecuteNonQueryAsync();
+                        if (valueCount > 0) insertSql.Append(", ");
+                        insertSql.Append($"(@cid{valueCount}, @did{valueCount}, @shoe{valueCount}, @gender{valueCount})");
 
-                            if (rowsAffected > 0)
-                            {
-                                Console.WriteLine($"Upserted {rowsAffected} customer profiles.");
-                                if (rowsAffected != expectedResult)
-                                {
-                                    Console.WriteLine($"Warning: Expected to upsert {expectedResult} profiles, but only {rowsAffected} were affected.");
-                                    expectedResult = rowsAffected;
-                                }
-                            }
-                        }
-                        await transaction.CommitAsync();
+                        insertParams.Add(new NpgsqlParameter($"cid{valueCount}", data.CustomerId));
+                        insertParams.Add(new NpgsqlParameter($"did{valueCount}", (long)data.DiscordId));
+                        insertParams.Add(new NpgsqlParameter($"shoe{valueCount}", data.ShoeSize));
+                        insertParams.Add(new NpgsqlParameter($"gender{valueCount}", data.Gender));
+
+                        valueCount++;
                     }
+
+                    expectedResult = valueCount;
+
+                    if (valueCount == 0)
+                    {
+                        Console.WriteLine("No valid guild member rows remained after verification checks; skipping upsert.");
+                        await transaction.RollbackAsync(ct);
+                        return 0;
+                    }
+
+                    insertSql.Append(@"),
+updated AS (
+    UPDATE customer_profile_soleplay existing
+       SET customer_id = incoming.customer_id,
+           shoe_size   = incoming.shoe_size,
+           gender      = incoming.gender,
+           updated_at  = now()
+      FROM incoming
+     WHERE existing.discord_id = incoming.discord_id
+     RETURNING existing.discord_id
+)
+INSERT INTO customer_profile_soleplay (customer_id, discord_id, shoe_size, gender, updated_at)
+SELECT incoming.customer_id,
+       incoming.discord_id,
+       incoming.shoe_size,
+       incoming.gender,
+       now()
+  FROM incoming
+  LEFT JOIN updated ON updated.discord_id = incoming.discord_id
+ WHERE updated.discord_id IS NULL
+ON CONFLICT (customer_id) DO UPDATE SET
+    discord_id = EXCLUDED.discord_id,
+    shoe_size  = EXCLUDED.shoe_size,
+    gender     = EXCLUDED.gender,
+    updated_at = EXCLUDED.updated_at;");
+
+                    await using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
+                    {
+                        cmd.Parameters.AddRange(insertParams.ToArray());
+                        var rowsAffected = await cmd.ExecuteNonQueryAsync(ct);
+
+                        if (rowsAffected > 0)
+                        {
+                            Console.WriteLine($"Upserted {rowsAffected} customer profiles.");
+                            if (rowsAffected != expectedResult)
+                            {
+                                Console.WriteLine($"Warning: Expected to upsert {expectedResult} profiles, but only {rowsAffected} were affected.");
+                                expectedResult = rowsAffected;
+                            }
+                        }
+                    }
+
+                    await transaction.CommitAsync(ct);
                     return expectedResult;
                 }
                 catch (NpgsqlException ex)
                 {
+                    await transaction.RollbackAsync(ct);
                     throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
                 }
                 catch (Exception ex)
                 {
+                    await transaction.RollbackAsync(ct);
                     Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
                     return 0;
                 }
             });
-            return 0;
         }
         private async Task<bool> VerifyCustomer(SolePlayDTO data)
         {
