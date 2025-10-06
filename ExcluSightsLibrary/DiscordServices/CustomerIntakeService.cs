@@ -348,7 +348,8 @@ namespace ExcluSightsLibrary.DiscordServices
         {
             for (var i = 0; i < 5; i++)
             {
-                var newId = Random.Shared.Next(100000, 1000000).ToString();
+
+                var newId = "CUST_" + Random.Shared.Next(100000, 1000000).ToString();
 
                 const string sql = @"INSERT INTO customers (customer_id) VALUES (@cid)
                              ON CONFLICT (customer_id) DO NOTHING;";
@@ -362,63 +363,98 @@ namespace ExcluSightsLibrary.DiscordServices
             }
             throw new InvalidOperationException("Could not generate unique CustomerId after 5 attempts.");
         }
-        public async Task<int> SaveGuildMemberChangesAsync(List<SolePlayDTO> reducedMembers, CancellationToken ct = default)
+        public async Task<int> SaveGuildMemberChangesAsync(List<SolePlayDTO> reduced, CancellationToken ct = default)
         {
-            if (reducedMembers == null || reducedMembers.Count == 0)
-                throw new ArgumentException("reducedMembers cannot be null or empty.", nameof(reducedMembers));
+            if (reduced is null || reduced.Count == 0)
+                throw new ArgumentException(nameof(reduced));
 
-            var expectedResult = reducedMembers.Count;
-
-            await WithDbGate(async () =>
+            return await WithDbGate(async () =>
             {
                 try
                 {
                     await using var conn = await OpenAsync(ct);
+                    await using var tx = await conn.BeginTransactionAsync(ct);
 
-                    using (var transaction = await conn.BeginTransactionAsync())
+                    //Temp table for bulk insertion
+                    const string createTemp = @"
+                        CREATE TEMP TABLE tmp_profiles (
+                          customer_id TEXT,
+                          discord_id  BIGINT,
+                          discord_tag TEXT,
+                          shoe_size   NUMERIC(4,1),
+                          gender      INT
+                        ) ON COMMIT DROP;";
+                    await conn.ExecuteAsync(createTemp, transaction: tx);
+
+                    // Bulk insert into temp via COPY
+                    using (var writer = await conn.BeginBinaryImportAsync(
+                        "COPY tmp_profiles (customer_id, discord_id, discord_tag, shoe_size, gender) FROM STDIN (FORMAT BINARY)", ct))
                     {
-                        var insertSql = new StringBuilder(@"INSERT INTO customer_profile_soleplay (customer_id, discord_id, shoe_size, gender, updated_at) VALUES ");
-                        var insertParams = new List<NpgsqlParameter>();
-                        var valueCount = 0;
-
-                        foreach (var data in reducedMembers)
+                        foreach (var user in reduced)
                         {
-                            if (!await VerifyCustomer(data))
-                            {
-                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId} \n Skipping...");
+                            // validate – skip junk rows
+                            if (user.DiscordId == 0 || string.IsNullOrWhiteSpace(user.CustomerId))
                                 continue;
-                            }
 
-                            if (valueCount > 0) insertSql.Append(", ");
-                            insertSql.Append($"(@cid{valueCount}, @did{valueCount}, @shoe{valueCount}, @gender{valueCount}, now())");
-
-                            insertParams.Add(new NpgsqlParameter($"cid{valueCount}", data.CustomerId));
-                            insertParams.Add(new NpgsqlParameter($"did{valueCount}", (long)data.DiscordId));
-                            insertParams.Add(new NpgsqlParameter($"shoe{valueCount}", data.ShoeSize));
-                            insertParams.Add(new NpgsqlParameter($"gender{valueCount}", data.Gender));
-
-                            valueCount++;
+                            await writer.StartRowAsync(ct);
+                            await writer.WriteAsync(user.CustomerId, NpgsqlTypes.NpgsqlDbType.Text);
+                            await writer.WriteAsync((long)user.DiscordId, NpgsqlTypes.NpgsqlDbType.Bigint);
+                            await writer.WriteAsync(user.DiscordTag ?? string.Empty, NpgsqlTypes.NpgsqlDbType.Text);
+                            await writer.WriteAsync((decimal)user.ShoeSize, NpgsqlTypes.NpgsqlDbType.Numeric);
+                            await writer.WriteAsync(user.Gender, NpgsqlTypes.NpgsqlDbType.Integer);
                         }
-                        insertSql.Append(" ON CONFLICT (customer_id) DO UPDATE SET shoe_size = EXCLUDED.shoe_size, updated_at = EXCLUDED.updated_at;");
-
-                        using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
-                        {
-                            cmd.Parameters.AddRange(insertParams.ToArray());
-                            var rowsAffected = await cmd.ExecuteNonQueryAsync();
-
-                            if (rowsAffected > 0)
-                            {
-                                Console.WriteLine($"Upserted {rowsAffected} customer profiles.");
-                                if (rowsAffected != expectedResult)
-                                {
-                                    Console.WriteLine($"Warning: Expected to upsert {expectedResult} profiles, but only {rowsAffected} were affected.");
-                                    expectedResult = rowsAffected;
-                                }
-                            }
-                        }
-                        await transaction.CommitAsync();
+                        await writer.CompleteAsync(ct);
                     }
-                    return expectedResult;
+
+                    // Ensure customers exist (idempotent)
+                    const string upsertCustomers = @"
+                        INSERT INTO customers (customer_id)
+                        SELECT DISTINCT customer_id FROM tmp_profiles WHERE customer_id IS NOT NULL
+                        ON CONFLICT (customer_id) DO NOTHING;";
+                    await conn.ExecuteAsync(upsertCustomers, transaction: tx);
+
+                    // Canonical mapping: upsert discord_accounts
+                    //   - If discord_id is new -> insert with (discord_id, customer_id, discord_tag)
+                    //   - If discord_id exists -> keep existing customer_id, but refresh discord_tag
+                    const string upsertDiscordAccounts = @"
+                        INSERT INTO discord_accounts (discord_id, customer_id, discord_tag)
+                        SELECT DISTINCT tp.discord_id, tp.customer_id, tp.discord_tag
+                        FROM tmp_profiles tp
+                        WHERE tp.discord_id IS NOT NULL AND tp.customer_id IS NOT NULL
+                        ON CONFLICT (discord_id) DO UPDATE
+                           SET discord_tag = EXCLUDED.discord_tag,       -- refresh tag
+                               updated_at  = now()                        -- keep existing mapping to customer_id
+                        ;";
+                    await conn.ExecuteAsync(upsertDiscordAccounts, transaction: tx);
+
+                    // Normalize tmp → replace any customer_id with canonical one from discord_accounts
+                    //    (guarantees a single customer per discord_id)
+                    const string normalizeTmp = @"
+                        UPDATE tmp_profiles tp
+                        SET customer_id = da.customer_id,
+                            discord_tag = COALESCE(NULLIF(tp.discord_tag, ''), da.discord_tag)  -- prefer non-empty
+                        FROM discord_accounts da
+                        WHERE tp.discord_id = da.discord_id;";
+                    await conn.ExecuteAsync(normalizeTmp, transaction: tx);
+
+                    // Defensive: drop rows without a customer_id after normalization
+                    const string dropNulls = "DELETE FROM tmp_profiles WHERE customer_id IS NULL;";
+                    await conn.ExecuteAsync(dropNulls, transaction: tx);
+
+                    // Upsert SolePlay profile keyed by customer_id only
+                    const string upsertProfiles = @"
+                        INSERT INTO customer_profile_soleplay (customer_id, discord_id, shoe_size, gender, updated_at)
+                        SELECT customer_id, discord_id, shoe_size, gender, now()
+                        FROM tmp_profiles
+                        ON CONFLICT (customer_id) DO UPDATE
+                          SET discord_id = EXCLUDED.discord_id,
+                              shoe_size  = EXCLUDED.shoe_size,
+                              gender     = EXCLUDED.gender,
+                              updated_at = now();";
+                    var affected = await conn.ExecuteAsync(upsertProfiles, transaction: tx);
+
+                    await tx.CommitAsync(ct);
+                    return affected;
                 }
                 catch (NpgsqlException ex)
                 {
@@ -427,36 +463,9 @@ namespace ExcluSightsLibrary.DiscordServices
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-                    return 0;
                 }
+                return 0;
             });
-            return 0;
-        }
-        private async Task<bool> VerifyCustomer(SolePlayDTO data)
-        {
-            if (await _customerQuery.GetCustomerByID(data.CustomerId) == null)
-            {
-                Console.WriteLine($"CustomerID {data.CustomerId} does not exist. Creating Links...");
-
-                var newLink = await UpsertDiscordAccountAsync(data.DiscordId, data.DiscordTag, " ", data.CustomerId);
-                if (!newLink) return false;
-
-                Console.WriteLine($"Created DiscordAccount link for CustomerID {data.CustomerId} and DiscordID {data.DiscordId}");
-                Console.WriteLine($"Creating Customer Link for: {data.CustomerId}...");
-
-                var newCustomer = await UpsertCustomerAsync(new CustomerProfileData()
-                {
-                    CustomerId = data.CustomerId,
-                    CustomerFirstName = data.CustomerFirstName,
-                    CustomerLastName = data.CustomerLastName,
-                    DiscordId = data.DiscordId,
-                    DiscordTag = data.DiscordTag,
-                    LastUpdated = data.LastUpdated,
-                });
-
-                if (!newCustomer) return false;
-            }
-            return true;
         }
         public async Task UpsertGuildRoleChangesAsync(ulong guildId, IReadOnlyCollection<SocketRole> roles)
         {

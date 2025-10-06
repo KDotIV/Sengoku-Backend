@@ -7,7 +7,6 @@ namespace ExcluSightsLibrary.DiscordServices
 {
     public class CustomerQueryService : ICustomerQueryService
     {
-        private readonly string _connectionString;
         private readonly ILogger<ICustomerQueryService> _log;
         private static readonly SemaphoreSlim DbGate = new(initialCount: 8, maxCount: 8); // limit to 8 concurrent DB operations
         private readonly NpgsqlDataSource _dataSource;
@@ -106,31 +105,48 @@ namespace ExcluSightsLibrary.DiscordServices
                 throw;
             }
         }
-        public async Task<SolePlayDTO?> GetCustomerByID(string customerId)
+        public async Task<SolePlayDTO?> GetCustomerByID(string customerId, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(customerId)) throw new ArgumentNullException(nameof(customerId));
 
-            try
-            {
-                await using var conn = await OpenAsync();
+            const string sql = @"
+                SELECT  c.customer_id,
+                        da.discord_tag,
+                        COALESCE(sp.discord_id, da.discord_id) AS discord_id,
+                        sp.shoe_size,
+                        sp.gender,
+                        COALESCE(sp.updated_at, c.updated_at) AS updated_at
+                FROM customers c
+                LEFT JOIN customer_profile_soleplay sp ON sp.customer_id = c.customer_id
+                LEFT JOIN discord_accounts da         ON da.customer_id = c.customer_id
+                WHERE c.customer_id = @cid
+                LIMIT 1;";
 
-                const string query = @"SELECT * FROM customer_profile_soleplay WHERE customer_id = @cid LIMIT 1;";
-                var result = await conn.QuerySingleOrDefaultAsync<SolePlayDTO>(query, new { cid = customerId });
-
-                return result ?? null;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-                return null;
-            }
+            await using var conn = await OpenAsync(ct);
+            return await conn.QuerySingleOrDefaultAsync<SolePlayDTO?>(sql, new { cid = customerId });
         }
 
-        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId, string? email)
+        public async Task<SolePlayDTO?> GetCustomerByDiscordId(ulong discordId, CancellationToken ct = default)
+        {
+            if (discordId == 0) throw new ArgumentOutOfRangeException(nameof(discordId));
+
+            const string sql = @"
+                SELECT  c.customer_id,
+                        da.discord_tag,
+                        sp.discord_id,
+                        sp.shoe_size,
+                        sp.gender,
+                        sp.updated_at
+                FROM customer_profile_soleplay sp
+                JOIN customers c       ON c.customer_id = sp.customer_id
+                LEFT JOIN discord_accounts da ON da.discord_id = sp.discord_id
+                WHERE sp.discord_id = @did
+                LIMIT 1;";
+
+            await using var conn = await OpenAsync(ct);
+            return await conn.QuerySingleOrDefaultAsync<SolePlayDTO?>(sql, new { did = (long)discordId });
+        }
+        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId)
         {
             if (guildId <= 0) throw new ArgumentOutOfRangeException(nameof(guildId));
 
@@ -139,8 +155,10 @@ namespace ExcluSightsLibrary.DiscordServices
                 var result = new List<SolePlayDTO>();
                 await using var conn = await OpenAsync();
 
-                const string query = @"SELECT c.customer_id, c.first_name AS discord_tag, c.discord_id, sp.shoe_size, sp.gender, c.updated_at 
-                                       FROM customers c JOIN customer_profile_soleplay sp ON c.customer_id = sp.customer_id";
+                const string query = @"SELECT c.customer_id, da.discord_tag, sp.discord_id, sp.shoe_size, sp.gender, c.updated_at
+                                        FROM customers c
+                                        JOIN customer_profile_soleplay sp ON c.customer_id = sp.customer_id
+                                        JOIN discord_accounts da ON c.customer_id = da.customer_id";
 
                 await using var reader = await conn.ExecuteReaderAsync(query);
 

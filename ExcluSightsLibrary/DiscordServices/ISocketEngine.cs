@@ -9,6 +9,6 @@ namespace ExcluSightsLibrary.DiscordServices
         Task<bool> WaitForInitialBackfillAsync(TimeSpan timeout);
         Task<bool> DownloadGuildMembersAsync(ulong guildId);
         IReadOnlyList<DiscordRoleData> GetRolesForConnectedGuild(ulong guildId);
-        Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildIdAsync(ulong guildId, string? email);
+        Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildIdAsync(ulong guildId);
     }
 }

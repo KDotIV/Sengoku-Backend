@@ -71,7 +71,7 @@ namespace SengokuProvider.API.Controllers
         {
             try
             {
-                IReadOnlyList<CustomerProfileData> customers = await _eventManager.GetCustomersDataByGuildId(guildId, email);
+                IReadOnlyList<CustomerProfileData> customers = await _eventManager.GetCustomersDataByGuildId(guildId);
                 if (customers == null || !customers.Any())
                 {
                     return NotFound($"No customer data found for guild ID {guildId}.");

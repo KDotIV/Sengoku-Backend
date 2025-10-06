@@ -198,6 +198,7 @@ namespace ExcluSightsLibrary.DiscordServices
                 : _client.Guilds;
 
             var roleDict = whitelist.ToDictionary(r => r.RoleId, r => r);
+            HashSet<ulong> uniqueDiscordIds = new();
 
             var result = new List<SolePlayDTO>(capacity: 1024);
 
@@ -213,6 +214,12 @@ namespace ExcluSightsLibrary.DiscordServices
                     int? gender = null;
                     double? shoe = null;
                     var interests = Interests.None;
+
+                    if (!uniqueDiscordIds.Add(user.Id))
+                    {
+                        // already processed this user (multi-guild)
+                        continue;
+                    }
 
                     // Merge attributes from all matched roles
                     foreach (var role in user.Roles)
@@ -230,6 +237,8 @@ namespace ExcluSightsLibrary.DiscordServices
                     // Skip users with no relevant roles
                     if (!gender.HasValue && !shoe.HasValue && interests == Interests.None)
                         continue;
+
+
 
                     // Use factory delegate to get/generate customer ID
                     var customerId = await customerIdFactory().ConfigureAwait(false);
@@ -291,7 +300,7 @@ namespace ExcluSightsLibrary.DiscordServices
         {
             try
             {
-                string newCustId = "CUST_678";
+                string newCustId = await _customerIntake.GenerateNewCustomerID();
                 if (!await _customerIntake.UpsertDiscordAccountAsync(user.Id, user.Username, user.Discriminator, newCustId))
                 {
                     _log.LogWarning("OnUserJoinedAsync: Failed to upsert Discord account for User: {User} ({Id})", user.Username, user.Id);
@@ -330,10 +339,13 @@ namespace ExcluSightsLibrary.DiscordServices
                 _log.LogError(ex, "OnUserJoinedAsync failed for User: {User} ({Id})", after.Username, after.Id);
             }
         }
-
-        public Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildIdAsync(ulong guildId, string? email)
+        public Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildIdAsync(ulong guildId)
         {
-            return _customerQuery.GetCustomersDataByGuildId(guildId, email);
+            return _customerQuery.GetCustomersDataByGuildId(guildId);
+        }
+        public Task GenerateCustomerReport(ulong guildId, string filePath)
+        {
+            throw new NotImplementedException();
         }
         #endregion
         #region Helpers

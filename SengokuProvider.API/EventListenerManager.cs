@@ -79,7 +79,7 @@ namespace SengokuProvider.API
             rolesResult = _socketEngine.GetRolesForConnectedGuild(guildId).ToList();
             return rolesResult;
         }
-        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId, string? email)
+        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId)
         {
             if (guildId <= 0) throw new ArgumentOutOfRangeException(nameof(guildId));
             await _socketEngine.EnsureStartedAsync();
@@ -89,7 +89,7 @@ namespace SengokuProvider.API
                 _log.LogWarning("Bot is not in guild {GuildId}", guildId);
                 return Array.Empty<CustomerProfileData>();
             }
-            var customers = await _socketEngine.GetCustomersDataByGuildIdAsync(guildId, email);
+            var customers = await _socketEngine.GetCustomersDataByGuildIdAsync(guildId);
             return customers;
         }
     }
