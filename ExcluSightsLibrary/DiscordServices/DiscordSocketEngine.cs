@@ -330,6 +330,11 @@ namespace ExcluSightsLibrary.DiscordServices
                 _log.LogError(ex, "OnUserJoinedAsync failed for User: {User} ({Id})", after.Username, after.Id);
             }
         }
+
+        public Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildIdAsync(ulong guildId, string? email)
+        {
+            return _customerQuery.GetCustomersDataByGuildId(guildId, email);
+        }
         #endregion
         #region Helpers
         #endregion

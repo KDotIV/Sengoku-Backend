@@ -167,9 +167,10 @@ namespace ExcluSightsLibrary.DiscordServices
             if (model.DiscordId == 0) throw new ArgumentException("Must have valid DiscordId", nameof(model.DiscordId));
 
             const string sqlCustomer = @"
-                INSERT INTO customers (customer_id, first_name, last_name)
-                VALUES (@cid, @fn, @ln)
+                INSERT INTO customers (customer_id, first_name, last_name, discord_id)
+                VALUES (@cid, @fn, @ln, @did)
                 ON CONFLICT (customer_id) DO UPDATE SET
+                  discord_id = EXCLUDED.discord_id,
                   first_name = EXCLUDED.first_name,
                   last_name  = EXCLUDED.last_name,
                   updated_at = now();";
@@ -188,7 +189,8 @@ namespace ExcluSightsLibrary.DiscordServices
                 {
                     cid = model.CustomerId,
                     fn = (object?)model.CustomerFirstName ?? DBNull.Value,
-                    ln = (object?)model.CustomerLastName ?? DBNull.Value
+                    ln = (object?)model.CustomerLastName ?? DBNull.Value,
+                    did = (long)model.DiscordId
                 }, tx);
 
                 if (insertResult <= 0)
@@ -383,7 +385,7 @@ namespace ExcluSightsLibrary.DiscordServices
                         {
                             if (!await VerifyCustomer(data))
                             {
-                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId} /n/ Skipping...");
+                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId} \n Skipping...");
                                 continue;
                             }
 
@@ -397,7 +399,7 @@ namespace ExcluSightsLibrary.DiscordServices
 
                             valueCount++;
                         }
-                        insertSql.Append(" ON CONFLICT (customer_id) DO UPDATE SET discord_id = EXCLUDED.discord_id, shoe_size = EXCLUDED.shoe_size, updated_at = EXCLUDED.updated_at;");
+                        insertSql.Append(" ON CONFLICT (customer_id) DO UPDATE SET shoe_size = EXCLUDED.shoe_size, updated_at = EXCLUDED.updated_at;");
 
                         using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
                         {

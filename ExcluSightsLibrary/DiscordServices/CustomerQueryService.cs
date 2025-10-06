@@ -106,7 +106,6 @@ namespace ExcluSightsLibrary.DiscordServices
                 throw;
             }
         }
-
         public async Task<SolePlayDTO?> GetCustomerByID(string customerId)
         {
             if (string.IsNullOrWhiteSpace(customerId)) throw new ArgumentNullException(nameof(customerId));
@@ -128,6 +127,52 @@ namespace ExcluSightsLibrary.DiscordServices
             {
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
                 return null;
+            }
+        }
+
+        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId, string? email)
+        {
+            if (guildId <= 0) throw new ArgumentOutOfRangeException(nameof(guildId));
+
+            try
+            {
+                var result = new List<SolePlayDTO>();
+                await using var conn = await OpenAsync();
+
+                const string query = @"SELECT c.customer_id, c.first_name AS discord_tag, c.discord_id, sp.shoe_size, sp.gender, c.updated_at 
+                                       FROM customers c JOIN customer_profile_soleplay sp ON c.customer_id = sp.customer_id";
+
+                await using var reader = await conn.ExecuteReaderAsync(query);
+
+                if (!reader.HasRows)
+                {
+                    Console.WriteLine("No records found.");
+                    return Array.Empty<CustomerProfileData>();
+                }
+                while (await reader.ReadAsync())
+                {
+                    var customer = new SolePlayDTO
+                    {
+                        CustomerId = reader.GetString(0),
+                        DiscordTag = reader.GetString(1),
+                        DiscordId = (ulong)reader.GetInt64(2),
+                        ShoeSize = reader.IsDBNull(3) ? 0.0 : (double)reader.GetDecimal(3),
+                        Interests = Interests.None,
+                        Gender = reader.IsDBNull(4) ? 0 : reader.GetInt32(4),
+                        LastUpdated = reader.GetDateTime(5)
+                    };
+                    result.Add(customer);
+                }
+                return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+                return Array.Empty<CustomerProfileData>();
             }
         }
     }
