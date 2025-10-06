@@ -9,14 +9,14 @@
 
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />
-    <PackageReference Include="GraphQL" Version="8.5.0" />
+    <PackageReference Include="GraphQL" Version="8.6.0" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />
     <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="Npgsql" Version="9.0.3" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
-    <PackageReference Include="System.Text.Json" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Npgsql" Version="9.0.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+    <PackageReference Include="System.Text.Json" Version="9.0.9" />
   </ItemGroup>
 
   <ItemGroup>

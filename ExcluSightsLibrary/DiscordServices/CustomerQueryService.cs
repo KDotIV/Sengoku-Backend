@@ -125,7 +125,6 @@ namespace ExcluSightsLibrary.DiscordServices
             await using var conn = await OpenAsync(ct);
             return await conn.QuerySingleOrDefaultAsync<SolePlayDTO?>(sql, new { cid = customerId });
         }
-
         public async Task<SolePlayDTO?> GetCustomerByDiscordId(ulong discordId, CancellationToken ct = default)
         {
             if (discordId == 0) throw new ArgumentOutOfRangeException(nameof(discordId));
@@ -146,7 +145,7 @@ namespace ExcluSightsLibrary.DiscordServices
             await using var conn = await OpenAsync(ct);
             return await conn.QuerySingleOrDefaultAsync<SolePlayDTO?>(sql, new { did = (long)discordId });
         }
-        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId)
+        public async Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildId(ulong guildId, CancellationToken ct = default)
         {
             if (guildId <= 0) throw new ArgumentOutOfRangeException(nameof(guildId));
 
