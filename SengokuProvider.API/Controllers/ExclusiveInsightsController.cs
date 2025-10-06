@@ -1,4 +1,5 @@
-﻿using ExcluSightsLibrary.DiscordServices;
+﻿using ExcluSightsLibrary.DiscordModels;
+using ExcluSightsLibrary.DiscordServices;
 using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Services.Common;
 
@@ -62,6 +63,24 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error retrieving roles for guild ID {GuildId}.", guildId);
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetCustomersDataByGuildId")]
+        public async Task<IActionResult> GetCustomersDataByGuildId([FromQuery] ulong guildId, string? email = default)
+        {
+            try
+            {
+                IReadOnlyList<CustomerProfileData> customers = await _eventManager.GetCustomersDataByGuildId(guildId, email);
+                if (customers == null || !customers.Any())
+                {
+                    return NotFound($"No customer data found for guild ID {guildId}.");
+                }
+                return Ok(customers);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error retrieving customer data for guild ID {GuildId}.", guildId);
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }

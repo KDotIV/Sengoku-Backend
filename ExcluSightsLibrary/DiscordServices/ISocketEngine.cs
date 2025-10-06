@@ -4,10 +4,11 @@ namespace ExcluSightsLibrary.DiscordServices
 {
     public interface ISocketEngine
     {
-        public Task EnsureStartedAsync();
+        Task EnsureStartedAsync();
         IReadOnlyList<(ulong GuildId, string GuildName)> GetConnectedGuilds();
-        public Task<bool> WaitForInitialBackfillAsync(TimeSpan timeout);
+        Task<bool> WaitForInitialBackfillAsync(TimeSpan timeout);
         Task<bool> DownloadGuildMembersAsync(ulong guildId);
-        public IReadOnlyList<DiscordRoleData> GetRolesForConnectedGuild(ulong guildId);
+        IReadOnlyList<DiscordRoleData> GetRolesForConnectedGuild(ulong guildId);
+        Task<IReadOnlyList<CustomerProfileData>> GetCustomersDataByGuildIdAsync(ulong guildId, string? email);
     }
 }
