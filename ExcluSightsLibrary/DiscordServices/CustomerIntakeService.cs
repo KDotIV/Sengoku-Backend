@@ -3,6 +3,7 @@ using Discord.WebSocket;
 using ExcluSightsLibrary.DiscordModels;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using System;
 using System.Text;
 
 namespace ExcluSightsLibrary.DiscordServices
@@ -166,10 +167,18 @@ namespace ExcluSightsLibrary.DiscordServices
 
             if (model.DiscordId == 0) throw new ArgumentException("Must have valid DiscordId", nameof(model.DiscordId));
 
+            const string sqlDetachDiscord = @"
+                UPDATE customers
+                   SET discord_id = NULL,
+                       updated_at = now()
+                 WHERE discord_id  = @did
+                   AND customer_id <> @cid;";
+
             const string sqlCustomer = @"
-                INSERT INTO customers (customer_id, first_name, last_name)
-                VALUES (@cid, @fn, @ln)
+                INSERT INTO customers (customer_id, first_name, last_name, discord_id)
+                VALUES (@cid, @fn, @ln, @did)
                 ON CONFLICT (customer_id) DO UPDATE SET
+                  discord_id = EXCLUDED.discord_id,
                   first_name = EXCLUDED.first_name,
                   last_name  = EXCLUDED.last_name,
                   updated_at = now();";
@@ -184,11 +193,18 @@ namespace ExcluSightsLibrary.DiscordServices
 
             try
             {
+                await conn.ExecuteAsync(sqlDetachDiscord, new
+                {
+                    cid = model.CustomerId,
+                    did = (long)model.DiscordId
+                }, tx);
+
                 var insertResult = await conn.ExecuteAsync(sqlCustomer, new
                 {
                     cid = model.CustomerId,
                     fn = (object?)model.CustomerFirstName ?? DBNull.Value,
-                    ln = (object?)model.CustomerLastName ?? DBNull.Value
+                    ln = (object?)model.CustomerLastName ?? DBNull.Value,
+                    did = (long)model.DiscordId
                 }, tx);
 
                 if (insertResult <= 0)
@@ -365,7 +381,40 @@ namespace ExcluSightsLibrary.DiscordServices
             if (reducedMembers == null || reducedMembers.Count == 0)
                 throw new ArgumentException("reducedMembers cannot be null or empty.", nameof(reducedMembers));
 
-            var expectedResult = reducedMembers.Count;
+            // Filter out duplicates locally so the bulk upsert cannot violate the
+            // unique constraints on customer_id / discord_id.
+            var uniqueMembers = new List<SolePlayDTO>(reducedMembers.Count);
+            var seenCustomerIds = new HashSet<string>(StringComparer.Ordinal);
+            var seenDiscordIds = new HashSet<ulong>();
+
+            for (var i = reducedMembers.Count - 1; i >= 0; i--)
+            {
+                var member = reducedMembers[i];
+
+                if (!seenCustomerIds.Add(member.CustomerId))
+                {
+                    Console.WriteLine($"Skipping duplicate CustomerID {member.CustomerId} while preparing customer_profile_soleplay upsert payload.");
+                    continue;
+                }
+
+                if (!seenDiscordIds.Add(member.DiscordId))
+                {
+                    Console.WriteLine($"Skipping duplicate DiscordID {member.DiscordId} while preparing customer_profile_soleplay upsert payload.");
+                    continue;
+                }
+
+                uniqueMembers.Add(member);
+            }
+
+            uniqueMembers.Reverse();
+
+            if (uniqueMembers.Count == 0)
+            {
+                Console.WriteLine("No unique guild member rows to upsert after duplicate filtering.");
+                return 0;
+            }
+
+            var expectedResult = uniqueMembers.Count;
 
             await WithDbGate(async () =>
             {
@@ -379,11 +428,11 @@ namespace ExcluSightsLibrary.DiscordServices
                         var insertParams = new List<NpgsqlParameter>();
                         var valueCount = 0;
 
-                        foreach (var data in reducedMembers)
+                        foreach (var data in uniqueMembers)
                         {
                             if (!await VerifyCustomer(data))
                             {
-                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId} /n/ Skipping...");
+                                Console.WriteLine($"Failed to verify CustomerID {data.CustomerId} and DiscordID {data.DiscordId}\nSkipping...");
                                 continue;
                             }
 
@@ -397,6 +446,16 @@ namespace ExcluSightsLibrary.DiscordServices
 
                             valueCount++;
                         }
+
+                        expectedResult = valueCount;
+
+                        if (valueCount == 0)
+                        {
+                            Console.WriteLine("No valid guild member rows remained after verification checks; skipping upsert.");
+                            await transaction.RollbackAsync(ct);
+                            return 0;
+                        }
+
                         insertSql.Append(" ON CONFLICT (customer_id) DO UPDATE SET discord_id = EXCLUDED.discord_id, shoe_size = EXCLUDED.shoe_size, updated_at = EXCLUDED.updated_at;");
 
                         using (var cmd = new NpgsqlCommand(insertSql.ToString(), conn, transaction))
