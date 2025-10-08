@@ -1,5 +1,4 @@
-﻿using ExcluSightsLibrary.DiscordModels;
-using ExcluSightsLibrary.DiscordServices;
+﻿using ExcluSightsLibrary.DiscordServices;
 using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Services.Common;
 
@@ -12,11 +11,13 @@ namespace SengokuProvider.API.Controllers
         private readonly ILogger<ExclusiveInsightsController> _log;
         private readonly EventListenerManager _eventManager;
         private readonly CommandProcessor _commandProcessor;
-        public ExclusiveInsightsController(ILogger<ExclusiveInsightsController> logger, EventListenerManager manager, CommandProcessor processor)
+        private readonly ICustomerReportService _reportService;
+        public ExclusiveInsightsController(ILogger<ExclusiveInsightsController> logger, EventListenerManager manager, ICustomerReportService reportService, CommandProcessor processor)
         {
             _log = logger;
             _commandProcessor = processor;
             _eventManager = manager;
+            _reportService = reportService;
         }
         [HttpPost("AddDiscordServerListener")]
         public async Task<IActionResult> AddDiscordServerListener([FromQuery] ulong guildId)
@@ -66,22 +67,41 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
-        [HttpGet("GetCustomersDataByGuildId")]
-        public async Task<IActionResult> GetCustomersDataByGuildId([FromQuery] ulong guildId, string? email = default)
+        [HttpGet("GetCustomersReportByGuildId")]
+        public async Task<IActionResult> GetCustomersDataByGuildId(
+            [FromQuery] ulong guildId,
+            [FromQuery] string? email = null,
+            [FromQuery] bool toSheets = false,
+            [FromQuery] bool saveLocal = false,
+            [FromQuery] ReportFormat format = ReportFormat.Excel)
         {
             try
             {
-                IReadOnlyList<CustomerProfileData> customers = await _eventManager.GetCustomersDataByGuildId(guildId);
-                if (customers == null || !customers.Any())
+                var opts = new GenerateReportOptions
                 {
-                    return NotFound($"No customer data found for guild ID {guildId}.");
-                }
-                return Ok(customers);
+                    EmailTo = email,
+                    UploadToGoogleSheets = toSheets,
+                    SaveToLocal = saveLocal,
+                    Format = format,
+                    SheetTitle = $"Guild-{guildId}-Report"
+                };
+
+                var (file, contentType, fileName, googleUrl) =
+                    await _reportService.GenerateCustomerReportAsync(guildId, opts, HttpContext.RequestAborted);
+
+                return Ok(new
+                {
+                    emailed = !string.IsNullOrWhiteSpace(email),
+                    savedLocal = saveLocal,
+                    googleUrl,
+                    fileName,
+                    directory = saveLocal ? Path.Combine(AppContext.BaseDirectory, "reports") : null
+                });
             }
             catch (Exception ex)
             {
-                _log.LogError(ex, "Error retrieving customer data for guild ID {GuildId}.", guildId);
-                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+                _log.LogError(ex, "Error generating report for guild ID {GuildId}.", guildId);
+                return StatusCode(StatusCodes.Status500InternalServerError, ex.Message);
             }
         }
     }

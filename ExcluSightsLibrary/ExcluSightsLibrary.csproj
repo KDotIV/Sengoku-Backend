@@ -14,8 +14,10 @@
     <PackageReference Include="Discord.Net.Rest" Version="3.18.0" />
     <PackageReference Include="Discord.Net.Webhook" Version="3.18.0" />
     <PackageReference Include="Discord.Net.WebSocket" Version="3.18.0" />
+    <PackageReference Include="Google.Apis.Sheets.v4" Version="1.70.0.3819" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.9" />
     <PackageReference Include="Npgsql" Version="9.0.4" />
+    <PackageReference Include="SendGrid" Version="9.29.3" />
   </ItemGroup>
 
 </Project>

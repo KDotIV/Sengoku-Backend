@@ -1,5 +1,6 @@
 using Azure.Messaging.ServiceBus;
 using ExcluSightsLibrary.DiscordServices;
+using Google.Apis.Sheets.v4;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using Npgsql;
@@ -47,7 +48,15 @@ builder.Services.AddSingleton<ISocketEngine>(sp =>
     var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
     return new DiscordSocketEngine(exclusiveInsightsBotToken!, customerPoolConnection!, log, scopeFactory);
 });
-
+builder.Services.AddSingleton<IEmailSender>(sp =>
+    new SendGridEmailSender(
+        builder.Configuration["SendGridSettings:ApiKey"],
+        builder.Configuration["SendGridSettings:FromEmail"],
+        builder.Configuration["SendGridSettings:FromName"]));
+builder.Services.AddSingleton<IGoogleSheetsClient>(sp =>
+{
+    return new GoogleSheetsClient(new SheetsService());
+});
 builder.Services.AddSingleton<EventListenerManager>(provider =>
 {
     var logger = provider.GetService<ILogger<EventListenerManager>>();
@@ -178,6 +187,15 @@ builder.Services.AddScoped<ICustomerIntakeService, CustomerIntakeService>(provid
     var logger = provider.GetService<ILogger<CustomerIntakeService>>();
     var customerQuery = provider.GetService<ICustomerQueryService>();
     return new CustomerIntakeService(dataSource, logger, customerQuery);
+});
+builder.Services.AddScoped<ICustomerReportService, CustomerReportService>(sp =>
+{
+    var customerQuery = sp.GetRequiredService<ICustomerQueryService>();
+    var email = sp.GetRequiredService<IEmailSender>();
+    var sheets = sp.GetRequiredService<IGoogleSheetsClient>();
+    var log = sp.GetRequiredService<ILogger<CustomerReportService>>();
+
+    return new CustomerReportService(customerQuery, email, sheets, log);
 });
 
 builder.Services.AddControllers();
