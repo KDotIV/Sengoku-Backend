@@ -9,7 +9,6 @@ namespace ExcluSightsLibrary.DiscordServices
 {
     public class CustomerIntakeService : ICustomerIntakeService
     {
-        //private readonly string _connectionString;
         private static readonly SemaphoreSlim DbGate = new(initialCount: 8, maxCount: 8); // limit to 8 concurrent DB operations
         private readonly ILogger<ICustomerIntakeService> _log;
         private readonly NpgsqlDataSource _dataSource;
