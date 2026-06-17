@@ -70,7 +70,7 @@ namespace EventTournamentScheduler
                     var tempArr = new int[currentEvents.Count];
                     for (int i = 0; i < currentEvents.Count; i++)
                     {
-                        tempArr[i] = currentEvents[i].LinkId;
+                        tempArr[i] = currentEvents[i].EventLink;
                     }
 
                     var currentTournaments = await _eventQueryService.GetTournamentsByEventIds(tempArr);
