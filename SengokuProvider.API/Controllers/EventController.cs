@@ -139,7 +139,7 @@ namespace SengokuProvider.API.Controllers
             [FromQuery] string regionId,
             [FromQuery] int[] gameIds,
             [FromQuery] int perPage = 50,
-            [FromQuery] string priority = "date")
+            [FromQuery] string priority = "local")
         {
             if (string.IsNullOrEmpty(regionId))
             {
