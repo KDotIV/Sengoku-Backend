@@ -3,7 +3,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Services.Common;
-using SengokuProvider.Library.Services.Comms;
+using SengokuProvider.Library.Services.Comms.Discord;
 using SengokuProvider.Library.Services.Legends;
 
 namespace SengokuProvider.API.Controllers

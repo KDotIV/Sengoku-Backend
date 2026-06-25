@@ -4,6 +4,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
+using SengokuProvider.Worker.Jobs;
 
 namespace SengokuProvider.Worker.Handlers
 {
@@ -25,14 +26,30 @@ namespace SengokuProvider.Worker.Handlers
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 1, PrefetchCount = 2, });
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:EventReceivedQueue"], new ServiceBusProcessorOptions
+            {
+                AutoCompleteMessages = false,
+                MaxConcurrentCalls = 1,
+                PrefetchCount = 2,
+                MaxAutoLockRenewalDuration = TimeSpan.FromMinutes(10)
+            });
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += Errorhandler;
 
-            await _processor.StartProcessingAsync();
+            await _processor.StartProcessingAsync(stoppingToken);
 
-            //await GroomEventData();
-            return;
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+            finally
+            {
+                await _processor.StopProcessingAsync(CancellationToken.None);
+                await _processor.DisposeAsync();
+            }
         }
 
         private async Task GroomEventData()
@@ -94,14 +111,10 @@ namespace SengokuProvider.Worker.Handlers
         {
             _log.LogWarning("Received Message...");
 
-            var currentMessage = await ParseMessage(args.Message);
-            if (currentMessage == null) { return; }
-
-            CancellationTokenSource cts = new CancellationTokenSource();
-            var lockRenewalTask = RenewMessageLockUntilComplete(args, cts.Token);
-
             try
             {
+                var currentMessage = await ParseMessage(args.Message)
+                    ?? throw new InvalidOperationException("The event-ingestion message could not be parsed.");
                 switch (currentMessage.Command.Topic)
                 {
                     case CommandRegistry.UpdateEvent:
@@ -116,17 +129,29 @@ namespace SengokuProvider.Worker.Handlers
                         if (tournamentResult == 0) { Console.WriteLine($"Failed to Intake Tournament"); }
                         Console.WriteLine($"Successfully Added Tournament Data");
                         break;
-                        //case CommandRegistry.ExportTournamentLocationResults:
+                    case CommandRegistry.IntakeEventsByGames:
+                        var gameResult = await IntakeGameEvents(currentMessage);
+                        Console.WriteLine($"Successfully added {gameResult} events by game filter");
+                        break;
+                    default:
+                        throw new NotSupportedException($"Unsupported event command topic: {currentMessage.Command.Topic}.");
                 }
                 await args.CompleteMessageAsync(args.Message);
-                cts.Cancel();
             }
-            catch (Exception ex)
+            catch (NotSupportedException ex)
             {
                 _log.LogError(ex.Message, ex);
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
-                cts.Cancel();
-                throw;
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("could not be parsed", StringComparison.Ordinal))
+            {
+                _log.LogError(ex.Message, ex);
+                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Event ingestion failed and will be retried.");
+                await args.AbandonMessageAsync(args.Message);
             }
         }
 
@@ -140,6 +165,13 @@ namespace SengokuProvider.Worker.Handlers
             }
             return 0;
         }
+        private async Task<int> IntakeGameEvents(EventReceivedData currentMessage)
+        {
+            if (currentMessage.Command is not IntakeEventsByGameIdCommand command)
+                throw new InvalidOperationException("Command is not an IntakeEventsByGameIdCommand.");
+
+            return await _eventFactory.CreateIntakeHandler().IntakeEventsByGameId(command);
+        }
         private async Task<List<int>> IntakeLocationEvents(EventReceivedData? currentMessage)
         {
             List<int> successList = new List<int>();
@@ -148,7 +180,7 @@ namespace SengokuProvider.Worker.Handlers
             {
                 var currentIntakeHandler = _eventFactory.CreateIntakeHandler();
                 successList = await currentIntakeHandler.IntakeTournamentData(intakeCommand);
-                if (successList.Count == 0) new ApplicationException($"Failed to Intake Tournament Batch");
+                if (successList.Count == 0) throw new ApplicationException("Failed to intake tournament batch.");
                 return successList;
             }
             else { throw new InvalidOperationException("Command is not of expected type IntakeLocationCommand"); }
@@ -160,7 +192,7 @@ namespace SengokuProvider.Worker.Handlers
             {
                 var currentUpdateHandler = _eventFactory.CreateIntakeHandler();
                 var result = await currentUpdateHandler.UpdateEventData(updateCommand);
-                if (!result) new ApplicationException($"Failed to update Event Data");
+                if (!result) throw new ApplicationException("Failed to update event data.");
             }
             else { throw new InvalidOperationException("Command is not of expected type UpdateEventCommand"); }
             _log.LogInformation("Successfully Updated Event");
@@ -174,6 +206,9 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
+                if (IngestionJobParser.TryParse(data, out var envelope))
+                    return IngestionJobParser.ToEventMessage(envelope!);
+
                 var settings = new JsonSerializerSettings
                 {
                     Converters = new List<JsonConverter> { new CommandSerializer() }

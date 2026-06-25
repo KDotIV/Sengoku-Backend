@@ -13,12 +13,15 @@
         OnboardPlayerData = 202,
         IntakePlayersByTournament = 203,
         QueryPlayerStandingsCommand = 204,
+        BuildBracketSnapshot = 205,
+        LinkStartGgUser = 206,
         //Legend Commands
         UpdateLegend = 301,
         OnboardLegendsByPlayerData = 302,
         IntakeLegendsByTournament = 303,
         OnboardTournamentToLeague = 304,
         OnboardPlayerToLeague = 305,
+        ImportTournamentStandingsToLeague = 306,
         //User Commands
         CreateNewUser = 401,
     }

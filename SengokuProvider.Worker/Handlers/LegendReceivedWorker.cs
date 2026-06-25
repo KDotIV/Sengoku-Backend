@@ -6,6 +6,7 @@ using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
+using SengokuProvider.Worker.Jobs;
 
 namespace SengokuProvider.Worker.Handlers
 {
@@ -26,18 +27,34 @@ namespace SengokuProvider.Worker.Handlers
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:LegendReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 1, PrefetchCount = 2, });
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:LegendReceivedQueue"], new ServiceBusProcessorOptions
+            {
+                AutoCompleteMessages = false,
+                MaxConcurrentCalls = 1,
+                PrefetchCount = 2,
+                MaxAutoLockRenewalDuration = TimeSpan.FromMinutes(10)
+            });
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += Errorhandler;
 
-            await _processor.StartProcessingAsync();
+            await _processor.StartProcessingAsync(stoppingToken);
 
             if (_log.IsEnabled(LogLevel.Information))
             {
                 _log.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             }
-            //await GroomLegendData();
-            return;
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+            }
+            finally
+            {
+                await _processor.StopProcessingAsync(CancellationToken.None);
+                await _processor.DisposeAsync();
+            }
         }
         private async Task GroomLegendData()
         {
@@ -65,11 +82,10 @@ namespace SengokuProvider.Worker.Handlers
         {
             _log.LogWarning("Received Message...");
 
-            var currentMessage = await ParseMessage(args.Message);
-            if (currentMessage == null) { throw new NullReferenceException(); }
-
             try
             {
+                var currentMessage = await ParseMessage(args.Message)
+                    ?? throw new InvalidOperationException("The league-ingestion message could not be parsed.");
                 switch (currentMessage.Command.Topic)
                 {
                     case CommandRegistry.UpdateLegend:
@@ -87,14 +103,28 @@ namespace SengokuProvider.Worker.Handlers
                             Console.WriteLine($"Successfully Added Tournament to League: {response.Response}");
                         }
                         break;
+                    case CommandRegistry.ImportTournamentStandingsToLeague:
+                        await ImportTournamentStandings(currentMessage);
+                        break;
+                    default:
+                        throw new NotSupportedException($"Unsupported league command topic: {currentMessage.Command.Topic}.");
                 }
                 await args.CompleteMessageAsync(args.Message);
             }
-            catch (Exception ex)
+            catch (NotSupportedException ex)
             {
                 _log.LogError(ex.Message, ex);
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
-                throw;
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("could not be parsed", StringComparison.Ordinal))
+            {
+                _log.LogError(ex.Message, ex);
+                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "League ingestion failed and will be retried.");
+                await args.AbandonMessageAsync(args.Message);
             }
         }
 
@@ -110,6 +140,19 @@ namespace SengokuProvider.Worker.Handlers
                 return result;
             }
             return new TournamentOnboardResult { Response = "Unexpected Error Occured" };
+        }
+
+        private async Task ImportTournamentStandings(OnboardReceivedData currentMessage)
+        {
+            if (currentMessage.Command is not OnboardTournamentStandingstoLeague command)
+                throw new InvalidOperationException("Command is not an OnboardTournamentStandingstoLeague command.");
+
+            await _legendFactory.CreateIntakeHandler().IntakeTournamentStandingsByEventLink(
+                command.TournamentLinks,
+                command.EventLinkSlug,
+                command.GameIds,
+                command.LeagueId,
+                command.Open);
         }
 
         private async Task<int> OnboardNewPlayer(OnboardReceivedData currentMessage)
@@ -156,6 +199,9 @@ namespace SengokuProvider.Worker.Handlers
 
             try
             {
+                if (IngestionJobParser.TryParse(data, out var envelope))
+                    return IngestionJobParser.ToLegendMessage(envelope!);
+
                 var settings = new JsonSerializerSettings
                 {
                     Converters = new List<JsonConverter> { new CommandSerializer() }

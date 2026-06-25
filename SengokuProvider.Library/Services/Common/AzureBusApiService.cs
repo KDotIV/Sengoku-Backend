@@ -30,5 +30,21 @@ namespace SengokuProvider.Library.Services.Common
 
             return true;
         }
+
+        public async Task SendAsync(string queueName, string message, string messageId, CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(queueName);
+            ArgumentException.ThrowIfNullOrWhiteSpace(message);
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId);
+
+            await using var sender = _client.CreateSender(queueName);
+            var busMessage = new ServiceBusMessage(message)
+            {
+                ContentType = "application/json",
+                MessageId = messageId
+            };
+
+            await sender.SendMessageAsync(busMessage, cancellationToken);
+        }
     }
 }

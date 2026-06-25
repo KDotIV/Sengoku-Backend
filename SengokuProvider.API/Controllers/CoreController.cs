@@ -2,7 +2,7 @@
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
-using SengokuProvider.Library.Services.Comms;
+using SengokuProvider.Library.Services.Comms.Discord;
 
 namespace SengokuProvider.API.Controllers
 {

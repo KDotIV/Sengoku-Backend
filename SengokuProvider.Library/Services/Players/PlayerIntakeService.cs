@@ -9,6 +9,7 @@ using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Library.Services.Comms.StartGG.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Worker.Handlers;
@@ -20,8 +21,9 @@ namespace SengokuProvider.Library.Services.Players
     public class PlayerIntakeService : IPlayerIntakeService
     {
         private readonly ICommonDatabaseService _commonDatabaseService;
-        private readonly IPlayerQueryService _queryService;
+        private readonly IStartGgPlayerQueryService _startGgQueries;
         private readonly ILegendQueryService _legendQueryService;
+        private readonly IPlayerQueryService _playerQueryService;
         private readonly IEventQueryService _eventQueryService;
         private readonly IAzureBusApiService _azureBusApiService;
         private readonly IConfiguration _config;
@@ -33,14 +35,15 @@ namespace SengokuProvider.Library.Services.Players
         private int _currentEventId;
         private static Random _rand = new Random();
 
-        public PlayerIntakeService(string connectionString, IConfiguration configuration, ICommonDatabaseService commonServices, IPlayerQueryService playerQueryService,
-            ILegendQueryService legendQueryService, IEventQueryService eventQueryService, IAzureBusApiService serviceBus)
+        public PlayerIntakeService(string connectionString, IConfiguration configuration, ICommonDatabaseService commonServices, IStartGgPlayerQueryService startGgQueries,
+            IPlayerQueryService playerQueryService, IEventQueryService eventQueryService, ILegendQueryService legendQueryService, IAzureBusApiService serviceBus)
         {
             _connectionString = connectionString;
             _config = configuration;
             _commonDatabaseService = commonServices;
-            _queryService = playerQueryService;
+            _startGgQueries = startGgQueries;
             _legendQueryService = legendQueryService;
+            _playerQueryService = playerQueryService;
             _eventQueryService = eventQueryService;
             _azureBusApiService = serviceBus;
             _playersCache = new ConcurrentDictionary<int, int>();
@@ -89,7 +92,7 @@ namespace SengokuProvider.Library.Services.Players
         {
             try
             {
-                PlayerGraphQLResult? newPlayerData = await _queryService.QueryPlayerDataFromStartgg(tournamentLink);
+                PlayerGraphQLResult? newPlayerData = await _startGgQueries.GetEventEntrantsAsync(tournamentLink);
                 if (newPlayerData == null) { return 0; }
 
                 _eventCache.Add(newPlayerData.TournamentLink.EventLink.Id);
@@ -116,7 +119,7 @@ namespace SengokuProvider.Library.Services.Players
             List<PlayerStandingResult> currentBatch = new List<PlayerStandingResult>();
             try
             {
-                PastEventPlayerData queryResult = await _queryService.QueryStartggPreviousEventData(command.PlayerId, command.GamerTag, command.PerPage);
+                PastEventPlayerData queryResult = await _startGgQueries.GetPreviousEventsAsync(command.PlayerId, command.GamerTag, command.PerPage);
 
                 if (queryResult == null || queryResult.PlayerQuery == null || queryResult.PlayerQuery.User == null || queryResult.PlayerQuery.User.Events == null || queryResult?.PlayerQuery?.User?.Events?.Nodes?.Count == 0) { return 0; }
 
@@ -150,7 +153,7 @@ namespace SengokuProvider.Library.Services.Players
             int tempBracketId = Convert.ToInt32(returnedSlug[2]);
             int tempGroupPhaseId = Convert.ToInt32(returnedSlug[1]);
             int tempTournamentId = Convert.ToInt32(returnedSlug[3]);
-            var bracketData = await _queryService.QueryBracketDataFromStartggByBracketId(tempBracketId);
+            var bracketData = await _startGgQueries.GetPhaseGroupAsync(tempBracketId);
             BracketVictoryPathData processedData = await ProcessNewBracketData(bracketData, playerId, tempTournamentId);
 
             onboardResult = await SaveVictoryPathData(processedData);
@@ -295,7 +298,7 @@ namespace SengokuProvider.Library.Services.Players
                 };
                 var tempPlayerArr = new int[] { playerId };
                 var tempTournamentArr = new int[] { tournamentId };
-                List<PlayerStandingResult> playerStanding = await _queryService.GetStandingsDataByPlayerIds(tempPlayerArr, tempTournamentArr);
+                List<PlayerStandingResult> playerStanding = await _playerQueryService.GetStandingsDataByPlayerIds(tempPlayerArr, tempTournamentArr);
                 if (playerStanding == null || playerStanding.Count == 0)
                 {
                     throw new ApplicationException("No Player Standing Data to process");
@@ -361,7 +364,7 @@ namespace SengokuProvider.Library.Services.Players
                 Console.WriteLine("No Entrant Set Cards found for the provided PlayerId");
                 return entrantSetCards;
             }
-            List<Links> playerIds = await _queryService.GetPlayersByEntrantLinks(entrantsRegistry.Keys.ToArray());
+            List<Links> playerIds = await _playerQueryService.GetPlayersByEntrantLinks(entrantsRegistry.Keys.ToArray());
             if (playerIds.Count == 0) throw new ApplicationException("No Player IDs found for the provided Entrant IDs");
 
             foreach (var entrantCard in entrantSetCards)
@@ -498,7 +501,7 @@ namespace SengokuProvider.Library.Services.Players
             {
                 Console.WriteLine("Found duplicate entrant IDs:");
                 foreach (var dup in duplicates)
-                    Console.WriteLine($"  • {dup.EntrantId} appears {dup.Count} times");
+                    Console.WriteLine($"{dup.EntrantId} appears {dup.Count} times");
             }
             else
             {

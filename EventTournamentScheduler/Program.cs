@@ -7,7 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
-using SengokuProvider.Library.Services.Comms;
+using SengokuProvider.Library.Services.Comms.Discord;
+using SengokuProvider.Library.Services.Comms.StartGG.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Orgs;
@@ -53,7 +54,7 @@ var host = new HostBuilder()
         {
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
             var playerQuery = provider.GetService<IPlayerQueryService>();
-            return new UserService(connectionString, intakeValidator, playerQuery);
+            return new UserService(connectionString, intakeValidator);
         });
         services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>(provider =>
         {
@@ -98,7 +99,7 @@ var host = new HostBuilder()
             var graphQlClient = provider.GetService<GraphQLHttpClient>();
             var throttler = provider.GetService<RequestThrottler>();
             var commonServices = provider.GetService<ICommonDatabaseService>();
-            return new PlayerQueryService(connectionString, configuration, graphQlClient, throttler, commonServices);
+            return new PlayerQueryService(connectionString, configuration, commonServices);
         });
         services.AddScoped<IPlayerIntakeService, PlayerIntakeService>(provider =>
         {
@@ -108,7 +109,8 @@ var host = new HostBuilder()
             var legendQueryService = provider.GetService<ILegendQueryService>();
             var eventQueryService = provider.GetService<IEventQueryService>();
             var serviceBus = provider.GetService<IAzureBusApiService>();
-            return new PlayerIntakeService(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus);
+            var startGgQueries = provider.GetService<IStartGgPlayerQueryService>();
+            return new PlayerIntakeService(connectionString!, configuration!, commonServices!, startGgQueries!, playerQueryService!, eventQueryService!, legendQueryService!, serviceBus!);
         });
         services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {
@@ -139,7 +141,7 @@ var host = new HostBuilder()
             var userQueryService = provider.GetService<IUserService>();
             var playerQueryService = provider.GetService<IPlayerQueryService>();
             var commonServices = provider.GetService<ICommonDatabaseService>();
-            return new LegendIntakeService(connectionString, config, queryService, eventQueryService, eventIntakeService, userQueryService, playerQueryService, serviceBus, commonServices);
+            return new LegendIntakeService(connectionString!, config!, queryService!, eventQueryService!, eventIntakeService!, userQueryService!, playerQueryService!, serviceBus!, commonServices!);
         });
     })
     .Build();

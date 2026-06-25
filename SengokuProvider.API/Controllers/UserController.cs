@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
+using SengokuProvider.Library.Services.Comms.StartGG;
 using SengokuProvider.Library.Services.Users;
 
 namespace SengokuProvider.API.Controllers
@@ -11,12 +12,14 @@ namespace SengokuProvider.API.Controllers
     {
         private readonly ILogger<UserController> _log;
         private readonly IUserService _userService;
+        private readonly IStartGgUserSyncService _userSyncService;
         private readonly CommandProcessor _commandProcessor;
-        public UserController(ILogger<UserController> logger, IUserService userService, CommandProcessor commandProcessor)
+        public UserController(ILogger<UserController> logger, IUserService userService, IStartGgUserSyncService userSyncService, CommandProcessor commandProcessor)
         {
             _log = logger;
             _userService = userService;
             _commandProcessor = commandProcessor;
+            _userSyncService = userSyncService;
         }
 
         [HttpPost("GetSearchedUsers")]
@@ -70,7 +73,7 @@ namespace SengokuProvider.API.Controllers
                 return new BadRequestObjectResult(parsedRequest.Response);
             }
 
-            UserPlayerDataResponse result = await _userService.SyncStartggDataToUserData(cmd.PlayerName, cmd.UserSlug);
+            UserPlayerDataResponse result = await _userSyncService.ResolveAsync(cmd.PlayerName, cmd.UserSlug);
             return Ok(result);
         }
     }

@@ -3,6 +3,8 @@ using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
+using SengokuProvider.Library.Services.Comms.StartGG;
+using SengokuProvider.Library.Services.Comms.StartGG.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Orgs;
@@ -36,7 +38,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         {
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
             var playerQuery = provider.GetRequiredService<IPlayerQueryService>();
-            return new UserService(connectionString, intakeValidator, playerQuery);
+            return new UserService(connectionString, intakeValidator);
         });
         services.AddSingleton<IEventIntakeService, EventIntakeService>(provider =>
         {
@@ -93,7 +95,8 @@ IHost host = Host.CreateDefaultBuilder(args)
             var legendQueryService = provider.GetRequiredService<ILegendQueryService>();
             var eventQueryService = provider.GetRequiredService<IEventQueryService>();
             var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new PlayerIntakeService(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus);
+            var startGgQueryService = provider.GetRequiredService<IStartGgPlayerQueryService>();
+            return new PlayerIntakeService(connectionString, configuration, commonServices, startGgQueryService, playerQueryService, eventQueryService, legendQueryService, serviceBus);
 
         });
         services.AddSingleton<IPlayerQueryService, PlayerQueryService>(provider =>
@@ -102,7 +105,7 @@ IHost host = Host.CreateDefaultBuilder(args)
             var graphClient = provider.GetRequiredService<GraphQLHttpClient>();
             var throttler = provider.GetRequiredService<RequestThrottler>();
             var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
-            return new PlayerQueryService(connectionString, configuration, graphClient, throttler, commonServices);
+            return new PlayerQueryService(connectionString, configuration, commonServices);
         });
         services.AddSingleton<IOrganizerIntakeService, OrganizerIntakeService>(provider =>
         {
@@ -116,11 +119,6 @@ IHost host = Host.CreateDefaultBuilder(args)
     }))
     .Build();
 await host.RunAsync();
-
-static T GetRequiredService<T>(IServiceProvider provider)
-{
-    return provider.GetService<T>() ?? throw new ArgumentNullException(nameof(T));
-}
 static void SetupServiceDependencies(IServiceCollection services, IConfiguration configuration, out string connectionString, out string graphQLUrl, out string bearerToken, out string serviceBusConnection)
 {
     connectionString = configuration.GetConnectionString("AlexandriaConnectionString") ?? throw new ArgumentNullException("Connection String is Null or Empty");
@@ -142,11 +140,8 @@ static void SetupServiceDependencies(IServiceCollection services, IConfiguration
     {
         HttpClient = { DefaultRequestHeaders = { Authorization = new AuthenticationHeaderValue("Bearer", bearerTokenCopy) } }
     });
-    services.AddSingleton(provider =>
-    {
-        var config = provider.GetService<IConfiguration>(); return new RequestThrottler(config); static T GetRequiredService<T>(IServiceProvider provider)
-        {
-            return provider.GetService<T>() ?? throw new ArgumentNullException(nameof(T));
-        }
-    });
+    services.AddSingleton<RequestThrottler>();
+    services.AddSingleton<IStartGgGraphQlClient, StartGgGraphQlClient>();
+    services.AddSingleton<IStartGgEventQueryService, StartGgEventQueryService>();
+    services.AddSingleton<IStartGgPlayerQueryService, StartGgPlayerQueryService>();
 }

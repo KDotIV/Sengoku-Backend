@@ -1,37 +1,24 @@
 ﻿using Dapper;
-using GraphQL.Client.Http;
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
-using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Models.User;
-using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
-using System.Net;
-using System.Net.Http.Headers;
 
 namespace SengokuProvider.Library.Services.Players
 {
     public class PlayerQueryService : IPlayerQueryService
     {
-        private readonly GraphQLHttpClient _client;
         private readonly string _connectionString;
-        private readonly RequestThrottler _requestThrottler;
         private readonly ICommonDatabaseService _commonDatabaseServices;
         private readonly IConfiguration _configuration;
 
-        public PlayerQueryService(string connectionString, IConfiguration config, GraphQLHttpClient graphQlClient, RequestThrottler throttler, ICommonDatabaseService commonServices)
+        public PlayerQueryService(string connectionString, IConfiguration config, ICommonDatabaseService commonServices)
         {
-            _requestThrottler = throttler;
             _connectionString = connectionString;
             _configuration = config;
-            _client = graphQlClient;
             _commonDatabaseServices = commonServices;
-            _client.HttpClient.DefaultRequestHeaders.Clear();
-            _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
         }
         public async Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int[] tournamentIds)
         {
@@ -41,34 +28,9 @@ namespace SengokuProvider.Library.Services.Players
 
             return result;
         }
-        public async Task<PlayerGraphQLResult?> QueryPlayerDataFromStartgg(int tournamentLink)
-        {
-            return await QueryStartggPlayerData(tournamentLink);
-        }
-        public async Task<PhaseGroupGraphQL> QueryBracketDataFromStartggByBracketId(int bracketId)
-        {
-            return await QueryPhaseGroupDataByID(bracketId);
-        }
         public async Task<List<PlayerStandingResult>> GetStandingsDataByPlayerIds(int[] playerIds, int[] tournamentIds)
         {
             return await QueryStandingsByPlayerIds(playerIds, tournamentIds);
-        }
-        public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
-        {
-            try
-            {
-                var data = await QueryStartggEventStandings(tournamentLink);
-
-                var newStandingResults = MapStandingsData(data);
-
-                if (newStandingResults.Count == 0) { Console.WriteLine("No Data found for this Tournament"); }
-
-                return newStandingResults;
-            }
-            catch (Exception ex)
-            {
-                throw new ArgumentNullException($"Error found while Querying for Player Standings data {ex.Message} - {ex.StackTrace}");
-            }
         }
         public async Task<List<PlayerStandingResult>> GetPlayerStandingResults(GetPlayerStandingsCommand command)
         {
@@ -225,29 +187,6 @@ namespace SengokuProvider.Library.Services.Players
         public async Task<UserPlayerData> GetUserDataByUserLink(int userLink)
         {
             return await QueryUserDataByUserLink(userLink);
-        }
-        public async Task<UserPlayerData> GetUserDataByUserSlug(string userSlug)
-        {
-            var result = new UserPlayerData
-            {
-                PlayerId = 0,
-                PlayerEmail = "",
-                PlayerName = "",
-                userLink = 0,
-                GameIds = []
-            };
-            try
-            {
-                var queryResult = await QueryStartggUserData(userSlug);
-                if (queryResult == null) return result;
-
-                return await MapUserPlayerDataAsync(result, queryResult);
-            }
-            catch (Exception)
-            {
-
-                throw;
-            }
         }
         public Task<UserPlayerData> GetUserDataByPlayerName(string playerName)
         {
@@ -425,7 +364,7 @@ namespace SengokuProvider.Library.Services.Players
 
             return result;
         }
-        private async Task<int> CheckExistingPlayerbase(int playerLinkId)
+        public async Task<int> GetPlayerIdByStartGgId(int playerLinkId)
         {
             using var conn = new NpgsqlConnection(_connectionString);
             try
@@ -455,72 +394,35 @@ namespace SengokuProvider.Library.Services.Players
             }
 
         }
-        private async Task<UserGraphQLResult?> QueryStartggUserData(string userSlug)
+        private async Task<int> CheckExistingPlayerbase(int playerLinkId)
         {
-            var query = @"query UserQuery($userSlug: String) { 
-                            user(slug: $userSlug) { 
-                                id name slug player { id gamerTag }}}";
-
-            var request = new GraphQLHttpRequest
+            using var conn = new NpgsqlConnection(_connectionString);
+            try
             {
-                Query = query,
-                Variables = new { userSlug }
-            };
+                await conn.OpenAsync();
 
-            var jsonSerializerSettings = new JsonSerializerSettings
-            {
-                NullValueHandling = NullValueHandling.Include,
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
-            };
-            bool success = false;
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const int delay = 3000;
-
-            while (!success && retryCount < maxRetries)
-            {
-                await _requestThrottler.WaitIfPaused();
-
-                try
+                using var cmd = new NpgsqlCommand(@"SELECT * FROM players where startgg_link = @Input", conn);
+                cmd.Parameters.AddWithValue("@Input", playerLinkId);
+                using (var reader = await cmd.ExecuteReaderAsync())
                 {
-                    var response = await _client.SendQueryAsync<JObject>(request);
-
-                    if (response.Errors != null && response.Errors.Any())
+                    while (await reader.ReadAsync())
                     {
-                        throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                    }
+                        if (!reader.HasRows) return 0;
 
-                    if (response.Data == null)
-                    {
-                        throw new ApplicationException("Failed to retrieve standing data");
+                        return reader.GetInt32(reader.GetOrdinal("id"));
                     }
-
-                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var userData = JsonConvert.DeserializeObject<UserGraphQLResult>(tempJson, jsonSerializerSettings);
-                    success = true;
-                    return userData;
                 }
-                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
-                {
-                    var errorContent = ex.Content;
-                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                    retryCount++;
-                    if (retryCount >= maxRetries)
-                    {
-                        Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests(_client);
-                    }
-                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                    await Task.Delay(delay);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    return null;
-                }
+                return 0;
             }
-            throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+
         }
         private async Task<UserPlayerData> QueryUserDataByUserLink(int userLink)
         {
@@ -589,497 +491,6 @@ namespace SengokuProvider.Library.Services.Players
                 EntrantsNum = reader.IsDBNull(reader.GetOrdinal("entrants_num")) ? 0 : reader.GetInt32(reader.GetOrdinal("entrants_num")),
                 LastUpdated = reader.IsDBNull(reader.GetOrdinal("last_updated")) ? DateTime.MinValue : reader.GetDateTime(reader.GetOrdinal("last_updated")),
             };
-        }
-        private List<PlayerStandingResult> MapStandingsData(PlayerGraphQLResult? data)
-        {
-            List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
-            if (data == null) return mappedResult;
-            foreach (var tempNode in data.TournamentLink.Entrants.Nodes)
-            {
-                if (tempNode.Standing == null) continue;
-                int numEntrants = data.TournamentLink.NumEntrants ?? 0;
-
-                var newStandings = new PlayerStandingResult
-                {
-                    Response = "Open",
-                    EntrantsNum = numEntrants,
-                    LastUpdated = DateTime.UtcNow,
-                    UrlSlug = data.TournamentLink.Slug,
-                    StandingDetails = new StandingDetails
-                    {
-                        IsActive = tempNode.Standing.IsActive ?? false,
-                        Placement = tempNode.Standing.Placement ?? 0,
-                        GamerTag = tempNode.Participants?.FirstOrDefault()?.Player.GamerTag ?? "",
-                        EventId = data.TournamentLink.EventLink.Id,
-                        EventName = data.TournamentLink.EventLink.Name,
-                        TournamentId = data.TournamentLink.Id,
-                        TournamentName = data.TournamentLink.Name
-                    },
-                    TournamentLinks = new Links
-                    {
-                        EntrantId = tempNode.Id,
-                        StandingId = tempNode.Standing.Id,
-                        PlayerId = tempNode.Participants?.FirstOrDefault()?.Player?.Id ?? 0,
-                    }
-                };
-                mappedResult.Add(newStandings);
-            }
-            return mappedResult;
-        }
-        private async Task<PhaseGroupGraphQL> QueryPhaseGroupDataByID(int phaseGroupId, int perPage = 50)
-        {
-            var tempQuery = @"query PhaseGroupSets($phaseGroupId: ID!, $page: Int!, $perPage: Int!) {
-                                  phaseGroup(id: $phaseGroupId) { id, displayIdentifier, 
-                                    sets(page: $page, perPage: $perPage, sortType: STANDARD) {
-                                      pageInfo { total }
-                                        nodes { id, slots { id, entrant { id, name }}}
-                                        pageInfo { total totalPages page perPage sortBy filter}}}}";
-
-            var jsonSerializerSettings = new JsonSerializerSettings
-            {
-                NullValueHandling = NullValueHandling.Include,
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
-            };
-
-            var allNodes = new List<SetNode>();
-            int currentPhaseId = 0;
-            string poolIdentifier = string.Empty;
-            int currentPage = 1;
-            int totalPages = int.MaxValue;
-
-            for (int i = 0; i <= totalPages; i++)
-            {
-                var request = new GraphQLHttpRequest
-                {
-                    Query = tempQuery,
-                    Variables = new
-                    {
-                        perPage,
-                        phaseGroupId,
-                        page = currentPage
-                    }
-                };
-                bool success = false;
-                int retryCount = 0;
-                const int maxRetries = 3;
-                const int delay = 1000;
-
-                while (!success && retryCount < maxRetries)
-                {
-                    await _requestThrottler.WaitIfPaused();
-
-                    try
-                    {
-                        var response = await _client.SendQueryAsync<JObject>(request);
-
-                        if (response.Errors != null && response.Errors.Any())
-                        {
-                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                        }
-
-                        if (response.Data == null)
-                        {
-                            throw new ApplicationException("Failed to retrieve player data");
-                        }
-
-                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                        var playerData = JsonConvert.DeserializeObject<PhaseGroupGraphQL>(tempJson, jsonSerializerSettings);
-
-                        if (playerData == null || playerData.PhaseGroup == null)
-                        {
-                            Console.WriteLine("Failed to retrieve player data");
-                            totalPages = 0;
-                            break;
-                        }
-
-                        if (playerData.PhaseGroup.Sets.Nodes != null)
-                        {
-                            allNodes.AddRange(playerData.PhaseGroup.Sets.Nodes);
-                            Console.WriteLine("Tournament Node Added");
-                        }
-
-                        currentPhaseId = playerData.PhaseGroup?.Id ?? 0;
-                        poolIdentifier = playerData.PhaseGroup?.DisplayIdentifier ?? string.Empty;
-
-                        // Update pagination info for the next iteration
-                        var pageInfo = playerData?.PhaseGroup?.Sets?.PageInfo;
-                        if (pageInfo != null)
-                        {
-                            totalPages = pageInfo?.TotalPages ?? 1;
-                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
-                        }
-                        success = true;
-                    }
-                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
-                    {
-                        var errorContent = ex.Content;
-                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                        retryCount++;
-                        if (retryCount >= maxRetries)
-                        {
-                            Console.WriteLine("Max retries reached. Pausing further requests.");
-                            await _requestThrottler.PauseRequests(_client);
-                        }
-                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                        await Task.Delay(delay);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                        throw;
-                    }
-                }
-            }
-            var result = new PhaseGroupGraphQL
-            {
-                PhaseGroup = new PhaseGroup
-                {
-                    Id = currentPhaseId,
-                    DisplayIdentifier = poolIdentifier,
-                    Sets = new Sets
-                    {
-                        Nodes = allNodes
-                    }
-                }
-            };
-            return result;
-        }
-        private async Task<PlayerGraphQLResult> QueryStartggPlayerData(int tournamentLink, int perPage = 80)
-        {
-            var tempQuery = @"query EventEntrants($perPage: Int!, $pageNum: Int!, $eventId: ID!) {
-                    event(id: $eventId) {
-                        id
-                        name
-                        tournament { id, name }
-                        slug
-                        numEntrants
-                        entrants(query: {perPage: $perPage, page: $pageNum filter: {}}) {
-                            nodes { id, paginatedSets(sortType: ROUND) {
-                                            nodes { round, displayScore, winnerId }},
-                                        participants { 
-                                            id, player { 
-                                                id, gamerTag },
-                                                user {
-                                                   id }} 
-                                        standing { id, placement, isFinal }}
-                            pageInfo { total totalPages page perPage sortBy filter}}}}";
-
-            var jsonSerializerSettings = new JsonSerializerSettings
-            {
-                NullValueHandling = NullValueHandling.Include,
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
-            };
-
-            var allNodes = new List<CommonEntrantNode>();
-            string currentEventLinkName = string.Empty;
-            int currentEventLinkId = 0;
-            int currentPage = 1;
-            int totalPages = int.MaxValue;
-            string currentTournamentLinkName = string.Empty;
-            int currentTournamentLinkId = 0;
-            int currentEntrantsNum = 0;
-            string currentTournamentLinkSlug = string.Empty;
-
-            for (; currentPage <= totalPages; currentPage++)
-            {
-                var request = new GraphQLHttpRequest
-                {
-                    Query = tempQuery,
-                    Variables = new
-                    {
-                        perPage,
-                        eventId = tournamentLink,
-                        pageNum = currentPage
-                    }
-                };
-
-                bool success = false;
-                int retryCount = 0;
-                const int maxRetries = 3;
-                const int delay = 1000;
-
-                while (!success && retryCount < maxRetries)
-                {
-                    await _requestThrottler.WaitIfPaused();
-
-                    try
-                    {
-                        var response = await _client.SendQueryAsync<JObject>(request);
-
-                        if (response.Errors != null && response.Errors.Any())
-                        {
-                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                        }
-
-                        if (response.Data == null)
-                        {
-                            throw new ApplicationException($"Failed to retrieve player data: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                        }
-
-                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                        var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
-
-                        if (playerData == null || playerData.TournamentLink == null)
-                        {
-                            Console.WriteLine("Failed to retrieve player data");
-                            totalPages = 0;
-                            break;
-                        }
-
-                        if (playerData.TournamentLink.Entrants.Nodes != null)
-                        {
-                            allNodes.AddRange(playerData.TournamentLink.Entrants.Nodes);
-                            Console.WriteLine("Tournament Node Added");
-                        }
-
-                        currentEventLinkName = playerData.TournamentLink.EventLink?.Name ?? string.Empty;
-                        currentEventLinkId = playerData.TournamentLink.EventLink?.Id ?? 0;
-                        currentTournamentLinkName = playerData.TournamentLink.Name ?? string.Empty;
-                        currentTournamentLinkSlug = playerData.TournamentLink?.Slug ?? string.Empty;
-                        currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
-                        currentEntrantsNum = playerData.TournamentLink?.NumEntrants ?? 0;
-
-                        // Update pagination info for the next iteration
-                        var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;
-                        if (pageInfo != null)
-                        {
-                            totalPages = pageInfo.TotalPages ?? 1;
-                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
-                        }
-                        success = true;
-                    }
-                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
-                    {
-                        var errorContent = ex.Content;
-                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                        retryCount++;
-                        if (retryCount >= maxRetries)
-                        {
-                            Console.WriteLine("Max retries reached. Pausing further requests.");
-                            await _requestThrottler.PauseRequests(_client);
-                        }
-                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                        await Task.Delay(delay);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"Failed to retrieve player data: {ex.Message + ": " + ex.StackTrace}");
-                    }
-                }
-            }
-
-            // Return the aggregated result
-            var result = new PlayerGraphQLResult
-            {
-                TournamentLink = new CommonEventNode
-                {
-                    Id = tournamentLink,
-                    Name = currentTournamentLinkName,
-                    Slug = currentTournamentLinkSlug,
-                    NumEntrants = currentEntrantsNum,
-                    Entrants = new CommonEntrantList
-                    {
-                        Nodes = allNodes
-                    },
-                    EventLink = new CommonTournament
-                    {
-                        Id = currentEventLinkId,
-                        Name = currentEventLinkName
-                    }
-                }
-            };
-
-            return result;
-        }
-        private async Task<PlayerGraphQLResult?> QueryStartggEventStandings(int tournamentLink, int perPage = 50)
-        {
-            var tempQuery = @"query EventEntrants($eventId: ID!, $perPage: Int!) {
-                                event(id: $eventId) { id name numEntrants slug tournament {
-                                  id name } entrants(query: {perPage: $perPage}) {
-                                      nodes { id participants {
-                                          id player { id gamerTag }} standing { id placement isFinal }}
-                                    pageInfo { total totalPages page perPage sortBy filter }}}}";
-
-            var request = new GraphQLHttpRequest
-            {
-                Query = tempQuery,
-                Variables = new
-                {
-                    tournamentLink,
-                    perPage
-                }
-            };
-
-            var jsonSerializerSettings = new JsonSerializerSettings
-            {
-                NullValueHandling = NullValueHandling.Include,
-                MissingMemberHandling = MissingMemberHandling.Ignore,
-                DefaultValueHandling = DefaultValueHandling.IgnoreAndPopulate
-            };
-            bool success = false;
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const int delay = 3000;
-
-            while (!success && retryCount < maxRetries)
-            {
-                await _requestThrottler.WaitIfPaused();
-
-                try
-                {
-                    var response = await _client.SendQueryAsync<JObject>(request);
-
-                    if (response.Errors != null && response.Errors.Any())
-                    {
-                        throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                    }
-
-                    if (response.Data == null)
-                    {
-                        throw new ApplicationException("Failed to retrieve standing data");
-                    }
-
-                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var standingsData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
-                    success = true;
-                    return standingsData;
-                }
-                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
-                {
-                    var errorContent = ex.Content;
-                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                    retryCount++;
-                    if (retryCount >= maxRetries)
-                    {
-                        Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests(_client);
-                    }
-                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                    await Task.Delay(delay);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    return null;
-                }
-            }
-            throw new ApplicationException("Failed to retrieve standing data after multiple attempts.");
-        }
-        public async Task<PastEventPlayerData> QueryStartggPreviousEventData(int playerId, string gamerTag, int perPage = 10)
-        {
-            var tempQuery = @"query UserPreviousEventsQuery($playerId: ID!, $perPage: Int!, $playerName: String!) {
-                                  player(id: $playerId) {id, gamerTag
-                                    user { id
-                                      events(query: {perPage: $perPage, filter: {location: {countryCode: ""US""}}}) {
-                                        nodes { id name numEntrants slug
-                                          tournament { id name }
-                                          entrants(query: { filter: {name: $playerName}}) {
-                                            nodes { id
-                                              paginatedSets(sortType: ROUND) {
-                                                nodes { round displayScore winnerId }}
-                                              participants { id player { id gamerTag }}
-                                              standing { id placement isFinal }}}}
-                                        pageInfo { total totalPages page perPage}}}}}";
-
-            var allNodes = new List<CommonEventNode>();
-            int currentPage = 1;
-            int totalPages = int.MaxValue; // Initialize to a large number
-
-            for (; currentPage <= totalPages; currentPage++)
-            {
-                var request = new GraphQLHttpRequest
-                {
-                    Query = tempQuery,
-                    Variables = new
-                    {
-                        playerId,
-                        perPage,
-                        playerName = gamerTag,
-                        pageNum = currentPage
-                    }
-                };
-
-                bool success = false;
-                int retryCount = 0;
-                const int maxRetries = 3;
-                const int delay = 3000;
-
-                while (!success && retryCount < maxRetries)
-                {
-                    await _requestThrottler.WaitIfPaused();
-
-                    try
-                    {
-                        var response = await _client.SendQueryAsync<JObject>(request);
-
-                        if (response.Errors != null && response.Errors.Any())
-                        {
-                            throw new ApplicationException($"GraphQL errors: {string.Join(", ", response.Errors.Select(e => e.Message))}");
-                        }
-
-                        if (response.Data == null)
-                        {
-                            throw new ApplicationException("Failed to retrieve standing data");
-                        }
-
-                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                        var playerData = JsonConvert.DeserializeObject<PastEventPlayerData>(tempJson);
-
-                        if (playerData?.PlayerQuery?.User?.Events?.Nodes != null)
-                        {
-                            allNodes.AddRange(playerData.PlayerQuery.User.Events.Nodes);
-                            Console.WriteLine("Tournament Node Added");
-                        }
-
-                        // Update pagination info for the next iteration
-                        var pageInfo = playerData?.PlayerQuery?.User?.Events?.PageInfo;
-                        if (pageInfo != null)
-                        {
-                            totalPages = pageInfo.TotalPages ?? 1;
-                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
-                        }
-
-                        success = true;
-                    }
-                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests || ex.StatusCode == HttpStatusCode.ServiceUnavailable)
-                    {
-                        var errorContent = ex.Content;
-                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                        retryCount++;
-                        if (retryCount >= maxRetries)
-                        {
-                            Console.WriteLine("Max retries reached. Pausing further requests.");
-                            await _requestThrottler.PauseRequests(_client);
-                        }
-                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                        await Task.Delay(delay);
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    }
-                }
-            }
-
-            // Construct the final result using the paginated results
-            var result = new PastEventPlayerData
-            {
-                PlayerQuery = new CommonPlayer
-                {
-                    Id = playerId,
-                    GamerTag = gamerTag,
-                    User = new CommonUser
-                    {
-                        Events = new CommonEvents
-                        {
-                            Nodes = allNodes
-                        }
-                    }
-                }
-            };
-            return result;
         }
         private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int[] tournamentLinks)
         {
