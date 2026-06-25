@@ -30,16 +30,6 @@ namespace SengokuProvider.Library.Models.User
                 !string.IsNullOrEmpty(UserSlug);
         }
     }
-
-    public class LinkStartGgUserCommand : ICommand
-    {
-        public required string PlayerName { get; set; }
-        public required string UserSlug { get; set; }
-        public CommandRegistry Topic { get; set; }
-        public string? Response { get; set; }
-
-        public bool Validate() => !string.IsNullOrWhiteSpace(PlayerName) || !string.IsNullOrWhiteSpace(UserSlug);
-    }
     public class DeleteUserCommand : ICommand
     {
         public required int UserId { get; set; }

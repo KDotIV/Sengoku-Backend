@@ -2,7 +2,7 @@
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 
-namespace SengokuProvider.Library.Services.Comms.Discord
+namespace SengokuProvider.Library.Services.Comms
 {
     public class DiscordWebhookHandler : IDiscordWebhookHandler
     {
