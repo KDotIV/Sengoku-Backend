@@ -15,6 +15,6 @@ namespace SengokuProvider.Library.Models.Players
         public required int EntrantTwoID { get; set; }
         public int PlayerTwoID { get; set; }
         public required string EntrantTwoName { get; set; }
-        public required int SetID { get; set; }
+        public required string SetID { get; set; }
     }
 }

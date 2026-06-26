@@ -2,8 +2,8 @@
 {
     public class PlayerOnboardResult
     {
-        public List<int> Successful { get; set; } = new List<int>();
-        public List<int> Failures { get; set; } = new List<int>();
+        public List<string> Successful { get; set; } = new List<string>();
+        public List<string> Failures { get; set; } = new List<string>();
         public required string Response { get; set; }
     }
 }

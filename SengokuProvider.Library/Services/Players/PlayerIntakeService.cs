@@ -171,7 +171,7 @@ namespace SengokuProvider.Library.Services.Players
             {
                 await conn.OpenAsync();
 
-                var setIds = _commonDatabaseService.CreateDBIntArrayType("@SetIds", setResponse.Successful.ToArray());
+                var setIds = _commonDatabaseService.CreateDBTextArrayType("@SetIds", setResponse.Successful.ToArray());
                 var newPathId = await GenerateNewBracketPathId();
                 try
                 {
@@ -293,15 +293,30 @@ namespace SengokuProvider.Library.Services.Players
                     },
                     EntrantSetCards = new List<EntrantSetCard>()
                 };
+
+                foreach (var setData in bracketData.PhaseGroup.Sets.Nodes)
+                {
+                    //Iterate over set data to pull out playerId and PlayerName
+                }
                 var tempPlayerArr = new int[] { playerId };
                 var tempTournamentArr = new int[] { tournamentId };
-                List<PlayerStandingResult> playerStanding = await _queryService.GetStandingsDataByPlayerIds(tempPlayerArr, tempTournamentArr);
+                PlayerStandingResult? firstRecord;
+                List <PlayerStandingResult> playerStanding = await _queryService.GetStandingsDataByPlayerIds(tempPlayerArr, tempTournamentArr);
                 if (playerStanding == null || playerStanding.Count == 0)
                 {
-                    throw new ApplicationException("No Player Standing Data to process");
+                    firstRecord = new PlayerStandingResult
+                    {
+                        TournamentLinks = new Links
+                        {
+                            PlayerId = playerId,
+                            EntrantId = 0,
+                        },
+                        LastUpdated = DateTime.UtcNow,
+                    };
                 }
-                PlayerStandingResult? firstRecord = playerStanding.FirstOrDefault(x => x.TournamentLinks?.PlayerId == playerId);
-                if (firstRecord == null || firstRecord.TournamentLinks == null || firstRecord.TournamentLinks.EntrantId == 0)
+                else firstRecord = playerStanding.FirstOrDefault(x => x.TournamentLinks?.PlayerId == playerId);
+
+                if (firstRecord == null || firstRecord.TournamentLinks == null)
                 {
                     throw new ApplicationException("No Player Standing Data found for the provided PlayerId");
                 }

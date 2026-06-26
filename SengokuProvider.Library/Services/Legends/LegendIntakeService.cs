@@ -118,12 +118,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return newOnboardResult;
         }
-        public async Task<PlayerOnboardResult> AddPlayerToLeague(int[] playerIds, int leagueId)
+        public async Task<LeagueOnboardResult> AddPlayerToLeague(int[] playerIds, int leagueId)
         {
-            if (playerIds.Length == 0) return new PlayerOnboardResult { Response = "PlayerId List cannot be Empty" };
+            if (playerIds.Length == 0) return new LeagueOnboardResult { Response = "PlayerId List cannot be Empty" };
             List<PlayerData> currentPlayers = await GetPlayersByIds(playerIds);
 
-            var newOnboardResult = new PlayerOnboardResult { Response = "Open" };
+            var newOnboardResult = new LeagueOnboardResult { Response = "Open" };
 
             if (leagueId < 0) { newOnboardResult.Response = "PlayerId or LeagueId cannot be invalid ids"; }
 
@@ -186,7 +186,7 @@ namespace SengokuProvider.Library.Services.Legends
             }
             return newOnboardResult;
         }
-        public async Task<PlayerOnboardResult> AddPlayerToLeague(HashSet<int> playerIds, int leagueId)
+        public async Task<LeagueOnboardResult> AddPlayerToLeague(HashSet<int> playerIds, int leagueId)
         {
             return await AddPlayerToLeague(playerIds.ToArray(), leagueId);
         }
@@ -200,7 +200,7 @@ namespace SengokuProvider.Library.Services.Legends
         {
             var totalResult = new LeaderboardOnboardIntakeResult
             {
-                PlayerResult = new PlayerOnboardResult { Response = "" },
+                PlayerResult = new LeagueOnboardResult { Response = "" },
                 TournamentResults = new TournamentOnboardResult { Response = "" }
             };
 

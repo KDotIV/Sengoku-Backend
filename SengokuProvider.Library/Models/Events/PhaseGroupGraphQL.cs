@@ -29,7 +29,7 @@ namespace SengokuProvider.Library.Models.Events
     public class SetNode
     {
         [JsonProperty("id")]
-        public int Id { get; set; }
+        public string Id { get; set; } = string.Empty;
         [JsonProperty("slots")]
         public List<Slot>? Slots { get; set; }
     }
@@ -48,6 +48,19 @@ namespace SengokuProvider.Library.Models.Events
         public int Id { get; set; }
         [JsonProperty("name")]
         public string? Name { get; set; }
+        [JsonProperty("standing")]
+        public Standing? Standing { get; set; }
     }
-
+    public class Standing
+    {
+        [JsonProperty("player")]
+        public Player? Player { get; set; }
+    }
+    public class Player
+    {
+        [JsonProperty("id")]
+        public int Id { get; set; }
+        [JsonProperty("gamerTag")]
+        public string GamerTag { get; set; } = string.Empty;
+    }
 }

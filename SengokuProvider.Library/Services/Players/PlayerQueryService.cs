@@ -632,7 +632,7 @@ namespace SengokuProvider.Library.Services.Players
                                   phaseGroup(id: $phaseGroupId) { id, displayIdentifier, 
                                     sets(page: $page, perPage: $perPage, sortType: STANDARD) {
                                       pageInfo { total }
-                                        nodes { id, slots { id, entrant { id, name }}}
+                                        nodes { id, slots { id, entrant { id, name, standing { player { id, gamerTag}}}}}
                                         pageInfo { total totalPages page perPage sortBy filter}}}}";
 
             var jsonSerializerSettings = new JsonSerializerSettings
