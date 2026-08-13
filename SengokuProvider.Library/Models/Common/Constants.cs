@@ -39,47 +39,22 @@ namespace SengokuProvider.Library.Models.Common
     }
     public struct QueryConstants
     {
-        public const string DatePriority = @"
-                            SELECT 
-                                a.address, a.latitude, a.longitude, 
-                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open, e.url_slug, e.online_tournament,
-                                SQRT(
-                                    POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
-                                ) AS distance
-                            FROM 
-                                events e
-                            JOIN addresses a ON e.address_id = a.id
-                            JOIN tournament_links tl ON e.link_id = tl.event_link
-                            WHERE
-                                e.region = ANY(@RegionIds)
-                                AND e.closing_registration_date >= CURRENT_DATE
-                                AND e.end_time >= CURRENT_DATE
-                                AND tl.game_id = ANY(@GameIds)
-                            ORDER BY
-                                e.closing_registration_date ASC,
-                                distance ASC
-                            LIMIT @PerPage;";
+        public const string DatePriority = @"SELECT * FROM public.get_tournaments_by_location(
+                @RegionIds,
+                @GameIds,
+                @PerPage,
+                @ReferenceLongitude::numeric,
+                @ReferenceLatitude::numeric
+            );";
 
         public const string DistancePriority = @"
-                            SELECT 
-                                a.address, a.latitude, a.longitude, 
-                                e.event_name, e.event_description, e.region, e.start_time, e.end_time, e.link_id, e.closing_registration_date, e.registration_open, e.url_slug, e.online_tournament,
-                                SQRT(
-                                    POW(a.longitude - @ReferenceLongitude, 2) + POW(a.latitude - @ReferenceLatitude, 2)
-                                ) AS distance
-                            FROM 
-                                events e
-                            JOIN addresses a ON e.address_id = a.id
-                            JOIN tournament_links tl ON e.link_id = tl.event_link
-                            WHERE
-                                e.region = ANY(@RegionIds)
-                                AND e.closing_registration_date >= CURRENT_DATE
-                                AND e.end_time >= CURRENT_DATE
-                                AND tl.game_id = ANY(@GameIds)
-                            ORDER BY
-                                distance ASC,
-                                e.closing_registration_date ASC
-                            LIMIT @PerPage;";
+                            SELECT * FROM public.get_tournaments_by_location(
+                @RegionIds,
+                @GameIds,
+                @PerPage,
+                @ReferenceLongitude::numeric,
+                @ReferenceLatitude::numeric
+            );";
         public const string LocalPriority = @"
             SELECT * FROM public.get_tournaments_by_location(
                 @RegionIds,
