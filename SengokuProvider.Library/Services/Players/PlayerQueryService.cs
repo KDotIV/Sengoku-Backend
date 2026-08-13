@@ -265,6 +265,52 @@ namespace SengokuProvider.Library.Services.Players
             };
             return await QueryPlayersByPlayerName(playerName, result);
         }
+        public async Task<PlayerData> GetPlayerDataById(int playerId)
+        {
+            var result = new PlayerData
+            {
+                Id = 0,
+                PlayerName = "",
+                PlayerLinkID = 0,
+                UserLink = 0,
+                LastUpdate = DateTime.UtcNow
+            };
+            return await QueryPlayersById(playerId, result);
+        }
+
+        private async Task<PlayerData> QueryPlayersById(int playerId, PlayerData result)
+        {
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                const string sql = @"SELECT * FROM public.players where id = @PlayerId;";
+                using var cmd = new NpgsqlCommand(sql, conn);
+                cmd.Parameters.AddWithValue("@PlayerId", playerId);
+                using (var reader = await cmd.ExecuteReaderAsync())
+                {
+                    if (!reader.HasRows) return result;
+                    if (await reader.ReadAsync())
+                    {
+                        result.Id = reader.GetInt32(reader.GetOrdinal("id"));
+                        result.PlayerName = reader.GetString(reader.GetOrdinal("player_name"));
+                        result.PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link"));
+                        result.UserLink = reader.GetInt32(reader.GetOrdinal("user_link"));
+                    }
+                    return result;
+                }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+
         public async Task<List<Links>> GetPlayersByEntrantLinks(int[] entrantId)
         {
             return await QueryPlayersByEntrantLinks(entrantId);
@@ -632,7 +678,7 @@ namespace SengokuProvider.Library.Services.Players
                                   phaseGroup(id: $phaseGroupId) { id, displayIdentifier, 
                                     sets(page: $page, perPage: $perPage, sortType: STANDARD) {
                                       pageInfo { total }
-                                        nodes { id, slots { id, entrant { id, name, standing { player { id, gamerTag}}}}}
+                                        nodes { id identifier round fullRoundText state winnerId slots { id prereqId prereqType prereqPlacement entrant { id, name, participants { player { id, gamerTag }}}}}
                                         pageInfo { total totalPages page perPage sortBy filter}}}}";
 
             var jsonSerializerSettings = new JsonSerializerSettings
@@ -646,9 +692,9 @@ namespace SengokuProvider.Library.Services.Players
             int currentPhaseId = 0;
             string poolIdentifier = string.Empty;
             int currentPage = 1;
-            int totalPages = int.MaxValue;
+            int totalPages = 1;
 
-            for (int i = 0; i <= totalPages; i++)
+            while (currentPage <= totalPages)
             {
                 var request = new GraphQLHttpRequest
                 {
@@ -730,7 +776,22 @@ namespace SengokuProvider.Library.Services.Players
                         throw;
                     }
                 }
+
+                if (!success)
+                {
+                    break;
+                }
+
+                currentPage++;
             }
+
+            // A set should occur only once, but de-duplicate defensively in case
+            // the upstream result changes between paginated requests.
+            allNodes = allNodes
+                .Where(node => !string.IsNullOrWhiteSpace(node.Id))
+                .GroupBy(node => node.Id, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToList();
             var result = new PhaseGroupGraphQL
             {
                 PhaseGroup = new PhaseGroup

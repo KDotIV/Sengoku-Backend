@@ -5,6 +5,7 @@ namespace SengokuProvider.Library.Models.Players
     {
         public required int PlayerID { get; set; }
         public required string PlayerName { get; set; }
+        public int EntrantID { get; set; } = 0;
         public required List<PlayerStandingResult> PlayerResults { get; set; } = new List<PlayerStandingResult>();
     }
     public class EntrantSetCard

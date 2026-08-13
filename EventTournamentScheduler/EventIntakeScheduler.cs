@@ -102,7 +102,7 @@ namespace EventTournamentScheduler
             Console.WriteLine($"CircuitScheduleUpdate complete with Results:\n\n{tempJson}");
         }
         [Function("EventIntakeScheduler")]
-        public async Task RunEventIntakeScheduler([TimerTrigger("00 01,13 * * *")] TimerInfo schedule)
+        public async Task RunEventIntakeScheduler([TimerTrigger("00 01,13 * * *", RunOnStartup = true)] TimerInfo schedule)
         {
             Console.WriteLine("Beginning Scheduled Event Intake");
             var tempStartDate = DateTime.Today.AddDays(-2);

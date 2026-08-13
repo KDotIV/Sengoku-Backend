@@ -150,8 +150,9 @@ namespace SengokuProvider.Library.Services.Players
             int tempBracketId = Convert.ToInt32(returnedSlug[2]);
             int tempGroupPhaseId = Convert.ToInt32(returnedSlug[1]);
             int tempTournamentId = Convert.ToInt32(returnedSlug[3]);
+            PlayerData tempPlayerLink = await _queryService.GetPlayerDataById(playerId);
             var bracketData = await _queryService.QueryBracketDataFromStartggByBracketId(tempBracketId);
-            BracketVictoryPathData processedData = await ProcessNewBracketData(bracketData, playerId, tempTournamentId);
+            BracketVictoryPathData processedData = await ProcessNewBracketData(bracketData, tempPlayerLink, tempTournamentId);
 
             onboardResult = await SaveVictoryPathData(processedData);
 
@@ -271,7 +272,7 @@ namespace SengokuProvider.Library.Services.Players
             }
             return onboardResult;
         }
-        private async Task<BracketVictoryPathData> ProcessNewBracketData(PhaseGroupGraphQL bracketData, int playerId, int tournamentId)
+        private async Task<BracketVictoryPathData> ProcessNewBracketData(PhaseGroupGraphQL bracketData, PlayerData playerData, int tournamentId)
         {
             if (bracketData == null || bracketData.PhaseGroup == null || bracketData.PhaseGroup.Sets.Nodes == null || bracketData.PhaseGroup.Id == 0 || bracketData.PhaseGroup.Sets.Nodes.Count == 0)
             {
@@ -287,8 +288,8 @@ namespace SengokuProvider.Library.Services.Players
                     RoundNum = bracketData.PhaseGroup.DisplayIdentifier ?? "Unknown",
                     PlayerTournamentCard = new PlayerTournamentCard
                     {
-                        PlayerID = playerId,
-                        PlayerName = "Unknown",
+                        PlayerID = playerData.Id,
+                        PlayerName = playerData.PlayerName,
                         PlayerResults = new List<PlayerStandingResult>()
                     },
                     EntrantSetCards = new List<EntrantSetCard>()
@@ -296,9 +297,25 @@ namespace SengokuProvider.Library.Services.Players
 
                 foreach (var setData in bracketData.PhaseGroup.Sets.Nodes)
                 {
-                    //Iterate over set data to pull out playerId and PlayerName
+                    if (setData == null || setData.Slots == null || setData.Slots.Count < 2) continue;
+                    var entrantOne = setData.Slots[0].Entrant;
+                    var entrantTwo = setData.Slots[1].Entrant;
+                    var entrantOnePlayerId = entrantOne?.Participants?.FirstOrDefault()?.Player?.Id;
+                    var entrantTwoPlayerId = entrantTwo?.Participants?.FirstOrDefault()?.Player?.Id;
+
+                    if(entrantOnePlayerId == playerData.PlayerLinkID || entrantTwoPlayerId == playerData.PlayerLinkID)
+                    {
+                        if(entrantOnePlayerId == entrantTwoPlayerId)
+                        {
+                            Console.WriteLine($"Entrant One and Two are the same: {entrantOne?.Name} - {entrantOne?.Id}");
+                            continue;
+                        }
+                        result.PlayerTournamentCard.EntrantID = entrantOnePlayerId == playerData.PlayerLinkID ? entrantOne?.Id ?? 0 : entrantTwo?.Id ?? 0;
+                        Console.WriteLine($"Player Entrant ID found: {result.PlayerTournamentCard.EntrantID} for Player: {playerData.PlayerName} in Tournament: {tournamentId}");
+                        break;
+                    }   
                 }
-                var tempPlayerArr = new int[] { playerId };
+                var tempPlayerArr = new int[] { playerData.Id };
                 var tempTournamentArr = new int[] { tournamentId };
                 PlayerStandingResult? firstRecord;
                 List <PlayerStandingResult> playerStanding = await _queryService.GetStandingsDataByPlayerIds(tempPlayerArr, tempTournamentArr);
@@ -308,30 +325,28 @@ namespace SengokuProvider.Library.Services.Players
                     {
                         TournamentLinks = new Links
                         {
-                            PlayerId = playerId,
-                            EntrantId = 0,
+                            PlayerId = playerData.Id,
+                            EntrantId = result.PlayerTournamentCard.EntrantID,
                         },
                         LastUpdated = DateTime.UtcNow,
                     };
                 }
-                else firstRecord = playerStanding.FirstOrDefault(x => x.TournamentLinks?.PlayerId == playerId);
+                else firstRecord = playerStanding.FirstOrDefault(x => x.TournamentLinks?.PlayerId == playerData.Id);
 
-                if (firstRecord == null || firstRecord.TournamentLinks == null)
-                {
-                    throw new ApplicationException("No Player Standing Data found for the provided PlayerId");
-                }
+                //Pathfinder using found EntrantId
+                SetNode? startingSet = FindStartingSet(bracketData.PhaseGroup.Sets.Nodes, result.PlayerTournamentCard.EntrantID);
+                if (startingSet == null) { throw new ApplicationException("Unable to find starting set for the provided PlayerId"); }
 
-                result.PlayerTournamentCard.PlayerName = firstRecord.StandingDetails.GamerTag ?? "Unknown";
-                result.TournamentLinkID = firstRecord.StandingDetails.TournamentId;
-                result.EventLinkID = firstRecord.StandingDetails.EventId;
-                result.TournamentName = firstRecord.StandingDetails.TournamentName ?? "Unknown";
+                var playerPath = FindPath(bracketData.PhaseGroup.Sets.Nodes, startingSet.Id);
+                playerPath.Insert(0, startingSet);
 
-                List<EntrantSetCard> entrantSetCards = await ReduceBracketDataForEntrantsCards(bracketData.PhaseGroup.Sets.Nodes, playerId,
-                    firstRecord.TournamentLinks.EntrantId);
+                var expectedOpponents = GetExpectedOpponents(bracketData.PhaseGroup.Sets.Nodes, playerPath, result.PlayerTournamentCard.EntrantID);
 
-                if (entrantSetCards == null || entrantSetCards.Count == 0) { throw new ApplicationException("Unable to Reduce Bracket data from Dataset with provided PlayerId"); }
+                var opponentCards = BuildPlayerCardsFromOpponentData(expectedOpponents, result.PlayerTournamentCard, tournamentId);
 
-                result.EntrantSetCards = entrantSetCards;
+                if (opponentCards == null || opponentCards.Count == 0) { throw new ApplicationException("Unable to Reduce Bracket data from Dataset with provided PlayerId"); }
+
+                result.EntrantSetCards = opponentCards;
 
                 return result;
             }
@@ -341,70 +356,131 @@ namespace SengokuProvider.Library.Services.Players
                 throw;
             }
         }
-        private async Task<List<EntrantSetCard>> ReduceBracketDataForEntrantsCards(List<SetNode> nodes, int playerId, int entrantId)
+
+        private List<EntrantSetCard> BuildPlayerCardsFromOpponentData(List<ExpectedOpponent> expectedOpponents, PlayerTournamentCard playerTournamentCard, int tournamentId)
         {
-            List<EntrantSetCard> entrantSetCards = new List<EntrantSetCard>();
-            ConcurrentDictionary<int, int> entrantsRegistry = new ConcurrentDictionary<int, int>();
+            throw new NotImplementedException();
+        }
 
-            foreach (var set in nodes)
-            {
-                if (set.Slots == null || set.Slots.Count < 2) continue;
-                var entrantOne = set.Slots[0].Entrant;
-                var entrantTwo = set.Slots[1].Entrant;
-                if (entrantOne == null || entrantTwo == null) continue;
-                if (entrantOne.Id == entrantId || entrantTwo.Id == entrantId)
-                {
-                    if (entrantOne.Id == entrantTwo.Id)
+        private List<SetNode> FindPath(IReadOnlyCollection<SetNode> nodes, string startingSetId, int requiredPlacement = 1)
+        {
+            var destinationsBySource = nodes
+                .SelectMany(destination => (destination.Slots ?? [])
+                    .Where(slot => !string.IsNullOrEmpty(slot.PrereqId))
+                    .Select(slot => new
                     {
-                        Console.WriteLine($"Entrant One and Two are the same: {entrantOne.Name} - {entrantOne.Id}");
-                        continue;
-                    }
-                    EntrantSetCard newCard = new EntrantSetCard
-                    {
-                        EntrantOneID = entrantOne.Id,
-                        EntrantOneName = entrantOne.Name ?? "Unknown",
-                        EntrantTwoID = entrantTwo.Id,
-                        EntrantTwoName = entrantTwo.Name ?? "Unknown",
-                        SetID = set.Id
-                    };
-                    entrantSetCards.Add(newCard);
-                    entrantsRegistry.TryAdd(entrantOne.Id != entrantId ? entrantOne.Id : entrantTwo.Id, 0);
-                }
-            }
-            if (entrantSetCards.Count == 0)
+                        SourceSetId = slot.PrereqId!,
+                        Destination = destination,
+                        DestinationSlot = slot
+                    }))
+                .ToLookup(x => x.SourceSetId);
+
+            var path = new List<SetNode>();
+            var visited = new HashSet<string>();
+            var currentSetId = startingSetId;
+
+            while (visited.Add(currentSetId))
             {
-                Console.WriteLine("No Entrant Set Cards found for the provided PlayerId");
-                return entrantSetCards;
+                // Placement 1 means the winner of currentSetId feeds this slot.
+                var edge = destinationsBySource[currentSetId]
+                    .FirstOrDefault(x =>
+                        x.DestinationSlot.PrereqPlacement == requiredPlacement);
+
+                if (edge == null)
+                    break;
+
+                path.Add(edge.Destination);
+                currentSetId = edge.Destination.Id;
             }
-            List<Links> playerIds = await _queryService.GetPlayersByEntrantLinks(entrantsRegistry.Keys.ToArray());
-            if (playerIds.Count == 0) throw new ApplicationException("No Player IDs found for the provided Entrant IDs");
 
-            foreach (var entrantCard in entrantSetCards)
+            return path;
+        }
+        private SetNode? FindStartingSet(IEnumerable<SetNode> nodes, int entrantId)
+        {
+            return nodes.Where(set => set.Slots?.Any(slot => slot.Entrant?.Id == entrantId) == true)
+                        .OrderBy(set => set.Round > 0 ? set.Round : int.MaxValue)
+                        .FirstOrDefault();
+        }
+        private List<ExpectedOpponent> GetExpectedOpponents(IReadOnlyCollection<SetNode> nodes, IReadOnlyList<SetNode> playerPath, int playerEntrantId)
+        {
+            // Duplicate set records can occur at page boundaries or in cached
+            // upstream data. They represent the same bracket vertex, so retain
+            // one record per non-empty set ID
+
+            var setsById = nodes
+                .Where(set => !string.IsNullOrWhiteSpace(set.Id))
+                .GroupBy(set => set.Id, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+            var opponents = new List<ExpectedOpponent>();
+            string? previousPathSetId = null;
+
+            foreach (var pathSet in playerPath)
             {
-                Links? currentLink = entrantCard.EntrantOneID != entrantId
-                    ? playerIds.FirstOrDefault(x => x.EntrantId == entrantCard.EntrantOneID)
-                    : playerIds.FirstOrDefault(x => x.EntrantId == entrantCard.EntrantTwoID);
+                var slots = pathSet.Slots ?? [];
+                Slot? playerSideSlot;
 
-                if (currentLink == null || currentLink.EntrantId == 0) continue;
-
-                if (currentLink.EntrantId == entrantCard.EntrantOneID)
+                if(previousPathSetId == null)
                 {
-                    entrantCard.PlayerOneID = currentLink.PlayerId;
-                    entrantCard.PlayerTwoID = playerId;
+                    //Starting set: user may have been seeded here with free bye
+                    playerSideSlot = slots.FirstOrDefault(slot => slot.Entrant?.Id == playerEntrantId);
                 }
                 else
                 {
-                    entrantCard.PlayerTwoID = currentLink.PlayerId;
-                    entrantCard.PlayerOneID = playerId;
+                    // Later set: this slot is sfed by preceding set in path
+                    playerSideSlot = slots.FirstOrDefault(slot => slot.PrereqType == "set" && slot.PrereqId == previousPathSetId && slot.PrereqPlacement == 1);
+                }
+
+                if(playerSideSlot == null)
+                { previousPathSetId = pathSet.Id; continue; }
+
+                var opponentSlot = slots.FirstOrDefault(slot => slot.Id != playerSideSlot.Id);
+
+                if(opponentSlot != null)
+                {
+                    var immediateSSsourceIdentifier = opponentSlot.PrereqId != null && setsById.TryGetValue(opponentSlot.PrereqId, out var immediatesource) ? immediatesource.Identifier : "Direct";
+
+                    foreach (var candidate in GetPossibleEntrants(opponentSlot, setsById))
+                    {
+                        var particcipant = candidate.Entrant.Participants?.FirstOrDefault(x => x.Player != null);
+
+                        if(particcipant?.Player == null) { continue; }
+
+                        opponents.Add(new ExpectedOpponent(candidate.Entrant.Id, particcipant.Player.Id, particcipant.Player.GamerTag ?? "Unknown", pathSet.Identifier, candidate.SourcceIdentifier));
+                    }
+                }
+                previousPathSetId = pathSet.Id;
+            }
+            return opponents.Where(x => x.EntrantId != playerEntrantId).DistinctBy(x => x.EntrantId).ToList();
+        }
+        private IEnumerable<(Entrant Entrant, string SourcceIdentifier)> GetPossibleEntrants(Slot slot, IReadOnlyDictionary<string, SetNode> setsById, HashSet<string>? visited = null)
+        {
+            //If slot is already populated, its entrant is authoritative
+            if(slot.Entrant != null)
+            {
+                yield return (slot.Entrant, "Direct");
+                yield break;
+            }
+            if(slot.PrereqType != "set" || string.IsNullOrWhiteSpace(slot.PrereqId) || !setsById.TryGetValue(slot.PrereqId, out var feederSet))
+            {
+                yield break;
+            }
+
+            visited ??= new HashSet<string>();
+
+            if(!visited.Add(feederSet.Id))
+                yield break; // Prevent cycles
+
+            foreach(var feederSlot in feederSet.Slots ?? [])
+            {
+                foreach (var candidate in GetPossibleEntrants(feederSlot, setsById, visited))
+                {
+                    yield return (candidate.Entrant, feederSet.Identifier);
                 }
             }
-            // Remove duplicates based on Entrant IDs
-            entrantSetCards = entrantSetCards
-                .GroupBy(x => new { x.EntrantOneID, x.EntrantTwoID })
-                .Select(g => g.First())
-                .ToList();
-            return entrantSetCards;
+
+            visited.Remove(feederSet.Id);
         }
+        
         private async Task<(bool flowControl, PlayerOnboardResult value, string[] returnedSlug)> VerifyBracketSlug(string bracketSlug, PlayerOnboardResult onboardResult)
         {
             if (!Uri.TryCreate(bracketSlug, UriKind.Absolute, out var uri))
@@ -499,6 +575,10 @@ namespace SengokuProvider.Library.Services.Players
         {
             List<PlayerStandingResult> mappedResult = new List<PlayerStandingResult>();
             if (data == null) return mappedResult;
+
+            // Guard against null tournament/entrants/nodes to avoid CS8602
+            if (data.TournamentLink?.Entrants?.Nodes == null || data.TournamentLink.Entrants.Nodes.Count == 0)
+                return mappedResult;
 
             var allIds = data.TournamentLink.Entrants.Nodes
                            .Select(n => n.Id);
@@ -805,6 +885,11 @@ namespace SengokuProvider.Library.Services.Players
         {
             var players = new List<PlayerData>();
             if (queryData.TournamentLink == null) throw new ApplicationException("Player Query Data was null from Start.gg");
+
+            // Guard Entrants/Nodes before enumerating
+            if (queryData.TournamentLink.Entrants?.Nodes == null || queryData.TournamentLink.Entrants.Nodes.Count == 0)
+                return 0;
+
             foreach (var node in queryData.TournamentLink.Entrants.Nodes)
             {
                 var firstRecord = node.Participants.FirstOrDefault();
