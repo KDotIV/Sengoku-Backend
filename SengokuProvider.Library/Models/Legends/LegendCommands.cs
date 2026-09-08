@@ -28,4 +28,15 @@ namespace SengokuProvider.Library.Models.Legends
             return false;
         }
     }
+    public class OnboardLegendsByPlayerLinkCommand : ICommand
+    {
+        public required int[] PlayerLinkIds { get; set; }
+        public required CommandRegistry Topic { get; set; }
+        public string? Response { get; set; }
+        public bool Validate()
+        {
+            if (PlayerLinkIds != null && PlayerLinkIds.Length > 0) return true;
+            return false;
+        }
+    }
 }

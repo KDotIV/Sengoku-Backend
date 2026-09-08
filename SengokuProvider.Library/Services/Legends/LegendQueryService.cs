@@ -101,9 +101,9 @@ namespace SengokuProvider.Library.Services.Legends
         {
             return await QueryActiveLeaguesByRegions();
         }
-        public async Task<LegendData?> GetLegendsByPlayerLink(GetLegendsByPlayerLinkCommand command)
+        public async Task<List<LegendData>> GetLegendsByPlayerLink(int[] playerLinks)
         {
-            return await QueryLegendsByPlayerLink(command.PlayerLinkId);
+            return await QueryLegendsByPlayerLink(playerLinks);
         }
         public async Task<StandingsQueryResult?> QueryStandingsByPlayerId(int playerId)
         {
@@ -302,30 +302,38 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        private async Task<LegendData?> QueryLegendsByPlayerLink(int playerLinkId)
+        private async Task<List<LegendData>> QueryLegendsByPlayerLink(int[] playerLinkIds)
         {
+            if(playerLinkIds.Length < 1) return new List<LegendData>();
+            List<LegendData> result = new List<LegendData>();
             try
             {
                 using (var conn = new NpgsqlConnection(_connectString))
                 {
                     await conn.OpenAsync();
 
-                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM legends WHERE player_link_id = @Input", conn))
+                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM legends WHERE player_link_id = ANY(@PlayerArray)", conn))
                     {
-                        cmd.Parameters.AddWithValue("@Input", playerLinkId);
+                        cmd.Parameters.AddWithValue("@PlayerArray", playerLinkIds);
 
                         using (var reader = await cmd.ExecuteReaderAsync())
                         {
                             while (await reader.ReadAsync())
                             {
-                                return new LegendData
+                                var standingsOrdinal = reader.GetOrdinal("standings");
+                                var standingsArray = reader.IsDBNull(standingsOrdinal)
+                                    ? Array.Empty<int>()
+                                    : reader.GetFieldValue<int[]>(standingsOrdinal);
+
+                                result.Add(new LegendData
                                 {
                                     Id = reader.GetInt32(reader.GetOrdinal("id")),
                                     LegendName = reader.GetString(reader.GetOrdinal("legend_name")),
                                     PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
                                     PlayerId = reader.GetInt32(reader.GetOrdinal("player_id")),
-                                    PlayerLinkId = reader.GetInt32(reader.GetOrdinal("player_link_id"))
-                                };
+                                    PlayerLinkId = reader.GetInt32(reader.GetOrdinal("player_link_id")),
+                                    Standings = new List<int>(standingsArray),
+                                });
                             }
                         }
                     }
@@ -339,7 +347,7 @@ namespace SengokuProvider.Library.Services.Legends
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
-            return null;
+            return result;
         }
         private async Task<List<LeaderboardData>> QueryLeaderboardResultsByLeagueIds(int[] leagueIds)
         {

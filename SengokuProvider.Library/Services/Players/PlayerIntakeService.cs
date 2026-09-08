@@ -342,7 +342,7 @@ namespace SengokuProvider.Library.Services.Players
 
                 var expectedOpponents = GetExpectedOpponents(bracketData.PhaseGroup.Sets.Nodes, playerPath, result.PlayerTournamentCard.EntrantID);
 
-                var opponentCards = BuildPlayerCardsFromOpponentData(expectedOpponents, result.PlayerTournamentCard, tournamentId);
+                var opponentCards = await BuildPlayerCardsFromOpponentData(expectedOpponents, result.PlayerTournamentCard, tournamentId);
 
                 if (opponentCards == null || opponentCards.Count == 0) { throw new ApplicationException("Unable to Reduce Bracket data from Dataset with provided PlayerId"); }
 
@@ -357,9 +357,25 @@ namespace SengokuProvider.Library.Services.Players
             }
         }
 
-        private List<EntrantSetCard> BuildPlayerCardsFromOpponentData(List<ExpectedOpponent> expectedOpponents, PlayerTournamentCard playerTournamentCard, int tournamentId)
+        private async Task<List<EntrantSetCard>> BuildPlayerCardsFromOpponentData(List<ExpectedOpponent> expectedOpponents, PlayerTournamentCard playerTournamentCard, int tournamentId)
         {
-            throw new NotImplementedException();
+            if(expectedOpponents == null || expectedOpponents.Count == 0) { return new List<EntrantSetCard>(); }
+
+            if(playerTournamentCard == null || playerTournamentCard.PlayerID == 0) { return new List<EntrantSetCard>(); }
+            
+            List<EntrantSetCard> result = new List<EntrantSetCard>();
+
+            var tempPlayerLinks = expectedOpponents.Select(x => x.PlayerLink).Distinct().ToList();
+
+            var foundLegends = await _legendQueryService.GetLegendsByPlayerLink(tempPlayerLinks.ToArray());
+            var messageJson = JsonConvert.SerializeObject(new OnboardLegendsByPlayerLinkCommand
+            {
+                Topic = CommandRegistry.OnboardPlayerToLeague,
+                PlayerLinkIds = tempPlayerLinks.ToArray()
+            }, JsonSettings.DefaultSettings);
+            if (foundLegends == null || foundLegends.Count == 0) { await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:LegendReceivedQueue"], messageJson); }
+
+            return result;
         }
 
         private List<SetNode> FindPath(IReadOnlyCollection<SetNode> nodes, string startingSetId, int requiredPlacement = 1)

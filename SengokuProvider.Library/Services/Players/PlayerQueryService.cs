@@ -728,7 +728,6 @@ namespace SengokuProvider.Library.Services.Players
                         {
                             throw new ApplicationException("Failed to retrieve player data");
                         }
-
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var playerData = JsonConvert.DeserializeObject<PhaseGroupGraphQL>(tempJson, jsonSerializerSettings);
 
