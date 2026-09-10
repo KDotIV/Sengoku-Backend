@@ -5,6 +5,7 @@ using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Comms;
 using SengokuProvider.Library.Services.Legends;
+using SengokuProvider.Library.Workflows.Legends;
 
 namespace SengokuProvider.API.Controllers
 {
@@ -15,15 +16,17 @@ namespace SengokuProvider.API.Controllers
         private readonly ILogger<LeagueController> _log;
         private readonly ILegendIntakeService _legendIntakeService;
         private readonly ILegendQueryService _legendQueryService;
+        private readonly ILegendsOperations _legendsOperations;
         private readonly IDiscordWebhookHandler _webhookHandler;
         private readonly CommandProcessor _commandProcessor;
 
-        public LeagueController(ILogger<LeagueController> logger, ILegendIntakeService legendIntake, ILegendQueryService legendQuery,
+        public LeagueController(ILogger<LeagueController> logger, ILegendIntakeService legendIntake, ILegendQueryService legendQuery, ILegendsOperations legendsOperations,
             IDiscordWebhookHandler webhookHandler, CommandProcessor command)
         {
             _log = logger;
             _legendIntakeService = legendIntake;
             _legendQueryService = legendQuery;
+            _legendsOperations = legendsOperations;
             _webhookHandler = webhookHandler;
             _commandProcessor = command;
         }
@@ -177,7 +180,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                string result = await _legendIntakeService.AddUserToLeague(cmd.PlayerId, cmd.PlayerName, cmd.PlayerEmail, cmd.LeagueId, cmd.GameIds);
+                string result = await _legendsOperations.AddUserToLeague(cmd.PlayerId, cmd.PlayerName, cmd.PlayerEmail, cmd.LeagueId, cmd.GameIds);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -202,7 +205,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                var results = await _legendIntakeService.IntakeTournamentStandingsByEventLink(command.TournamentLinks, command.EventLinkSlug, command.GameIds, command.LeagueId, command.Open);
+                var results = await _legendsOperations.IntakeTournamentStandingsByEventLink(command.TournamentLinks, command.EventLinkSlug, command.GameIds, command.LeagueId, command.Open);
                 return Ok(results);
             }
             catch (Exception ex)
@@ -294,7 +297,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                var result = await _legendIntakeService.CreateNewRunnerBoard(command.TournamentIds, command.UserId, command.UserName, command.OrgId, command.OrgName);
+                var result = await _legendsOperations.CreateNewRunnerBoard(command.TournamentIds, command.UserId, command.UserName, command.OrgId, command.OrgName);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -372,7 +375,7 @@ namespace SengokuProvider.API.Controllers
         {
             try
             {
-                bool result = await _legendIntakeService.AddLeagueToUser(leagueId, userId);
+                bool result = await _legendsOperations.AddLeagueToUser(leagueId, userId);
                 return Ok(result);
             }
             catch (Exception ex)

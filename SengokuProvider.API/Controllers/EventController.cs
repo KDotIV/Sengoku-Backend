@@ -2,6 +2,7 @@
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Workflows.Events;
 using SengokuProvider.Library.Services.Orgs;
 
 namespace SengokuProvider.API.Controllers
@@ -11,12 +12,12 @@ namespace SengokuProvider.API.Controllers
     public class EventController : Controller
     {
         private readonly ILogger<EventController> _log;
-        private readonly IEventIntakeService _eventIntakeService;
+        private readonly IEventOperations _eventIntakeService;
         private readonly IEventQueryService _eventQueryService;
         private readonly IOrganizerQueryService _organizerQueryService;
         private readonly CommandProcessor _commandProcessor;
 
-        public EventController(ILogger<EventController> logger, IEventIntakeService eventIntakeService, IEventQueryService eventQueryService,
+        public EventController(ILogger<EventController> logger, IEventOperations eventIntakeService, IEventQueryService eventQueryService,
             IOrganizerQueryService orgQueryService, CommandProcessor command)
         {
             _log = logger;

@@ -16,14 +16,12 @@ namespace SengokuProvider.Library.Services.Legends
         private readonly string _connectString;
         private readonly GraphQLHttpClient _client;
         private readonly ICommonDatabaseService _commonServices;
-        private readonly IEventQueryService _eventQueryService;
 
         public LegendQueryService(string connectionString, GraphQLHttpClient graphQlClient, ICommonDatabaseService commonServices, IEventQueryService eventQuery)
         {
             _connectString = connectionString;
             _client = graphQlClient;
             _commonServices = commonServices;
-            _eventQueryService = eventQuery;
         }
         public async Task<List<LeagueByOrgResults>> GetLeaderboardsByOrgId(int OrgId)
         {
@@ -144,6 +142,25 @@ namespace SengokuProvider.Library.Services.Legends
                         }
                     }
                 }
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException("Database error occurred: ", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+            }
+        }
+        public async Task<List<PlayerStandingResult>> QueryStandingsByPlayerLinkId(int[] playerLinks)
+        {
+            var queryResult = new List<PlayerStandingResult>();
+            if (playerLinks == null || playerLinks.Length == 0) return queryResult;
+
+            try
+            {
+
+                return queryResult;
             }
             catch (NpgsqlException ex)
             {

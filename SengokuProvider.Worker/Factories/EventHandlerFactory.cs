@@ -11,10 +11,10 @@ namespace SengokuProvider.Worker.Factories
             _serviceScopeFactory = serviceScopeFactory;
         }
 
-        public IEventIntakeService CreateIntakeHandler()
+        public SengokuProvider.Library.Workflows.Events.IEventOperations CreateIntakeHandler()
         {
             var scope = _serviceScopeFactory.CreateScope();
-            return scope.ServiceProvider.GetRequiredService<IEventIntakeService>();
+            return scope.ServiceProvider.GetRequiredService<SengokuProvider.Library.Workflows.Events.IEventOperations>();
         }
 
         public IEventIntegrityService CreateIntegrityHandler()

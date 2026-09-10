@@ -5,9 +5,8 @@ namespace SengokuProvider.Library.Services.Players
 {
     public interface IPlayerIntakeService
     {
-        public Task<int> IntakePlayerData(int tournamentLink);
-        public Task<bool> SendPlayerIntakeMessage(int tournamentLink);
-        public Task<int> OnboardPreviousTournamentData(OnboardPlayerDataCommand command, int volumeLimit = 100);
-        public Task<PlayerOnboardResult> OnboardBracketRunnerByBracketSlug(string bracketSlug, int playerId);
+        Task<PlayerOnboardResult> SaveVictoryPathData(BracketVictoryPathData processedData);
+        Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings);
+        Task<int> InsertNewPlayerData(List<PlayerData> players);
     }
 }

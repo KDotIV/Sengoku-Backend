@@ -3,6 +3,7 @@ using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Regions;
+using SengokuProvider.Library.Workflows.Events;
 using System.Text.RegularExpressions;
 
 namespace SengokuProvider.Library.Services.Events
@@ -10,9 +11,9 @@ namespace SengokuProvider.Library.Services.Events
     public class EventIntegrityService : IEventIntegrityService
     {
         private readonly IEventQueryService _queryService;
-        private readonly IEventIntakeService _intakeService;
+        private readonly IEventOperations _intakeService;
         private readonly string _connectionString;
-        public EventIntegrityService(IEventQueryService eventQueryService, IEventIntakeService eventIntakeService, string connectionString)
+        public EventIntegrityService(IEventQueryService eventQueryService, IEventOperations eventIntakeService, string connectionString)
         {
             _queryService = eventQueryService;
             _intakeService = eventIntakeService;

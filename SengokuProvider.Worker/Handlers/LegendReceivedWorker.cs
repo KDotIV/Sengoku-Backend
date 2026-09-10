@@ -6,6 +6,7 @@ using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
+using SengokuProvider.Library.Workflows.Legends;
 
 namespace SengokuProvider.Worker.Handlers
 {
@@ -13,16 +14,20 @@ namespace SengokuProvider.Worker.Handlers
     {
         private readonly ILogger<LegendReceivedWorker> _log;
         private readonly ILegendHandlerFactory _legendFactory;
+        private readonly IPlayerHandlerFactory _playerFactory;
+        private readonly ILegendsOperations _legendsOperations;
         private readonly IConfiguration _configuration;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
-        public LegendReceivedWorker(ILogger<LegendReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus, ILegendHandlerFactory legendFactory)
+        public LegendReceivedWorker(ILogger<LegendReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus, ILegendHandlerFactory legendFactory, IPlayerHandlerFactory playerFactory, ILegendsOperations legendsOperations)
         {
             _log = logger;
             _configuration = config;
             _client = serviceBus;
             _legendFactory = legendFactory;
+            _playerFactory = playerFactory;
+            _legendsOperations = legendsOperations;
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -48,13 +53,19 @@ namespace SengokuProvider.Worker.Handlers
 
             foreach (var player in playersToProcess)
             {
-                int result = await OnboardNewPlayer(player);
+                int result = await OnboardNewLegendByPlayerData(player);
                 if (result == 0) { Console.WriteLine($"Failed to Onboard"); }
                 else { Console.WriteLine($"Successfully Added: Legend ID: {result}"); }
             }
 
             Console.WriteLine("Groom Legend Data Operation Completed...");
         }
+
+        private async Task<int> OnboardNewLegendByPlayerData(OnboardLegendsByPlayerCommand player)
+        {
+            throw new NotImplementedException();
+        }
+
         private Task Errorhandler(ProcessErrorEventArgs args)
         {
             _log.LogError($"Error Processing Message: {args.ErrorSource}: {args.FullyQualifiedNamespace} {args.EntityPath} {args.Exception}");
@@ -76,7 +87,7 @@ namespace SengokuProvider.Worker.Handlers
                         await UpdateLegend(currentMessage);
                         break;
                     case CommandRegistry.OnboardLegendsByPlayerData:
-                        int result = await OnboardNewPlayer(currentMessage);
+                        int result = await OnboardNewLegendByPlayerData(currentMessage);
                         if (result == 0) { Console.WriteLine($"Failed to Onboard"); }
                         else { Console.WriteLine($"Successfully Added: Legend ID: {result}"); }
                         break;
@@ -87,6 +98,9 @@ namespace SengokuProvider.Worker.Handlers
                             Console.WriteLine($"Successfully Added Tournament to League: {response.Response}");
                         }
                         break;
+                    case CommandRegistry.OnboardPlayersByLinkData:
+                        int newPlayerLinkResponse = await OnboardNewPlayerLinks(currentMessage);
+                        break;
                 }
                 await args.CompleteMessageAsync(args.Message);
             }
@@ -96,6 +110,11 @@ namespace SengokuProvider.Worker.Handlers
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
                 throw;
             }
+        }
+
+        private async Task<int> OnboardNewLegendByPlayerData(OnboardReceivedData currentMessage)
+        {
+            throw new NotImplementedException();
         }
 
         private async Task<TournamentOnboardResult> OnboardTournamentToLeague(OnboardReceivedData currentMessage)
@@ -111,35 +130,20 @@ namespace SengokuProvider.Worker.Handlers
             }
             return new TournamentOnboardResult { Response = "Unexpected Error Occured" };
         }
-
-        private async Task<int> OnboardNewPlayer(OnboardReceivedData currentMessage)
+        private async Task<int> OnboardNewPlayerLinks(OnboardReceivedData currentMessage)
         {
             if (currentMessage == null) { return 0; }
+            var currentPlayerQuery = _playerFactory.CreateQueryHandler();
 
-            var currentIntake = _legendFactory.CreateIntakeHandler();
-            if (currentMessage.Command is OnboardLegendsByPlayerCommand onboardCommand)
+            if (currentMessage.Command is OnboardLegendsByPlayerLinkCommand onboardCommand)
             {
-                var newLegend = await currentIntake.GenerateNewLegends(onboardCommand.PlayerId, onboardCommand.GamerTag);
-
+                var foundStandings = await currentPlayerQuery.GetStandingsDataByPlayerLinks(onboardCommand.PlayerLinkIds);
+                var newLegend = await _legendsOperations.GenerateNewLegendsByPlayerStandings(foundStandings);
                 if (newLegend == null) { return 0; }
-
+                var currentIntake = _legendFactory.CreateIntakeHandler();
                 int newLegendID = await currentIntake.InsertNewLegendData(newLegend);
                 if (newLegendID > 0) { return newLegendID; }
             }
-            return 0;
-        }
-        private async Task<int> OnboardNewPlayer(OnboardLegendsByPlayerCommand onboardCommand)
-        {
-            if (onboardCommand == null) { return 0; }
-
-            var currentIntake = _legendFactory.CreateIntakeHandler();
-
-            var newLegend = await currentIntake.GenerateNewLegends(onboardCommand.PlayerId, onboardCommand.GamerTag);
-
-            if (newLegend == null) { return 0; }
-
-            int newLegendID = await currentIntake.InsertNewLegendData(newLegend);
-            if (newLegendID > 0) { return newLegendID; }
             return 0;
         }
         private async Task UpdateLegend(OnboardReceivedData currentMessage)

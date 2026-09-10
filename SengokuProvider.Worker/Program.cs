@@ -8,6 +8,10 @@ using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Orgs;
 using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
+using SengokuProvider.Library.Workflows.Legends;
+using SengokuProvider.Library.Workflows.Events;
+using SengokuProvider.Library.Workflows.Players;
+using SengokuProvider.Library.Workflows.Orgs;
 using SengokuProvider.Worker.Factories;
 using SengokuProvider.Worker.Handlers;
 using System.Net.Http.Headers;
@@ -38,14 +42,15 @@ IHost host = Host.CreateDefaultBuilder(args)
             var playerQuery = provider.GetRequiredService<IPlayerQueryService>();
             return new UserService(connectionString, intakeValidator, playerQuery);
         });
-        services.AddSingleton<IEventIntakeService, EventIntakeService>(provider =>
+        services.AddSingleton<IEventIntakeService>(_ => new EventIntakeService(connectionString));
+        services.AddSingleton<IEventOperations>(provider =>
         {
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
             var graphQlClient = provider.GetRequiredService<GraphQLHttpClient>();
             var queryService = provider.GetRequiredService<IEventQueryService>();
             var throttler = provider.GetRequiredService<RequestThrottler>();
             var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new EventIntakeService(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler);
+            return new EventOperations(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler, provider.GetRequiredService<IEventIntakeService>());
         });
         services.AddSingleton<IEventQueryService, EventQueryService>(provider =>
         {
@@ -58,7 +63,7 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IEventIntegrityService, EventIntegrityService>(provider =>
         {
             var queryService = provider.GetRequiredService<IEventQueryService>();
-            var intakeService = provider.GetRequiredService<IEventIntakeService>();
+            var intakeService = provider.GetRequiredService<IEventOperations>();
             return new EventIntegrityService(queryService, intakeService, connectionString);
         });
         services.AddSingleton<ILegendQueryService, LegendQueryService>(provider =>
@@ -71,29 +76,36 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ILegendIntakeService, LegendIntakeService>(provider =>
         {
             var legendQueryService = provider.GetRequiredService<ILegendQueryService>();
-            var eventQueryService = provider.GetRequiredService<IEventQueryService>();
-            var eventIntakeService = provider.GetRequiredService<IEventIntakeService>();
-            var userQueryService = provider.GetRequiredService<IUserService>();
-            var playerQueryService = provider.GetRequiredService<IPlayerQueryService>();
-            var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
-            var config = provider.GetRequiredService<IConfiguration>();
-            var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new LegendIntakeService(connectionString, config, legendQueryService, eventQueryService, eventIntakeService, userQueryService, playerQueryService, serviceBus, commonServices);
+            return new LegendIntakeService(connectionString, legendQueryService);
         });
+        services.AddSingleton<ILegendsOperations>(provider => new LegendsOperations(
+            connectionString,
+            provider.GetRequiredService<IConfiguration>(),
+            provider.GetRequiredService<ILegendIntakeService>(),
+            provider.GetRequiredService<ILegendQueryService>(),
+            provider.GetRequiredService<IEventOperations>(),
+            provider.GetRequiredService<IEventQueryService>(),
+            provider.GetRequiredService<IPlayerQueryService>(),
+            provider.GetRequiredService<IAzureBusApiService>(),
+            provider.GetRequiredService<ICommonDatabaseService>(),
+            provider.GetRequiredService<IUserService>()));
         services.AddSingleton<ILegendIntegrityService, LegendIntegrityService>(provider =>
         {
             var queryService = provider.GetRequiredService<ILegendQueryService>();
             var intakeService = provider.GetRequiredService<ILegendIntakeService>();
             return new LegendIntegrityService(connectionString, queryService, intakeService);
         });
-        services.AddSingleton<IPlayerIntakeService, PlayerIntakeService>(provider =>
+        services.AddSingleton<IPlayerIntakeService>(provider => new PlayerIntakeService(connectionString,
+            provider.GetRequiredService<ICommonDatabaseService>(), provider.GetRequiredService<IEventQueryService>(),
+            provider.GetRequiredService<IConfiguration>(), provider.GetRequiredService<IAzureBusApiService>()));
+        services.AddSingleton<IPlayerOperations>(provider =>
         {
             var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
             var playerQueryService = provider.GetRequiredService<IPlayerQueryService>();
             var legendQueryService = provider.GetRequiredService<ILegendQueryService>();
             var eventQueryService = provider.GetRequiredService<IEventQueryService>();
             var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new PlayerIntakeService(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus);
+            return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>());
 
         });
         services.AddSingleton<IPlayerQueryService, PlayerQueryService>(provider =>
@@ -104,14 +116,14 @@ IHost host = Host.CreateDefaultBuilder(args)
             var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
             return new PlayerQueryService(connectionString, configuration, graphClient, throttler, commonServices);
         });
-        services.AddSingleton<IOrganizerIntakeService, OrganizerIntakeService>(provider =>
+        services.AddSingleton<IOrganizerIntakeService, OrganizerOperations>(provider =>
         {
             var configuration = provider.GetRequiredService<IConfiguration>();
             var graphClient = provider.GetRequiredService<GraphQLHttpClient>();
             var throttler = provider.GetRequiredService<RequestThrottler>();
             var userService = provider.GetRequiredService<IUserService>();
             var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
-            return new OrganizerIntakeService(connectionString, graphClient, throttler, userService, commonServices);
+            return new OrganizerOperations(connectionString, graphClient, throttler, userService, commonServices);
         });
     }))
     .Build();

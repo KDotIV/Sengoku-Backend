@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
+using SengokuProvider.Library.Workflows.Players;
 
 namespace SengokuProvider.API.Controllers
 {
@@ -11,11 +12,11 @@ namespace SengokuProvider.API.Controllers
     public class PlayerController : Controller
     {
         private readonly ILogger<PlayerController> _log;
-        private readonly IPlayerIntakeService _playerIntakeService;
+        private readonly IPlayerOperations _playerIntakeService;
         private readonly IPlayerQueryService _playerQueryService;
         private readonly CommandProcessor _commandProcessor;
 
-        public PlayerController(ILogger<PlayerController> logger, IPlayerIntakeService intakeService, IPlayerQueryService queryService,
+        public PlayerController(ILogger<PlayerController> logger, IPlayerOperations intakeService, IPlayerQueryService queryService,
             CommandProcessor commandProcessor)
         {
             _log = logger;

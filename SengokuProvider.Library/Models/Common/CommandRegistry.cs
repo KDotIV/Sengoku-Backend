@@ -16,6 +16,7 @@
         //Legend Commands
         UpdateLegend = 301,
         OnboardLegendsByPlayerData = 302,
+        OnboardPlayersByLinkData = 3021,
         IntakeLegendsByTournament = 303,
         OnboardTournamentToLeague = 304,
         OnboardPlayerToLeague = 305,

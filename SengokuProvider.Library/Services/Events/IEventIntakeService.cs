@@ -1,17 +1,12 @@
-﻿using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
-
-namespace SengokuProvider.Library.Services.Events
+using SengokuProvider.Library.Models.Common;
+using SengokuProvider.Library.Models.Regions;
+namespace SengokuProvider.Library.Services.Events;
+public interface IEventIntakeService
 {
-    public interface IEventIntakeService
-    {
-        public Task<List<int>> IntakeTournamentData(IntakeEventsByLocationCommand intakeCommand);
-        public Task<int> IntakeTournamentIdData(LinkTournamentByEventIdCommand command);
-        public Task<int> IntakeEventsByGameId(IntakeEventsByGameIdCommand intakeCommand);
-        public Task<int> IntakeTournamentsByLinkId(int[] tournamentLinks);
-        public Task<bool> SendTournamentLinkEventMessage(int eventLinkId);
-        public Task<bool> SendEventIntakeLocationMessage(IntakeEventsByLocationCommand command);
-        public Task<bool> UpdateEventData(UpdateEventCommand command);
-        public Task<string> IntakeNewRegion(AddressData addressData);
-    }
+    Task<int> InsertNewTournamentData(int totalSuccess, List<TournamentData> currentBatch);
+    Task<int> InsertNewAddressData(List<AddressData> data);
+    Task<int> InsertNewEventsData(List<EventData> data);
+    Task<int> InsertNewRegionData(RegionData newData);
+    Task<bool> UpdateEventData(UpdateEventCommand command);
 }

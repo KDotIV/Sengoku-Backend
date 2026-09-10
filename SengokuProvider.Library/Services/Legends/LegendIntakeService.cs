@@ -21,50 +21,30 @@ namespace SengokuProvider.Library.Services.Legends
 {
     public class LegendIntakeService : ILegendIntakeService
     {
-        private readonly IConfiguration _configuration;
         private readonly ILegendQueryService _legendQueryService;
-        private readonly IEventQueryService _eventQueryService;
-        private readonly IEventIntakeService _eventIntakeService;
-        private readonly IUserService _userService;
-        private readonly IPlayerQueryService _playerQueryService;
-        private readonly IAzureBusApiService _azureBusApiService;
-        private readonly ICommonDatabaseService _commonServices;
         private readonly string _connectionString;
-        private readonly int _orgLeagueLimit = 5;
         private static Random _rand = new Random();
-        public LegendIntakeService(string connectionString, IConfiguration configuration, ILegendQueryService queryService, IEventQueryService eventQueryService,
-            IEventIntakeService eventIntakeService, IUserService userService, IPlayerQueryService playerQueryService, IAzureBusApiService azureServiceBus, ICommonDatabaseService commonServices)
+        public LegendIntakeService(string connectionString, ILegendQueryService queryService)
         {
-            _configuration = configuration;
             _connectionString = connectionString;
             _legendQueryService = queryService;
-            _eventQueryService = eventQueryService;
-            _eventIntakeService = eventIntakeService;
-            _azureBusApiService = azureServiceBus;
-            _commonServices = commonServices;
-            _userService = userService;
-            _playerQueryService = playerQueryService;
         }
-        public async Task<LegendData?> GenerateNewLegends(int playerId, string playerName)
+        public async Task<LegendData> BuildLegendData(StandingsQueryResult standings, string playerName)
         {
-            Console.WriteLine("Beginning Onboarding Process...");
+            ArgumentNullException.ThrowIfNull(standings);
+            var existingLegendId = await CheckDuplicateLegend(standings.PlayerID);
+            if (existingLegendId > 0)
+                throw new ApplicationException($"Legend already exists for Player: {standings.PlayerID}");
 
-            try
+            return new LegendData
             {
-                var currentData = await _legendQueryService.QueryStandingsByPlayerId(playerId);
-
-                LegendData? newLegend = await BuildLegendData(currentData, playerName);
-
-                return newLegend;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error While Generating New Legend for PlayerID: {playerId} - {ex.Message}", ex.StackTrace);
-                Console.WriteLine($"Sending Player for Onboarding");
-                if (await SendPlayerIntakeMessage(playerId, playerName)) { Console.WriteLine("Successfully Sent Player Onbaord Message"); }
-            }
-
-            return null;
+                Id = await GenerateNewLegendId(),
+                LegendName = "Placeholder Style",
+                PlayerId = standings.PlayerID,
+                PlayerLinkId = 0,
+                PlayerName = playerName,
+                Standings = standings.StandingData?.Select(standing => standing.Placement).ToList() ?? []
+            };
         }
         public async Task<TournamentOnboardResult> AddTournamentToLeague(int[] tournamentIds, int leagueId)
         {
@@ -196,138 +176,12 @@ namespace SengokuProvider.Library.Services.Legends
 
             return await _legendQueryService.GetCurrentRunnerBoard(userId, orgId);
         }
-        public async Task<LeaderboardOnboardIntakeResult> IntakeTournamentStandingsByEventLink(int[] tournamentLinks, string eventLinkSlug, int[] gameIds, int leagueId, bool open = true)
-        {
-            var totalResult = new LeaderboardOnboardIntakeResult
-            {
-                PlayerResult = new LeagueOnboardResult { Response = "" },
-                TournamentResults = new TournamentOnboardResult { Response = "" }
-            };
-
-            if (tournamentLinks.Length == 0)
-            {
-                tournamentLinks = (await _eventQueryService.GetTournamentLinksByUrl(eventLinkSlug, gameIds))
-                                  .Select(t => t.Id)
-                                  .ToArray();
-            }
-            if (await UpdateTournamentStandings(tournamentLinks) == 0) { totalResult.TournamentResults.Response = "Onboarding Failed. Check Logs"; return totalResult; }
-            var tempPlayerIds = await ExtractPlayerIds(tournamentLinks);
-
-            totalResult.PlayerResult = await AddPlayerToLeague(tempPlayerIds, leagueId);
-            totalResult.TournamentResults = await AddTournamentToLeague(tournamentLinks, leagueId);
-
-            return totalResult;
-        }
-        private async Task<int> UpdateTournamentStandings(int[] tournamentLinks)
-        {
-            try
-            {
-                var currentTournaments = await _eventQueryService.GetTournamentLinksById(tournamentLinks);
-                return await _eventIntakeService.IntakeTournamentsByLinkId(tournamentLinks);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error while Updating Tournament Standings: {ex.Message} - {ex.StackTrace}");
-                return 0;
-            }
-        }
-        private async Task<HashSet<int>> ExtractPlayerIds(int[] tournamentLinks)
-        {
-            var playerIds = new HashSet<int>();
-            const int batchSize = 500;
-
-            for (int i = 0; i < tournamentLinks.Length; i += batchSize)
-            {
-                var batch = tournamentLinks.Skip(i).Take(batchSize).ToArray();
-                var batchPlayerIds = await _playerQueryService.GetRegisteredPlayersByTournamentId(batch);
-                playerIds.UnionWith(batchPlayerIds.Select(p => p.Id).ToArray());
-            }
-
-            return playerIds;
-        }
-        public async Task<BoardRunnerResult> CreateNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default, string? orgName = default)
-        {
-            var boardResult = new BoardRunnerResult
-            {
-                TournamentList = new List<TournamentBoardResult>(0),
-                UserId = userId,
-                OrgId = orgId,
-                Response = ""
-            };
-            var success = await InsertNewRunnerBoard(tournamentIds, userId, userName, orgId);
-
-            if (!success) return boardResult;
-
-            var tempList = await _eventQueryService.GetTournamentLinksById(tournamentIds.ToArray());
-
-            foreach (var tournament in tempList)
-            {
-                boardResult.TournamentList.Add(new TournamentBoardResult
-                {
-                    TournamentId = tournament.Id,
-                    TournamentName = CleanUrlSlugName(tournament.UrlSlug),
-                    UrlSlug = tournament.UrlSlug,
-                    EntrantsNum = tournament.EntrantsNum,
-                    LastUpdated = tournament.LastUpdated,
-                });
-            }
-            return boardResult;
-        }
         public async Task<UpdateLeaderboardResponse> UpdateLeaderboardStandingsByLeagueId(int[] leagueIds)
         {
             if (leagueIds.Length < 0) throw new ArgumentException($"Cannot Update an invalid LeagueId {nameof(leagueIds)}.");
             var previousResults = await _legendQueryService.GetCurrentLeaderBoardResults(leagueIds, []);
             var newResults = await _legendQueryService.GetLeaderboardResultsByLeagueId(leagueIds, 2);
             return await UpdateCurrentLeaderboardResults(previousResults, newResults);
-        }
-        public async Task<string> AddUserToLeague(int playerId, string playerName, string playerEmail, int leagueId, int[] gameIds)
-        {
-            int result = 0;
-            var addResult = await AddPlayerToLeague(new int[1] { playerId }, leagueId);
-
-            if (addResult.Successful.Count > 0)
-            {
-                try
-                {
-                    result = await _userService.CreateUser(playerName, playerEmail, GenerateHashedPassword(), playerId);
-                    if (result > 0) return "Successfully Registered!";
-                    return "User already registered";
-                }
-                catch (Exception ex)
-                {
-                    return ex.Message;
-                }
-            }
-            else
-            {
-                return "This player is already registered...";
-            }
-        }
-        private string GenerateHashedPassword()
-        {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_@.";
-
-            // This regex enforces:
-            //  - At least one letter:       (?=.*[A-Za-z])
-            //  - At least one digit:        (?=.*\d)
-            //  - At least one "special":    (?=.*[@_.])
-            //  - Exactly 10 chars total, all from [A-Za-z0-9@_.]
-            var pattern = new Regex(@"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@_.])[A-Za-z0-9@_.]{10}$");
-
-            while (true)
-            {
-                // Generate a random 10-character password using the restricted chars
-                string password = new string(
-                    Enumerable.Range(0, 10)
-                        .Select(_ => chars[_rand.Next(chars.Length)])
-                        .ToArray()
-                );
-
-                if (pattern.IsMatch(password))
-                {
-                    return password;
-                }
-            }
         }
         public async Task<int> InsertNewLegendData(LegendData newLegend)
         {
@@ -366,6 +220,17 @@ namespace SengokuProvider.Library.Services.Legends
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
+        }
+        public async Task<int> InsertNewLegendData(List<LegendData> legendData)
+        {
+            if (legendData == null || legendData.Count == 0) { throw new ArgumentNullException(nameof(legendData)); }
+            int insertedCount = 0;
+            foreach (var legend in legendData)
+            {
+                var result = await InsertNewLegendData(legend);
+                if (result > 0) insertedCount++;
+            }
+            return insertedCount;
         }
         public async Task<LeagueByOrgResults> InsertNewLeagueByOrg(int orgId, string leagueName, DateTime startDate, DateTime endDate, int gameId = 0, string description = "")
         {
@@ -424,53 +289,6 @@ namespace SengokuProvider.Library.Services.Legends
             catch (Exception ex)
             {
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
-        }
-        public async Task<bool> AddLeagueToUser(int leagueId, int userId)
-        {
-            if (leagueId < 0 || userId < 0) { throw new ArgumentException($"LeagueId and UserId must be valid {nameof(leagueId)} - {nameof(userId)}"); }
-
-            try
-            {
-                var currentUserData = await _userService.GetUserById(userId);
-                var tempList = await _legendQueryService.GetLeagueByLeagueIds([leagueId]);
-                if (tempList.Count == 0) { throw new ArgumentNullException($"League Results were empty {nameof(tempList)}"); }
-                var currentLeagueData = tempList.First(x => x.LeagueId == leagueId);
-
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    try
-                    {
-                        using (var cmd = new NpgsqlCommand(@"INSERT INTO user_leagues (user_id, user_name, league_id, league_name, last_updated) VALUES (@UserInput, @UserName, @LeagueInput, @LeagueName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
-                        {
-                            cmd.Parameters.AddWithValue("@UserInput", userId);
-                            cmd.Parameters.AddWithValue("@UserName", currentUserData.UserName);
-                            cmd.Parameters.AddWithValue("@LeagueName", currentLeagueData.LeagueName);
-                            cmd.Parameters.AddWithValue("@LeagueInput", leagueId);
-                            cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-
-                            var result = await cmd.ExecuteNonQueryAsync();
-                            if (result > 0)
-                            {
-                                return true;
-                            }
-                            else { return false; }
-                        }
-                    }
-                    catch (NpgsqlException ex)
-                    {
-                        throw new ApplicationException("Database error occurred: ", ex);
-                    }
-                    catch (Exception ex)
-                    {
-                        throw new ApplicationException("Unexpected Error Occurred: ", ex);
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                throw;
             }
         }
         private async Task<UpdateLeaderboardResponse> UpdateCurrentLeaderboardResults(List<LeaderboardData> previousResults, List<LeaderboardData> newResults)
@@ -610,76 +428,6 @@ namespace SengokuProvider.Library.Services.Legends
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
-        private async Task<bool> InsertNewRunnerBoard(List<int> tournamentIds, int userId, string userName, int orgId = default,
-            string? orgName = default)
-        {
-            if (userId < 0 || tournamentIds.Count == 0) { return false; }
-
-            try
-            {
-                using (var conn = new NpgsqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"INSERT INTO bracket_boards (user_id, user_name, tournament_links, organization_id, organization_name, last_updated) 
-                                                        VALUES (@UserInput, @UserName, @TournamentLinks, @OrgId, @OrgName, @LastUpdated)
-                                                        ON CONFLICT DO NOTHING RETURNING user_id;", conn))
-                    {
-                        cmd.Parameters.AddWithValue("@UserInput", userId);
-                        cmd.Parameters.AddWithValue("@UserName", userName);
-                        var tournamentArrayParam = _commonServices.CreateDBIntArrayType("@TournamentLinks", tournamentIds.ToArray());
-                        cmd.Parameters.Add(tournamentArrayParam);
-                        cmd.Parameters.AddWithValue("@OrgId", orgId);
-                        cmd.Parameters.AddWithValue("@OrgName", orgName ?? "");
-                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-
-                        var result = await cmd.ExecuteNonQueryAsync();
-
-                        if (result > 0)
-                        {
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
-        }
-        private async Task<LegendData?> BuildLegendData(StandingsQueryResult? currentData, string playerName)
-        {
-            if (currentData == null)
-            {
-                throw new ArgumentNullException(nameof(currentData), "Player Data cannot be null.");
-            }
-
-            // Check for existing legend
-            int existingLegendId = await CheckDuplicateLegend(currentData.PlayerID);
-            if (existingLegendId > 0)
-            {
-                throw new ApplicationException($"Legend already exists for Player: {currentData.PlayerID}");
-            }
-
-            // Create or use existing ID based on whether the legend was found
-            int legendId = existingLegendId > 0 ? existingLegendId : await GenerateNewLegendId();
-
-            LegendData legendData = new LegendData
-            {
-                Id = legendId,
-                LegendName = "Placeholder Style",
-                PlayerId = currentData.PlayerID,
-                PlayerLinkId = 0,
-                PlayerName = playerName,
-                Standings = currentData.StandingData?.Select(standing => standing.Placement).ToList() ?? new List<int>()
-            };
-
-            return legendData;
-        }
         private async Task<int> CheckDuplicateLegend(int playerId)
         {
             try
@@ -702,45 +450,6 @@ namespace SengokuProvider.Library.Services.Legends
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;
-        }
-        private async Task<bool> SendPlayerIntakeMessage(int playerId, string gamerTag)
-        {
-            if (string.IsNullOrEmpty(_configuration["ServiceBusSettings:PlayerReceivedQueue"]) || _configuration == null)
-            {
-                Console.WriteLine("Service Bus Settings Cannot be empty or null");
-                return false;
-            }
-            if (string.IsNullOrEmpty(gamerTag) || playerId == 0)
-            {
-                Console.WriteLine("Player Intake Data cannot be null or empty");
-                return false;
-            }
-
-            try
-            {
-                var newCommand = new PlayerReceivedData
-                {
-                    Command = new OnboardPlayerDataCommand
-                    {
-                        Topic = CommandRegistry.OnboardPlayerData,
-                        PlayerId = playerId,
-                        GamerTag = gamerTag
-                    },
-                    MessagePriority = MessagePriority.SystemIntake
-                };
-                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
-                var result = await _azureBusApiService.SendBatchAsync(_configuration["ServiceBusSettings:PlayerReceivedQueue"], messageJson);
-                if (!result)
-                {
-                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
-                    return false;
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
-            }
         }
         private async Task<List<PlayerData>> GetPlayersByIds(int[] playerIds)
         {
@@ -867,34 +576,6 @@ namespace SengokuProvider.Library.Services.Legends
                     if (newId != queryResult || queryResult == 0) return newId;
                 }
             }
-        }
-        private string CleanUrlSlugName(string urlSlug)
-        {
-            if (string.IsNullOrEmpty(urlSlug))
-                return string.Empty;
-
-            //Extract the tournament name part
-            var tournamentMatch = Regex.Match(urlSlug, @"tournament/([^/]+)/event");
-            var tournamentPart = tournamentMatch.Success ? tournamentMatch.Groups[1].Value : string.Empty;
-
-            //Extract the event name part
-            var eventMatch = Regex.Match(urlSlug, @"event/([^/]+)");
-            var eventPart = eventMatch.Success ? eventMatch.Groups[1].Value : string.Empty;
-
-            //Clean and capitalize both parts
-            var cleanedTournamentPart = CleanAndCapitalize(tournamentPart);
-            var cleanedEventPart = CleanAndCapitalize(eventPart);
-
-            // Combine both parts into one result string
-            return $"{cleanedTournamentPart} {cleanedEventPart}".Trim();
-        }
-        private string CleanAndCapitalize(string input)
-        {
-            // Remove special characters except '#', keep A-Z, a-z, 0-9
-            var cleanedInput = Regex.Replace(input, @"[^A-Za-z0-9#\s]", " ");
-
-            var textInfo = CultureInfo.CurrentCulture.TextInfo;
-            return textInfo.ToTitleCase(cleanedInput.ToLower());
         }
     }
 }

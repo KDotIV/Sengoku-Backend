@@ -5,6 +5,7 @@ using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Players;
+using SengokuProvider.Library.Workflows.Players;
 using System.Text;
 using System.Text.Json;
 using TimerInfo = Microsoft.Azure.Functions.Worker.TimerInfo;
@@ -18,9 +19,9 @@ namespace EventTournamentScheduler
         private readonly IEventQueryService _eventQueryService;
         private readonly ILegendQueryService _legendQueryService;
         private readonly ILegendIntakeService _legendIntakeService;
-        private readonly IPlayerIntakeService _playerIntakeService;
+        private readonly IPlayerOperations _playerIntakeService;
         public EventIntakeScheduler(HttpClient httpClient, IEventQueryService eventQuery, ILegendQueryService legendQuery, ILegendIntakeService legendIntake,
-            IPlayerIntakeService playerIntake)
+            IPlayerOperations playerIntake)
         {
             _httpClient = httpClient;
             _eventQueryService = eventQuery;

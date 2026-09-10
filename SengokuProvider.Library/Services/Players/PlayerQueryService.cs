@@ -53,6 +53,10 @@ namespace SengokuProvider.Library.Services.Players
         {
             return await QueryStandingsByPlayerIds(playerIds, tournamentIds);
         }
+        public async Task<List<PlayerStandingResult>> GetStandingsDataByPlayerLinks(int[] playerLinks)
+        {
+            return await QueryStandingsByPlayerLinks(playerLinks);
+        }
         public async Task<List<PlayerStandingResult>> QueryStartggPlayerStandings(int tournamentLink)
         {
             try
@@ -348,6 +352,68 @@ namespace SengokuProvider.Library.Services.Players
                     }
                 }
                 return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
+        }
+        private async Task<List<PlayerStandingResult>> QueryStandingsByPlayerLinks(int[] playerLinks)
+        {
+            if(playerLinks.Length < 1)
+            {
+                Console.WriteLine("Player Links cannot be empty or invalid array");
+                return new List<PlayerStandingResult>();
+            }
+            var playerResults = new List<PlayerStandingResult>();
+
+            try
+            {
+                using (var conn = new NpgsqlConnection(_connectionString))
+                {
+                    await conn.OpenAsync();
+                    using (var cmd = new NpgsqlCommand(@"SELECT s.entrant_id, p.startgg_link, s.player_id, s.tournament_link, s.placement, s.entrants_num, 
+                                                        s.active, tl.url_slug, tl.event_link, s.last_updated 
+                                                        FROM standings s 
+                                                        JOIN tournament_links tl ON s.tournament_link = tl.id
+                                                        JOIN players p ON p.id = s.player_id
+                                                        WHERE p.startgg_link = ANY(@playerLinks)
+                                                        ORDER BY entrants_num DESC;", conn))
+                    {
+                        cmd.Parameters.AddWithValue("playerLinks", NpgsqlTypes.NpgsqlDbType.Array | NpgsqlTypes.NpgsqlDbType.Integer, playerLinks);
+                        using (var reader = await cmd.ExecuteReaderAsync())
+                        {
+                            if (!reader.HasRows) return playerResults;
+
+                            while (await reader.ReadAsync())
+                            {
+                                playerResults.Add(new PlayerStandingResult
+                                {
+                                    EntrantsNum = reader.GetInt32(reader.GetOrdinal("entrants_num")),
+                                    StandingDetails = new StandingDetails
+                                    {
+                                        IsActive = reader.GetBoolean(reader.GetOrdinal("active")),
+                                        Placement = reader.GetInt32(reader.GetOrdinal("placement")),
+                                        TournamentId = reader.GetInt32(reader.GetOrdinal("tournament_link")),
+                                        TournamentName = _commonDatabaseServices.CleanUrlSlugName(reader.GetString(reader.GetOrdinal("url_slug"))),
+                                        EventId = reader.GetInt32(reader.GetOrdinal("event_link"))
+                                    },
+                                    TournamentLinks = new Links
+                                    {
+                                        EntrantId = reader.GetInt32(reader.GetOrdinal("entrant_id")),
+                                        PlayerId = reader.GetInt32(reader.GetOrdinal("player_id"))
+                                    },
+                                    LastUpdated = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                                });
+                            }
+                            return playerResults;
+                        }
+                    }
+                }
             }
             catch (NpgsqlException ex)
             {

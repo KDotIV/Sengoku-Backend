@@ -4,7 +4,7 @@ namespace SengokuProvider.Worker.Factories
 {
     public interface IPlayerHandlerFactory
     {
-        public IPlayerIntakeService CreateIntakeHandler();
+        public SengokuProvider.Library.Workflows.Players.IPlayerOperations CreateIntakeHandler();
         public IPlayerIntegrityService CreateIntegrityHandler();
         public IPlayerQueryService CreateQueryHandler();
     }
