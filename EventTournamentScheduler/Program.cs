@@ -107,6 +107,7 @@ var host = new HostBuilder()
         services.AddScoped<IPlayerIntakeService>(provider => new PlayerIntakeService(connectionString,
             provider.GetRequiredService<ICommonDatabaseService>(), provider.GetRequiredService<IEventQueryService>(),
             provider.GetRequiredService<IConfiguration>(), provider.GetRequiredService<IAzureBusApiService>()));
+        services.AddScoped<IBracketCheckpointStore>(provider => new BracketCheckpointStore(connectionString));
         services.AddScoped<IPlayerOperations>(provider =>
         {
             var configuration = provider.GetService<IConfiguration>();
@@ -115,7 +116,9 @@ var host = new HostBuilder()
             var legendQueryService = provider.GetService<ILegendQueryService>();
             var eventQueryService = provider.GetService<IEventQueryService>();
             var serviceBus = provider.GetService<IAzureBusApiService>();
-            return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>());
+            var playerIntakeService = provider.GetRequiredService<IPlayerIntakeService>();
+            var bracketCheckpointStore = provider.GetRequiredService<IBracketCheckpointStore>();
+            return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, bracketCheckpointStore);
         });
         services.AddScoped(provider => new GraphQLHttpClient(graphQLUrl, new NewtonsoftJsonSerializer())
         {

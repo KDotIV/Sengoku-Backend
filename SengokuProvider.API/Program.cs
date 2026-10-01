@@ -133,7 +133,8 @@ builder.Services.AddScoped<IEventOperations>(provider =>
     var queryService = provider.GetService<IEventQueryService>();
     var throttler = provider.GetService<RequestThrottler>();
     var serviceBus = provider.GetService<IAzureBusApiService>();
-    return new EventOperations(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler, provider.GetRequiredService<IEventIntakeService>());
+    var eventIntakeService = provider.GetRequiredService<IEventIntakeService>();
+    return new EventOperations(connectionString, configuration, graphQlClient, queryService, serviceBus, intakeValidator, throttler, eventIntakeService);
 });
 builder.Services.AddScoped<ILegendQueryService, LegendQueryService>(provider =>
 {
@@ -161,7 +162,9 @@ builder.Services.AddScoped<IPlayerOperations>(provider =>
     var legendQueryService = provider.GetService<ILegendQueryService>();
     var eventQueryService = provider.GetService<IEventQueryService>();
     var serviceBus = provider.GetService<IAzureBusApiService>();
-    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>(), provider.GetRequiredService<IBracketCheckpointStore>());
+    var playerIntakeService = provider.GetRequiredService<IPlayerIntakeService>();
+    var bracketCheckpointStore = provider.GetRequiredService<IBracketCheckpointStore>();
+    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, bracketCheckpointStore);
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {
