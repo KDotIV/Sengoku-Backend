@@ -1,5 +1,6 @@
 name: API QA-Deploy
 on:
+  workflow_dispatch:
   push:
     branches:
     - master
@@ -12,6 +13,7 @@ permissions:
   contents: read
 
 env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   AZURE_WEBAPP_NAME: sengoku-alexandria-qa
   AZURE_WEBAPP_PACKAGE_PATH: .\publish
   CONFIGURATION: Release
@@ -31,15 +33,38 @@ jobs:
     - name: Build
       run: dotnet build "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-restore
     - name: Test
-      run: dotnet test "${{ env.WORKING_DIRECTORY }}" --no-build
-    - name: Publish
-      run: dotnet publish "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-build --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+      run: dotnet test "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-build
+    - name: Publish API
+      run: dotnet publish SengokuProvider.API/SengokuProvider.API.csproj --configuration ${{ env.CONFIGURATION }} --no-build --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
+    - name: Publish worker
+      run: dotnet publish SengokuProvider.Worker/SengokuProvider.Worker.csproj --configuration ${{ env.CONFIGURATION }} --no-build --output ./worker-publish
+    - name: Package existing continuous WebJobs
+      shell: pwsh
+      run: |
+        # Preserve the three existing Azure WebJob names instead of creating a fourth worker.
+        foreach ($jobName in @('SengokuProvider.Worker-1', 'SengokuProvider.Worker-2', 'SengokuProvider.Worker-3')) {
+          $jobPath = Join-Path $env:AZURE_WEBAPP_PACKAGE_PATH "App_Data/jobs/continuous/$jobName"
+          New-Item -ItemType Directory -Path $jobPath -Force | Out-Null
+          Copy-Item -Path ./worker-publish/* -Destination $jobPath -Recurse -Force
+          @('@echo off', 'cd /d "%~dp0"', 'dotnet SengokuProvider.Worker.dll', 'exit /b %errorlevel%') | Set-Content -Path (Join-Path $jobPath 'run.cmd') -Encoding ascii
+          foreach ($file in @('SengokuProvider.Worker.dll', 'SengokuProvider.Worker.runtimeconfig.json', 'run.cmd')) {
+            if (-not (Test-Path (Join-Path $jobPath $file))) {
+              throw "WebJob $jobName is missing $file"
+            }
+          }
+        }
     - name: Publish Artifacts
       uses: actions/upload-artifact@v4
       with:
         name: webapp
         path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+        if-no-files-found: error
   deploy:
+    # Other branches still build, but Azure OIDC currently trusts only master.
+    if: github.ref == 'refs/heads/master'
+    concurrency:
+      group: deploy-sengoku-alexandria-qa
+      cancel-in-progress: false
     runs-on: windows-latest
     needs: build
     steps:
@@ -53,9 +78,9 @@ jobs:
       with:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID}}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
     - name: Deploy to Azure WebApp
-      uses: azure/webapps-deploy@v2
+      uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}

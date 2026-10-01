@@ -233,7 +233,17 @@ namespace SengokuProvider.Library.Workflows.Players
 
                 var opponentCards = await BuildPlayerCardsFromOpponentData(expectedOpponents, result.PlayerTournamentCard, tournamentId);
 
-                if (opponentCards == null || opponentCards.Count == 0) { throw new ApplicationException("Unable to Reduce Bracket data from Dataset with provided PlayerId"); }
+                //if no legends were found, a message is sent to intake legends for that player. Cache the current state of the player and
+                //return an empty list to avoid processing further until legends are onboarded.
+
+                if (opponentCards == null) { throw new ApplicationException("Unable to Reduce Bracket data from Dataset with provided PlayerId"); }
+                if(opponentCards.Count == 0)
+                {
+                    Console.WriteLine($"No opponent cards were found for Player: {playerData.PlayerName} in Tournament: {tournamentId}. Legends may need to be onboarded. " +
+                        $"\n Cache the current state of data");
+                    //Cache logic here:
+
+                }
 
                 result.EntrantSetCards = opponentCards;
 
@@ -245,7 +255,6 @@ namespace SengokuProvider.Library.Workflows.Players
                 throw;
             }
         }
-
         private async Task<List<EntrantSetCard>> BuildPlayerCardsFromOpponentData(List<ExpectedOpponent> expectedOpponents, PlayerTournamentCard playerTournamentCard, int tournamentId)
         {
             if(expectedOpponents == null || expectedOpponents.Count == 0) { return new List<EntrantSetCard>(); }
@@ -257,13 +266,15 @@ namespace SengokuProvider.Library.Workflows.Players
             var tempPlayerLinks = expectedOpponents.Select(x => x.PlayerLink).Distinct().ToList();
 
             var foundLegends = await _legendQueryService.GetLegendsByPlayerLink(tempPlayerLinks.ToArray());
-            var messageJson = JsonConvert.SerializeObject(new OnboardLegendsByPlayerLinkCommand
+            if (foundLegends == null || foundLegends.Count == 0) 
             {
-                Topic = CommandRegistry.OnboardPlayerToLeague,
-                PlayerLinkIds = tempPlayerLinks.ToArray()
-            }, JsonSettings.DefaultSettings);
-            if (foundLegends == null || foundLegends.Count == 0) { await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:LegendReceivedQueue"], messageJson); }
-
+                var messageJson = JsonConvert.SerializeObject(new OnboardLegendsByPlayerLinkCommand
+                {
+                    Topic = CommandRegistry.OnboardPlayerToLeague,
+                    PlayerLinkIds = tempPlayerLinks.ToArray()
+                }, JsonSettings.DefaultSettings);
+                await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:LegendReceivedQueue"], messageJson); 
+            }
             return result;
         }
         private List<SetNode> FindPath(IReadOnlyCollection<SetNode> nodes, string startingSetId, int requiredPlacement = 1)

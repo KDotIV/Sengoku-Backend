@@ -1,11 +1,12 @@
 ﻿using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Workflows.Events;
 
 namespace SengokuProvider.Worker.Factories
 {
     public interface IEventHandlerFactory
     {
         public IEventIntegrityService CreateIntegrityHandler();
-        public SengokuProvider.Library.Workflows.Events.IEventOperations CreateIntakeHandler();
+        public IEventOperations CreateIntakeHandler();
         public IEventQueryService CreateQueryHandler();
     }
 }

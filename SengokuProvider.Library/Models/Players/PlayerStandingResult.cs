@@ -4,7 +4,7 @@
     {
         public StandingDetails StandingDetails { get; set; } = new StandingDetails();
         public int LeaugeId { get; set; }
-        public Links? TournamentLinks { get; set; }
+        public Links TournamentLinks { get; set; } = new Links { EntrantId = 0, PlayerId = 0, StandingId = 0 };
         public int EntrantsNum { get; set; }
         public string? Response { get; set; }
         public string? UrlSlug { get; set; }

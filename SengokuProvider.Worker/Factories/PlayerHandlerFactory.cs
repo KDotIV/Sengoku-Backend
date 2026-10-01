@@ -1,4 +1,5 @@
 ﻿using SengokuProvider.Library.Services.Players;
+using SengokuProvider.Library.Workflows.Players;
 using SengokuProvider.Worker.Factories;
 
 public class PlayerHandlerFactory : IPlayerHandlerFactory
@@ -9,10 +10,10 @@ public class PlayerHandlerFactory : IPlayerHandlerFactory
     {
         _serviceScopeFactory = serviceScopeFactory;
     }
-    public SengokuProvider.Library.Workflows.Players.IPlayerOperations CreateIntakeHandler()
+    public IPlayerOperations CreateIntakeHandler()
     {
         var scope = _serviceScopeFactory.CreateScope();
-        return scope.ServiceProvider.GetRequiredService<SengokuProvider.Library.Workflows.Players.IPlayerOperations>();
+        return scope.ServiceProvider.GetRequiredService<IPlayerOperations>();
     }
 
     public IPlayerIntegrityService CreateIntegrityHandler()

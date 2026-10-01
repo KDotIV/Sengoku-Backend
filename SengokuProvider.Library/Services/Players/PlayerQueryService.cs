@@ -992,6 +992,11 @@ namespace SengokuProvider.Library.Services.Players
                     catch (Exception ex)
                     {
                         Console.WriteLine($"Failed to retrieve player data: {ex.Message + ": " + ex.StackTrace}");
+                        retryCount++;
+                        if(retryCount >= maxRetries)
+                        {
+                            Console.WriteLine($"Failed Max retries reached. Aborting Operation for {tournamentLink}");
+                        }
                     }
                 }
             }
@@ -1016,7 +1021,6 @@ namespace SengokuProvider.Library.Services.Players
                     }
                 }
             };
-
             return result;
         }
         private async Task<PlayerGraphQLResult?> QueryStartggEventStandings(int tournamentLink, int perPage = 50)

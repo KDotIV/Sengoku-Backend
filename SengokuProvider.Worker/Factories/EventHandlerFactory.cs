@@ -1,20 +1,20 @@
 ﻿using SengokuProvider.Library.Services.Events;
+using SengokuProvider.Library.Workflows.Events;
 
 namespace SengokuProvider.Worker.Factories
 {
     public class EventHandlerFactory : IEventHandlerFactory
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
-
         public EventHandlerFactory(IServiceScopeFactory serviceScopeFactory)
         {
             _serviceScopeFactory = serviceScopeFactory;
         }
 
-        public SengokuProvider.Library.Workflows.Events.IEventOperations CreateIntakeHandler()
+        public IEventOperations CreateIntakeHandler()
         {
             var scope = _serviceScopeFactory.CreateScope();
-            return scope.ServiceProvider.GetRequiredService<SengokuProvider.Library.Workflows.Events.IEventOperations>();
+            return scope.ServiceProvider.GetRequiredService<IEventOperations>();
         }
 
         public IEventIntegrityService CreateIntegrityHandler()

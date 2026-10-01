@@ -51,8 +51,12 @@ public class LegendsOperations : ILegendsOperations
 
     public async Task<List<LegendData>> GenerateNewLegendsByPlayerStandings(List<PlayerStandingResult> standings)
     {
+        //Need to refactor this to sort players standings into dictionary
         var legends = new List<LegendData>();
         if (standings == null || standings.Count == 0) return legends;
+
+        
+        var standingsDict = standings.GroupBy(s => s.TournamentLinks.PlayerId).ToDictionary(g => g.Key, g => g.ToList());
         foreach (var standing in standings)
         {
             if (standing.TournamentLinks == null || standing.StandingDetails == null) continue;

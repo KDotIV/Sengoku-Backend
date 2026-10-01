@@ -1,5 +1,6 @@
 name: Deploy EventTournamentScheduler
 on:
+  workflow_dispatch:
   push:
     branches:
     - master
@@ -9,12 +10,12 @@ permissions:
   contents: read
   
 env:
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   AZURE_FUNCTIONAPP_NAME: EventTournamentScheduler
   AZURE_FUNCTIONAPP_PACKAGE_PATH: .\published
   CONFIGURATION: Release
   DOTNET_CORE_VERSION: 8.0.x
   WORKING_DIRECTORY: EventTournamentScheduler/EventTournamentScheduler.csproj
-  DOTNET_CORE_VERSION_INPROC: 6.0.x
   AZURE_RESOURCE_GROUP: Alexandria
 jobs:
   build:
@@ -25,10 +26,6 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
-    - name: Setup .NET Core (for inproc extensions)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: ${{ env.DOTNET_CORE_VERSION_INPROC }}
     - name: Restore
       run: dotnet restore "${{ env.WORKING_DIRECTORY }}"
     - name: Build
@@ -40,7 +37,14 @@ jobs:
       with:
         name: functionapp
         path: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        include-hidden-files: true
+        if-no-files-found: error
   deploy:
+    # The Azure federated credential currently trusts only master.
+    if: github.ref == 'refs/heads/master'
+    concurrency:
+      group: deploy-EventTournamentScheduler
+      cancel-in-progress: false
     runs-on: windows-latest
     needs: build
     steps:
@@ -52,9 +56,22 @@ jobs:
     - name: Azure Login (OIDC)
       uses: azure/login@v2
       with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
+        # Optional dedicated identity; see .github/DEPLOYMENT.md for Azure RBAC setup.
+        client-id: ${{ secrets.AZURE_FUNCTIONAPP_CLIENT_ID || secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID}}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+    - name: Verify Function App access and deployment package
+      shell: pwsh
+      run: |
+        az functionapp show --subscription $env:AZURE_SUBSCRIPTION_ID --resource-group $env:AZURE_RESOURCE_GROUP --name $env:AZURE_FUNCTIONAPP_NAME --query id --output tsv
+        if ($LASTEXITCODE -ne 0) {
+          throw 'Cannot access the Function App. Grant the selected OIDC identity Website Contributor on EventTournamentScheduler; see .github/DEPLOYMENT.md.'
+        }
+        foreach ($file in @('.azurefunctions', 'host.json', 'functions.metadata', 'worker.config.json', 'EventTournamentScheduler.dll')) {
+          if (-not (Test-Path (Join-Path $env:AZURE_FUNCTIONAPP_PACKAGE_PATH $file))) {
+            throw "Function deployment artifact is missing $file"
+          }
+        }
     - name: Deploy to Azure Function App
       uses: azure/functions-action@v1
       with:

@@ -49,7 +49,8 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                 var newPathId = await GenerateNewBracketPathId();
                 try
                 {
-                    using (var cmd = new NpgsqlCommand(@"INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids) VALUES (@ID, @TournamentLink, @TournamentName, @EventLink, @RoundNum, @PlayerId, @LastUpdated, @SetIds) ON CONFLICT DO NOTHING;", conn))
+                    using (var cmd = new NpgsqlCommand(@"INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids) 
+                                                        VALUES (@ID, @TournamentLink, @TournamentName, @EventLink, @RoundNum, @PlayerId, @LastUpdated, @SetIds) ON CONFLICT DO NOTHING;", conn))
                     {
                         cmd.Parameters.AddWithValue("@ID", newPathId);
                         cmd.Parameters.AddWithValue("@TournamentLink", processedData.TournamentLinkID);

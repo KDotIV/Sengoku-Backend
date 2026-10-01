@@ -137,7 +137,11 @@ namespace SengokuProvider.Worker.Handlers
 
             if (currentMessage.Command is OnboardLegendsByPlayerLinkCommand onboardCommand)
             {
+                //This is unsorted
                 var foundStandings = await currentPlayerQuery.GetStandingsDataByPlayerLinks(onboardCommand.PlayerLinkIds);
+                //THIS NEEDS REFACTOR
+                if(foundStandings == null || foundStandings.Count == 0) { Console.WriteLine($"Unable to complete request for player links: {string.Join(", ", onboardCommand.PlayerLinkIds)}"); 
+                    return 0; }
                 var newLegend = await _legendsOperations.GenerateNewLegendsByPlayerStandings(foundStandings);
                 if (newLegend == null) { return 0; }
                 var currentIntake = _legendFactory.CreateIntakeHandler();
