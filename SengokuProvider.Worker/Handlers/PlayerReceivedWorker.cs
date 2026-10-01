@@ -23,7 +23,7 @@ namespace SengokuProvider.Worker.Handlers
             _playerFactory = playerFactory;
             _configuration = config;
             _client = serviceBus;
-            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:PlayerReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 1, PrefetchCount = 2, });
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:PlayerReceivedQueue"], new ServiceBusProcessorOptions { AutoCompleteMessages = false, MaxConcurrentCalls = 1, PrefetchCount = 2, });
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += Errorhandler;
         }
@@ -77,6 +77,11 @@ namespace SengokuProvider.Worker.Handlers
             {
                 switch (currentMessage.Command.Topic)
                 {
+                    case CommandRegistry.ResumeBracketProcessing:
+                        if (currentMessage.Command is not ResumeBracketProcessingCommand resume || !resume.Validate())
+                            throw new ArgumentException("Invalid resume command.");
+                        await _playerFactory.CreateIntakeHandler().ResumeBracketProcessing(resume.OperationId);
+                        break;
                     case CommandRegistry.UpdatePlayer:
                         break;
                     case CommandRegistry.OnboardPlayerData:
@@ -90,6 +95,8 @@ namespace SengokuProvider.Worker.Handlers
                     case CommandRegistry.QueryPlayerStandingsCommand:
                         List<PlayerStandingResult> playerResults = await QueryPlayerStandings(currentMessage);
                         break;
+                    default:
+                        throw new NotSupportedException($"Unsupported player command: {currentMessage.Command.Topic}");
                 }
                 await args.CompleteMessageAsync(args.Message);
                 cts.Cancel();
@@ -97,9 +104,19 @@ namespace SengokuProvider.Worker.Handlers
             catch (Exception ex)
             {
                 _log.LogError(ex.Message, ex);
-                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
+                if (currentMessage.Command.Topic == CommandRegistry.ResumeBracketProcessing &&
+                    ex is not ArgumentException && ex is not NotSupportedException)
+                    await args.AbandonMessageAsync(args.Message);
+                else
+                    await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
                 cts.Cancel();
                 throw;
+            }
+            finally
+            {
+                cts.Cancel();
+                await lockRenewalTask;
+                cts.Dispose();
             }
         }
 

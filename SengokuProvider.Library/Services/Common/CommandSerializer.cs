@@ -3,6 +3,7 @@ using Newtonsoft.Json.Linq;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Legends;
+using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Models.Players;
 
 namespace SengokuProvider.Library.Services.Common
@@ -82,6 +83,9 @@ namespace SengokuProvider.Library.Services.Common
                 ICommand? result = topic switch
                 {
                     CommandRegistry.OnboardPlayerData => commandToken.ToObject<OnboardPlayerDataCommand>(localSerializer),
+                    CommandRegistry.ResumeBracketProcessing => commandToken.ToObject<ResumeBracketProcessingCommand>(localSerializer),
+                    CommandRegistry.OnboardPlayersByLinkData => commandToken.ToObject<OnboardLegendsByPlayerLinkCommand>(localSerializer),
+                    CommandRegistry.OnboardTournamentToLeague => commandToken.ToObject<OnboardTournamentToLeagueCommand>(localSerializer),
                     CommandRegistry.LinkTournamentByEvent => commandToken.ToObject<LinkTournamentByEventIdCommand>(localSerializer),
                     CommandRegistry.IntakePlayersByTournament => commandToken.ToObject<IntakePlayersByTournamentCommand>(localSerializer),
                     CommandRegistry.UpdateEvent => throw new NotImplementedException(),

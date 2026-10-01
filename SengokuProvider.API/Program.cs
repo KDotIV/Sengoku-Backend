@@ -83,6 +83,7 @@ builder.Services.AddCors(options =>
 });
 
 //Scopes
+builder.Services.AddScoped<IBracketCheckpointStore>(_ => new BracketCheckpointStore(connectionString!));
 builder.Services.AddScoped<IAzureBusApiService, AzureBusApiService>(provider =>
 {
     var client = provider.GetService<ServiceBusClient>();
@@ -160,7 +161,7 @@ builder.Services.AddScoped<IPlayerOperations>(provider =>
     var legendQueryService = provider.GetService<ILegendQueryService>();
     var eventQueryService = provider.GetService<IEventQueryService>();
     var serviceBus = provider.GetService<IAzureBusApiService>();
-    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>());
+    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>(), provider.GetRequiredService<IBracketCheckpointStore>());
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {

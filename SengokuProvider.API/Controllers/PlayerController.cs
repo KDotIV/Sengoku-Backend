@@ -135,6 +135,13 @@ namespace SengokuProvider.API.Controllers
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }
+        [HttpGet("BracketProcessing/{operationId:guid}")]
+        public async Task<IActionResult> GetBracketProcessingStatus(Guid operationId)
+        {
+            var result = await _playerIntakeService.GetBracketProcessingStatus(operationId);
+            return result == null ? NotFound() : Ok(result);
+        }
+
         [HttpPost("OnboardBracketRunnerByBracketSlug")]
         public async Task<IActionResult> OnboardBracketRunnerByBracketSlug([FromBody] OnboardBracketRunnerByBracketSlug command)
         {
@@ -147,7 +154,15 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _playerIntakeService.OnboardBracketRunnerByBracketSlug(command.BracketSlug, command.PlayerId);
+                if (result.Status == "Pending")
+                    return AcceptedAtAction(nameof(GetBracketProcessingStatus), new { operationId = result.OperationId }, result);
+                if (result.Status is "Failed" or "Expired" || result.Response.StartsWith("FAILED:", StringComparison.Ordinal))
+                    return BadRequest(result);
                 return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
             }
             catch (Exception ex)
             {

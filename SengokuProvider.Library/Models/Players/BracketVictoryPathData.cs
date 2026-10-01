@@ -9,5 +9,8 @@
         public required PlayerTournamentCard PlayerTournamentCard { get; set; }
         public required List<EntrantSetCard> EntrantSetCards { get; set; } = new List<EntrantSetCard>();
     }
-    public sealed record ExpectedOpponent(int EntrantId, int PlayerLink, string GamerTag, string pathSetIdentifier, string SourceSetIdentifier);
+    public sealed record ExpectedOpponent(int EntrantId, int PlayerLink, string GamerTag, string pathSetIdentifier, string SourceSetIdentifier)
+    {
+        public string PathSetId { get; init; } = string.Empty;
+    }
 }

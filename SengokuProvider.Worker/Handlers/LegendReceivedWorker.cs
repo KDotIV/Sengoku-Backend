@@ -7,6 +7,7 @@ using SengokuProvider.Library.Models.Legends;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Worker.Factories;
 using SengokuProvider.Library.Workflows.Legends;
+using SengokuProvider.Library.Services.Players;
 
 namespace SengokuProvider.Worker.Handlers
 {
@@ -17,10 +18,11 @@ namespace SengokuProvider.Worker.Handlers
         private readonly IPlayerHandlerFactory _playerFactory;
         private readonly ILegendsOperations _legendsOperations;
         private readonly IConfiguration _configuration;
+        private readonly IBracketCheckpointStore _checkpoints;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
-        public LegendReceivedWorker(ILogger<LegendReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus, ILegendHandlerFactory legendFactory, IPlayerHandlerFactory playerFactory, ILegendsOperations legendsOperations)
+        public LegendReceivedWorker(ILogger<LegendReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus, ILegendHandlerFactory legendFactory, IPlayerHandlerFactory playerFactory, ILegendsOperations legendsOperations, IBracketCheckpointStore checkpoints)
         {
             _log = logger;
             _configuration = config;
@@ -28,10 +30,11 @@ namespace SengokuProvider.Worker.Handlers
             _legendFactory = legendFactory;
             _playerFactory = playerFactory;
             _legendsOperations = legendsOperations;
+            _checkpoints = checkpoints;
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:LegendReceivedQueue"], new ServiceBusProcessorOptions { MaxConcurrentCalls = 1, PrefetchCount = 2, });
+            _processor = _client.CreateProcessor(_configuration["ServiceBusSettings:LegendReceivedQueue"], new ServiceBusProcessorOptions { AutoCompleteMessages = false, MaxConcurrentCalls = 1, PrefetchCount = 2, });
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += Errorhandler;
 
@@ -101,13 +104,19 @@ namespace SengokuProvider.Worker.Handlers
                     case CommandRegistry.OnboardPlayersByLinkData:
                         int newPlayerLinkResponse = await OnboardNewPlayerLinks(currentMessage);
                         break;
+                    default:
+                        throw new NotSupportedException($"Unsupported legend command: {currentMessage.Command.Topic}");
                 }
                 await args.CompleteMessageAsync(args.Message);
             }
             catch (Exception ex)
             {
                 _log.LogError(ex.Message, ex);
-                await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
+                if (currentMessage.Command is OnboardLegendsByPlayerLinkCommand &&
+                    ex is not ArgumentException && ex is not NotSupportedException)
+                    await args.AbandonMessageAsync(args.Message);
+                else
+                    await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
                 throw;
             }
         }
@@ -137,16 +146,20 @@ namespace SengokuProvider.Worker.Handlers
 
             if (currentMessage.Command is OnboardLegendsByPlayerLinkCommand onboardCommand)
             {
-                //This is unsorted
+                if (!onboardCommand.Validate()) throw new ArgumentException("Player links are required.");
+                if (onboardCommand.OperationId is Guid operationId)
+                {
+                    var checkpoint = await _checkpoints.GetAsync(operationId);
+                    if (checkpoint == null || checkpoint.Result.Status != "Pending" || checkpoint.ExpiresAt <= DateTime.UtcNow)
+                        return 0;
+                }
                 var foundStandings = await currentPlayerQuery.GetStandingsDataByPlayerLinks(onboardCommand.PlayerLinkIds);
-                //THIS NEEDS REFACTOR
-                if(foundStandings == null || foundStandings.Count == 0) { Console.WriteLine($"Unable to complete request for player links: {string.Join(", ", onboardCommand.PlayerLinkIds)}"); 
-                    return 0; }
-                var newLegend = await _legendsOperations.GenerateNewLegendsByPlayerStandings(foundStandings);
-                if (newLegend == null) { return 0; }
-                var currentIntake = _legendFactory.CreateIntakeHandler();
-                int newLegendID = await currentIntake.InsertNewLegendData(newLegend);
-                if (newLegendID > 0) { return newLegendID; }
+                var newLegends = await _legendsOperations.GenerateNewLegendsByPlayerStandings(foundStandings ?? []);
+                var inserted = newLegends.Count == 0 ? 0 : await _legendFactory.CreateIntakeHandler().InsertNewLegendData(newLegends);
+                // A duplicate onboarding request still wakes the waiting operation.
+                if (onboardCommand.OperationId is Guid resumeId)
+                    await _checkpoints.EnqueueResumeAsync(resumeId, _configuration["ServiceBusSettings:PlayerReceivedQueue"]!);
+                return inserted;
             }
             return 0;
         }

@@ -13,6 +13,7 @@
         OnboardPlayerData = 202,
         IntakePlayersByTournament = 203,
         QueryPlayerStandingsCommand = 204,
+        ResumeBracketProcessing = 205,
         //Legend Commands
         UpdateLegend = 301,
         OnboardLegendsByPlayerData = 302,

@@ -51,25 +51,29 @@ public class LegendsOperations : ILegendsOperations
 
     public async Task<List<LegendData>> GenerateNewLegendsByPlayerStandings(List<PlayerStandingResult> standings)
     {
-        //Need to refactor this to sort players standings into dictionary
         var legends = new List<LegendData>();
         if (standings == null || standings.Count == 0) return legends;
 
         
-        var standingsDict = standings.GroupBy(s => s.TournamentLinks.PlayerId).ToDictionary(g => g.Key, g => g.ToList());
-        foreach (var standing in standings)
+        foreach (var standing in standings.Where(s => s.TournamentLinks?.PlayerId > 0)
+            .DistinctBy(s => s.TournamentLinks.PlayerId))
         {
             if (standing.TournamentLinks == null || standing.StandingDetails == null) continue;
             try
             {
                 var current = await _legendQuery.QueryStandingsByPlayerId(standing.TournamentLinks.PlayerId);
                 if (current == null) throw new ArgumentNullException(nameof(current), "Player data cannot be null.");
-                legends.Add(await _legendIntake.BuildLegendData(current, standing.StandingDetails.GamerTag ?? string.Empty));
+                var player = await _playerQuery.GetPlayerDataById(standing.TournamentLinks.PlayerId);
+                if (player.PlayerLinkID <= 0) throw new ArgumentException("Player has no start.gg link.");
+                var legend = await _legendIntake.BuildLegendData(current, player.PlayerName);
+                legend.PlayerLinkId = player.PlayerLinkID;
+                legends.Add(legend);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error While Generating New Legend for PlayerID: {standing.TournamentLinks.PlayerId} - {ex.Message}");
-                await SendPlayerIntakeMessage(standing.TournamentLinks.PlayerId, standing.StandingDetails.GamerTag ?? string.Empty);
+                var player = await _playerQuery.GetPlayerDataById(standing.TournamentLinks.PlayerId);
+                await SendPlayerIntakeMessage(player.PlayerLinkID, player.PlayerName);
             }
         }
         return legends;
@@ -154,7 +158,7 @@ public class LegendsOperations : ILegendsOperations
     {
         var queue = _config["ServiceBusSettings:PlayerReceivedQueue"];
         if (string.IsNullOrEmpty(queue) || string.IsNullOrEmpty(gamerTag) || playerId == 0) return false;
-        var message = new PlayerReceivedData { Command = new OnboardPlayerDataCommand { Topic = CommandRegistry.OnboardPlayerData, PlayerId = playerId, GamerTag = gamerTag }, MessagePriority = MessagePriority.SystemIntake };
+        var message = new PlayerReceivedData { Command = new OnboardPlayerDataCommand { Topic = CommandRegistry.OnboardPlayerData, PlayerId = playerId, GamerTag = gamerTag, PerPage = 50 }, MessagePriority = MessagePriority.SystemIntake };
         return await _bus.SendBatchAsync(queue, JsonConvert.SerializeObject(message, JsonSettings.DefaultSettings));
     }
 

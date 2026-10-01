@@ -2,6 +2,13 @@
 
 namespace SengokuProvider.Library.Models.Players
 {
+    public sealed class ResumeBracketProcessingCommand : ICommand
+    {
+        public Guid OperationId { get; set; }
+        public CommandRegistry Topic { get; set; } = CommandRegistry.ResumeBracketProcessing;
+        public string? Response { get; set; }
+        public bool Validate() => OperationId != Guid.Empty;
+    }
     public class GetRegisteredPlayersByTournamentIdCommand : ICommand
     {
         public required int TournamentLink { get; set; }

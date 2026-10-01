@@ -7,4 +7,6 @@ public interface IPlayerOperations
     Task<int> IntakePlayerData(int tournamentLink);
     Task<int> OnboardPreviousTournamentData(OnboardPlayerDataCommand command, int volumeLimit = 100);
     Task<PlayerOnboardResult> OnboardBracketRunnerByBracketSlug(string bracketSlug, int playerId);
+    Task<PlayerOnboardResult?> ResumeBracketProcessing(Guid operationId);
+    Task<PlayerOnboardResult?> GetBracketProcessingStatus(Guid operationId);
 }

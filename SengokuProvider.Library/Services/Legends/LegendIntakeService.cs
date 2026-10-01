@@ -33,12 +33,10 @@ namespace SengokuProvider.Library.Services.Legends
         {
             ArgumentNullException.ThrowIfNull(standings);
             var existingLegendId = await CheckDuplicateLegend(standings.PlayerID);
-            if (existingLegendId > 0)
-                throw new ApplicationException($"Legend already exists for Player: {standings.PlayerID}");
 
             return new LegendData
             {
-                Id = await GenerateNewLegendId(),
+                Id = existingLegendId > 0 ? existingLegendId : await GenerateNewLegendId(),
                 LegendName = "Placeholder Style",
                 PlayerId = standings.PlayerID,
                 PlayerLinkId = 0,
@@ -191,9 +189,25 @@ namespace SengokuProvider.Library.Services.Legends
                 using (var conn = new NpgsqlConnection(_connectionString))
                 {
                     await conn.OpenAsync();
+                    await using var transaction = await conn.BeginTransactionAsync();
+                    await conn.ExecuteAsync("SELECT pg_advisory_xact_lock(hashtextextended(@key, 2))",
+                        new { key = $"legend:{newLegend.PlayerId}" }, transaction);
+                    var existingId = await conn.QueryFirstOrDefaultAsync<int>("SELECT id FROM legends WHERE player_id = @PlayerId ORDER BY id LIMIT 1",
+                        new { newLegend.PlayerId }, transaction);
+                    if (existingId > 0)
+                    {
+                        if (newLegend.PlayerLinkId > 0)
+                            await conn.ExecuteAsync("UPDATE legends SET player_link_id = @PlayerLinkId WHERE id = @existingId",
+                                new { newLegend.PlayerLinkId, existingId }, transaction);
+                        await transaction.CommitAsync();
+                        return existingId;
+                    }
+                    await conn.ExecuteAsync("SELECT pg_advisory_xact_lock(728349103)", transaction: transaction);
+                    while (await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM legends WHERE id = @Id)", new { newLegend.Id }, transaction))
+                        newLegend.Id = _rand.Next(100000, 1000000);
                     using (var cmd = new NpgsqlCommand(@"INSERT INTO legends (id, legend_name, player_name, player_id, player_link_id, standings, last_updated) 
                     VALUES (@Id, @LegendName, @PlayerName, @PlayerId, @PlayerLink, @Standings, @LastUpdated)
-                    ON CONFLICT (id) DO NOTHING RETURNING id", conn))
+                    RETURNING id", conn, transaction))
                     {
                         cmd.Parameters.AddWithValue("@Id", newLegend.Id);
                         cmd.Parameters.AddWithValue("@LegendName", newLegend.LegendName);
@@ -208,6 +222,7 @@ namespace SengokuProvider.Library.Services.Legends
                         cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
 
                         var result = await cmd.ExecuteScalarAsync();
+                        await transaction.CommitAsync();
                         return result != null ? Convert.ToInt32(result) : 0;
                     }
                 }

@@ -404,6 +404,7 @@ namespace SengokuProvider.Library.Services.Players
                                     },
                                     TournamentLinks = new Links
                                     {
+                                        PlayerLinkId = reader.GetInt32(reader.GetOrdinal("startgg_link")),
                                         EntrantId = reader.GetInt32(reader.GetOrdinal("entrant_id")),
                                         PlayerId = reader.GetInt32(reader.GetOrdinal("player_id"))
                                     },

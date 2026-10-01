@@ -32,120 +32,57 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
         _azureBusApiService = azureBusApiService;
     }
     public async Task<PlayerOnboardResult> SaveVictoryPathData(BracketVictoryPathData processedData)
+    {
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        var result = await SaveVictoryPathData(processedData, connection, transaction);
+        await transaction.CommitAsync();
+        return result;
+    }
+
+    public async Task<PlayerOnboardResult> SaveVictoryPathData(BracketVictoryPathData data,
+        NpgsqlConnection connection, NpgsqlTransaction transaction)
+    {
+        if (data?.EntrantSetCards == null || data.EntrantSetCards.Count == 0 ||
+            data.EntrantSetCards.Any(x => x.PlayerOneID <= 0 || x.PlayerTwoID <= 0 || string.IsNullOrWhiteSpace(x.SetID)))
+            throw new ArgumentException("Cannot save incomplete bracket data.");
+        var setIds = data.EntrantSetCards.Select(x => x.SetID).Distinct().Order(StringComparer.Ordinal).ToArray();
+        // Also protects callers outside the checkpoint workflow. A retry must reuse
+        // the existing path rather than allocate another random primary key.
+        var identity = $"{data.TournamentLinkID}:{data.PlayerTournamentCard.PlayerID}:{string.Join(',', setIds)}";
+        await connection.ExecuteAsync("SELECT pg_advisory_xact_lock(hashtextextended(@identity, 1))", new { identity }, transaction);
+        var existing = await connection.QuerySingleOrDefaultAsync<int?>("""
+            SELECT id FROM bracket_paths
+            WHERE tournament_link = @TournamentLinkID AND player_id = @PlayerID
+                AND set_ids @> @setIds AND set_ids <@ @setIds
+            ORDER BY id LIMIT 1
+            """, new { data.TournamentLinkID, data.PlayerTournamentCard.PlayerID, setIds }, transaction);
+        foreach (var card in data.EntrantSetCards.DistinctBy(x => x.SetID))
+            await connection.ExecuteAsync("""
+                INSERT INTO tournament_sets (id, playerone_id, playerone_name, playertwo_id, playertwo_name, last_updated)
+                VALUES (@SetID, @PlayerOneID, @EntrantOneName, @PlayerTwoID, @EntrantTwoName, now())
+                ON CONFLICT (id) DO UPDATE SET playerone_id = EXCLUDED.playerone_id,
+                    playerone_name = EXCLUDED.playerone_name, playertwo_id = EXCLUDED.playertwo_id,
+                    playertwo_name = EXCLUDED.playertwo_name, last_updated = now()
+                """, card, transaction);
+        if (existing == null)
         {
-            if (processedData == null || processedData.EntrantSetCards == null || processedData.EntrantSetCards.Count == 0)
-            {
-                return new PlayerOnboardResult { Response = "FAILED: Cannot save invalid Bracket Data" };
-            }
-
-            var setResponse = await SaveTournamentSetData(processedData.EntrantSetCards);
-            if (setResponse.Successful.Count == 0) { setResponse.Response = "No Sets were inserted. Can't Create Victory Path"; return setResponse; }
-
-            using (var conn = new NpgsqlConnection(_connectionString))
-            {
-                await conn.OpenAsync();
-
-                var setIds = _commonDatabaseService.CreateDBTextArrayType("@SetIds", setResponse.Successful.ToArray());
-                var newPathId = await GenerateNewBracketPathId();
-                try
-                {
-                    using (var cmd = new NpgsqlCommand(@"INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids) 
-                                                        VALUES (@ID, @TournamentLink, @TournamentName, @EventLink, @RoundNum, @PlayerId, @LastUpdated, @SetIds) ON CONFLICT DO NOTHING;", conn))
-                    {
-                        cmd.Parameters.AddWithValue("@ID", newPathId);
-                        cmd.Parameters.AddWithValue("@TournamentLink", processedData.TournamentLinkID);
-                        cmd.Parameters.AddWithValue("@TournamentName", processedData.TournamentName);
-                        cmd.Parameters.AddWithValue("@EventLink", processedData.EventLinkID);
-                        cmd.Parameters.AddWithValue("@RoundNum", processedData.RoundNum);
-                        cmd.Parameters.AddWithValue("@PlayerId", processedData.PlayerTournamentCard.PlayerID);
-                        cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-                        cmd.Parameters.Add(setIds);
-
-                        var result = await cmd.ExecuteNonQueryAsync();
-
-                        if (result > 0)
-                        {
-                            Console.WriteLine($"Victory Path Inserted for Player: {processedData.PlayerTournamentCard.PlayerID} in Tournament: {processedData.TournamentLinkID}");
-                            setResponse.Response = $"Bracket Path Inserted Successfully: PlayerID: {processedData.PlayerTournamentCard.PlayerID} Tournament: {processedData.TournamentLinkID}";
-                            return setResponse;
-                        }
-                        else
-                        {
-                            Console.WriteLine($"Victory Path already exists for Player: {processedData.PlayerTournamentCard.PlayerID} in Tournament: {processedData.TournamentLinkID}");
-                            setResponse.Response = "Victory Path already exists";
-                            return setResponse;
-                        }
-                    }
-                }
-                catch (NpgsqlException ex)
-                {
-                    throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-                }
-                catch (Exception ex)
-                {
-                    throw new ApplicationException($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-                }
-            }
+            // Serialize random-ID allocation too, avoiding a collision between
+            // concurrent saves for different bracket requests.
+            await connection.ExecuteAsync("SELECT pg_advisory_xact_lock(728349102)", transaction: transaction);
+            int pathId;
+            do { pathId = _rand.Next(100000, 1000000); }
+            while (await connection.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM bracket_paths WHERE id = @pathId)", new { pathId }, transaction));
+            await connection.ExecuteAsync("""
+                INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids)
+                VALUES (@pathId, @TournamentLinkID, @TournamentName, @EventLinkID, @RoundNum, @PlayerID, now(), @setIds)
+                """, new { pathId, data.TournamentLinkID, data.TournamentName, data.EventLinkID, data.RoundNum,
+                    data.PlayerTournamentCard.PlayerID, setIds }, transaction);
         }
-        private async Task<PlayerOnboardResult> SaveTournamentSetData(List<EntrantSetCard> entrantsData)
-        {
-            var onboardResult = new PlayerOnboardResult { Response = "Open" };
-            using (var conn = new NpgsqlConnection(_connectionString))
-            {
-                await conn.OpenAsync();
-                using (var transaction = await conn.BeginTransactionAsync())
-                {
-                    foreach (var entrantCard in entrantsData)
-                    {
-                        if (entrantCard.PlayerOneID == 0 || entrantCard.PlayerTwoID == 0)
-                        {
-                            Console.WriteLine("Entrant Card is missing Player IDs. Cannot insert into database");
-                            onboardResult.Failures.Add(entrantCard.SetID);
-                            continue;
-                        }
-                        try
-                        {
-                            using (var cmd = new NpgsqlCommand(@"INSERT INTO tournament_sets (id, playerone_id, playerone_name, playertwo_id, playertwo_name, last_updated) VALUES (@SetId, @PlayerOneId, @PlayerOneName, @PlayerTwoId, @PlayerTwoName, @LastUpdated) ON CONFLICT DO NOTHING;", conn))
-                            {
-                                cmd.Parameters.AddWithValue("@SetId", entrantCard.SetID);
-                                cmd.Parameters.AddWithValue("@PlayerOneId", entrantCard.PlayerOneID);
-                                cmd.Parameters.AddWithValue("@PlayerOneName", entrantCard.EntrantOneName);
-                                cmd.Parameters.AddWithValue("@PlayerTwoId", entrantCard.PlayerTwoID);
-                                cmd.Parameters.AddWithValue("@PlayerTwoName", entrantCard.EntrantTwoName);
-                                cmd.Parameters.AddWithValue("@LastUpdated", DateTime.UtcNow);
-
-                                var result = await cmd.ExecuteNonQueryAsync();
-                                if (result == 0)
-                                {
-                                    Console.WriteLine($"Set already exists in database for Players: {entrantCard.PlayerOneID} vs {entrantCard.PlayerTwoID}");
-                                    onboardResult.Successful.Add(entrantCard.SetID);
-                                }
-                                if (result > 0)
-                                {
-                                    Console.WriteLine($"Set Inserted for Players: {entrantCard.PlayerOneID} vs {entrantCard.PlayerTwoID}");
-                                    onboardResult.Successful.Add(entrantCard.SetID);
-                                }
-                            }
-                        }
-                        catch (NpgsqlException ex)
-                        {
-                            onboardResult.Response = ex.Message;
-                            onboardResult.Failures.Add(entrantCard.SetID);
-                            continue;
-                        }
-                        catch (Exception ex)
-                        {
-                            onboardResult.Response = ex.Message;
-                            onboardResult.Failures.Add(entrantCard.SetID);
-                            continue;
-                        }
-                    }
-                    await transaction.CommitAsync();
-                }
-                await conn.CloseAsync();
-            }
-            return onboardResult;
-        }
+        return new PlayerOnboardResult { Response = existing == null ? "Bracket path saved successfully" : "Bracket path already exists",
+            Status = "Completed", Successful = setIds.ToList() };
+    }
     public async Task<int> IntakePlayerStandingData(List<PlayerStandingResult> currentStandings)
         {
             if (currentStandings == null || currentStandings.Count == 0) return 0;
@@ -322,20 +259,6 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;
-        }
-        private async Task<int> GenerateNewBracketPathId()
-        {
-            using (var conn = new NpgsqlConnection(_connectionString))
-            {
-                await conn.OpenAsync();
-                while (true)
-                {
-                    var newId = _rand.Next(100000, 1000000);
-                    var newQuery = @"SELECT id FROM bracket_paths where id = @Input";
-                    var queryResult = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = newId });
-                    if (newId != queryResult || queryResult == 0) return newId;
-                }
-            }
         }
         private async Task<bool> SendTournamentLinkEventMessage(int eventLinkId)
         {

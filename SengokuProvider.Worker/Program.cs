@@ -23,10 +23,12 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddHostedService<EventReceivedWorker>();
         services.AddHostedService<LegendReceivedWorker>();
         services.AddHostedService<PlayerReceivedWorker>();
+        services.AddHostedService<BracketOutboxWorker>();
         string connectionString, graphQLUrl, bearerToken, serviceBusConnection;
 
         services.AddSingleton(new IntakeValidator());
         SetupServiceDependencies(services, configuration, out connectionString, out graphQLUrl, out bearerToken, out serviceBusConnection);
+        services.AddSingleton<IBracketCheckpointStore>(_ => new BracketCheckpointStore(connectionString));
 
         services.AddSingleton<IEventHandlerFactory, EventHandlerFactory>();
         services.AddSingleton<ILegendHandlerFactory, LegendHandlerFactory>();
@@ -105,7 +107,7 @@ IHost host = Host.CreateDefaultBuilder(args)
             var legendQueryService = provider.GetRequiredService<ILegendQueryService>();
             var eventQueryService = provider.GetRequiredService<IEventQueryService>();
             var serviceBus = provider.GetRequiredService<IAzureBusApiService>();
-            return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>());
+            return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, provider.GetRequiredService<IPlayerIntakeService>(), provider.GetRequiredService<IBracketCheckpointStore>());
 
         });
         services.AddSingleton<IPlayerQueryService, PlayerQueryService>(provider =>

@@ -60,6 +60,11 @@ The AlexandriaConnectionString is used to connect to your PostgreSQL database. Y
 Set up PostgreSQL and create a database.
 Update the AlexandriaConnectionString in appsettings.json with your PostgreSQL connection string.
 Run the database migrations or create the tables manually based on the schema in the source code.
+
+For resumable bracket processing, apply
+[`001_bracket_processing.sql`](database/migrations/001_bracket_processing.sql)
+before deploying the API and worker. See [the workflow guide](docs/bracket-processing.md)
+for queue configuration, pending responses, recovery, and regression checks.
 ## GraphQL Setup
 To use the GraphQL functionality, you need to create a developer account on start.gg and obtain an API key.
 
