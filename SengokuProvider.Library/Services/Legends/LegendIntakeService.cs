@@ -229,11 +229,14 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
-                throw new ApplicationException("Database error occurred: ", ex);
+                var message = $"Database error while saving legend for player {newLegend.PlayerId} (SQLSTATE {ex.SqlState}): {ex.Message}";
+                Console.Error.WriteLine($"{message}{Environment.NewLine}{ex}");
+                throw new ApplicationException(message, ex);
             }
             catch (Exception ex)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                Console.Error.WriteLine($"Error while saving legend for player {newLegend.PlayerId}: {ex}");
+                throw;
             }
         }
         public async Task<int> InsertNewLegendData(List<LegendData> legendData)

@@ -188,7 +188,9 @@ namespace SengokuProvider.Library.Workflows.Players
             var resumed = await _checkpoints.ExecuteAsync(checkpoint.RequestKey, async (current, connection, transaction) =>
             {
                 if (current == null) throw new InvalidOperationException("Checkpoint was removed.");
+
                 ExpireIfNeeded(current);
+
                 if (current.Result.Status != "Pending") return current;
                 if (current.SchemaVersion != 1)
                 {
@@ -229,6 +231,7 @@ namespace SengokuProvider.Library.Workflows.Players
                 checkpoint.Result.Status = "Completed";
                 return checkpoint;
             }
+
             // Completion notifications may arrive before the fallback retry. Recheck
             // legends immediately, but avoid issuing duplicate intake requests early.
             if (checkpoint.NextAttemptAt > DateTime.UtcNow) return checkpoint;

@@ -2,6 +2,9 @@
 
 Apply `database/migrations/001_bracket_processing.sql` to the Alexandria database
 before deploying the updated API and worker. There is no automatic schema creation.
+Also apply `database/migrations/002_bracket_matchup_keys.sql` before deploying the
+integer set-reference fix. It adds a mapping table and sequence; existing
+`bracket_paths.set_ids` stays `integer[]` and existing set rows are preserved.
 Both processes need access to the two new tables. Deploy both updated processes
 together so that the worker recognizes the new resume command.
 
@@ -61,12 +64,24 @@ Candidate matchup IDs have the format
 `br:{bracketId}:{pathSetId}:{playerEntrantId}:{opponentEntrantId}`. These are synthetic
 IDs for possible matchups, not upstream start.gg set IDs. Opponents that can appear
 in multiple rounds get a separate card for each round.
+These keys remain strings in checkpoints. During the final transaction,
+`bracket_matchup_keys` assigns each key a stable integer used by `tournament_sets.id`
+and `bracket_paths.set_ids`. The allocator uses the existing set identity/serial
+sequence when present, otherwise the new fallback sequence, and skips occupied
+legacy IDs. Mapping, set,
+path, and checkpoint writes roll back together; sequence gaps after rollback are
+normal. `Successful` contains the persisted integer IDs represented as strings.
+Keep the mapping table as long as the associated sets/paths exist; it is not part
+of temporary checkpoint cleanup. Existing version-1 checkpoints require no rewrite.
 
-Run the dependency-free regression executable:
+Run the regression executable:
 
 ```powershell
 dotnet run --project tests/BracketWorkflow.Tests/BracketWorkflow.Tests.csproj
 ```
+
+Append `-- --bracket-only` to run the bracket workflow and optional PostgreSQL
+checks without the separate player-query retry checks.
 
 The default checks use fake data services and a transaction-modeling in-memory
 checkpoint store. PostgreSQL integration checks are opt-in: set

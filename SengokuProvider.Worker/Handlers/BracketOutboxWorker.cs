@@ -62,6 +62,11 @@ internal sealed class BracketOutboxWorker(IConfiguration configuration, ServiceB
                         await connection.ExecuteAsync("UPDATE bracket_processing_outbox SET sent_at = now(), last_error = NULL WHERE id = @Id",
                             new { message.Id }, transaction);
                     }
+                    catch (NpgsqlException)
+                    {
+                        // Dispose the failed transaction; do not issue retry SQL on it.
+                        throw;
+                    }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         log.LogWarning(ex, "Could not publish bracket message {MessageId}; retrying", message.Id);
@@ -82,6 +87,10 @@ internal sealed class BracketOutboxWorker(IConfiguration configuration, ServiceB
                     """);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (NpgsqlException ex)
+            {
+                log.LogError(ex, "Database error in bracket outbox cycle (SQLSTATE {SqlState})", ex.SqlState);
+            }
             catch (Exception ex) { log.LogError(ex, "Bracket outbox cycle failed"); }
             try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
