@@ -45,6 +45,12 @@ removed seven days after their expiration timestamp, and sent outbox rows are
 removed after seven days. These fixed intervals live in the checkpoint model,
 PlayerOperations, and BracketOutboxWorker.
 
+Player queries treat HTTP 429 separately from ordinary failures: after three rate
+limit responses on a page, they await the throttler cooldown, select a bearer not
+yet exhausted for that page, and retry the same page with completed pages retained.
+Each bearer gets three rate-limit attempts. An exhausted bearer pool stops the
+invocation; other errors still stop after three attempts on the failed page.
+
 Inspect `bracket_processing_checkpoints.status` and its JSON payload for progress;
 inspect unsent `bracket_processing_outbox` rows (`attempts`, `last_error`,
 `available_at`) for publish failures. Service Bus delivery failures still appear in

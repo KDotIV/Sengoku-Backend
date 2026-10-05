@@ -172,6 +172,7 @@ var tests = new (string Name, Func<Task> Run)[]
 foreach (var test in tests) { await test.Run(); Console.WriteLine($"PASS {test.Name}"); }
 Console.WriteLine($"{tests.Length} workflow regression tests passed.");
 await PostgresChecks.Run();
+await PlayerQueryRetryChecks.Run();
 
 static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
 

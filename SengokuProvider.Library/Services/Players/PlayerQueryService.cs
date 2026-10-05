@@ -903,7 +903,7 @@ namespace SengokuProvider.Library.Services.Players
             string currentEventLinkName = string.Empty;
             int currentEventLinkId = 0;
             int currentPage = 1;
-            int totalPages = int.MaxValue;
+            int totalPages = 1;
             string currentTournamentLinkName = string.Empty;
             int currentTournamentLinkId = 0;
             int currentEntrantsNum = 0;
@@ -924,6 +924,10 @@ namespace SengokuProvider.Library.Services.Players
 
                 bool success = false;
                 int retryCount = 0;
+                int rateLimitFailures = 0;
+                var exhaustedTokens = new HashSet<string>(StringComparer.Ordinal);
+                // Ordinary failures stop after three attempts. Rate limits get
+                // three attempts per bearer, then pause/rotate on this same page.
                 const int maxRetries = 3;
                 const int delay = 1000;
 
@@ -942,62 +946,68 @@ namespace SengokuProvider.Library.Services.Players
 
                         if (response.Data == null)
                         {
-                            throw new ApplicationException($"Failed to retrieve player data: {string.Join(", ", response.Errors.Select(e => e.Message))}");
+                            throw new ApplicationException("start.gg returned null player data without GraphQL errors.");
                         }
 
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var playerData = JsonConvert.DeserializeObject<PlayerGraphQLResult>(tempJson, jsonSerializerSettings);
 
-                        if (playerData == null || playerData.TournamentLink == null)
-                        {
-                            Console.WriteLine("Failed to retrieve player data");
-                            totalPages = 0;
-                            break;
-                        }
+                        var eventData = playerData?.TournamentLink;
+                        var entrants = eventData?.Entrants;
+                        var reportedPages = entrants?.PageInfo?.TotalPages;
+                        if (eventData == null || entrants?.Nodes == null || reportedPages == null ||
+                            (reportedPages < currentPage && !(currentPage == 1 && reportedPages == 0 && entrants.Nodes.Count == 0)))
+                            throw new ApplicationException("start.gg returned incomplete player data or invalid pagination metadata.");
 
-                        if (playerData.TournamentLink.Entrants.Nodes != null)
-                        {
-                            allNodes.AddRange(playerData.TournamentLink.Entrants.Nodes);
-                            Console.WriteLine("Tournament Node Added");
-                        }
+                        // Append only after validating the whole page so a retry cannot duplicate nodes.
+                        allNodes.AddRange(entrants.Nodes);
 
-                        currentEventLinkName = playerData.TournamentLink.EventLink?.Name ?? string.Empty;
-                        currentEventLinkId = playerData.TournamentLink.EventLink?.Id ?? 0;
-                        currentTournamentLinkName = playerData.TournamentLink.Name ?? string.Empty;
-                        currentTournamentLinkSlug = playerData.TournamentLink?.Slug ?? string.Empty;
-                        currentTournamentLinkId = playerData.TournamentLink?.Id ?? 0;
-                        currentEntrantsNum = playerData.TournamentLink?.NumEntrants ?? 0;
+                        currentEventLinkName = eventData.EventLink?.Name ?? string.Empty;
+                        currentEventLinkId = eventData.EventLink?.Id ?? 0;
+                        currentTournamentLinkName = eventData.Name ?? string.Empty;
+                        currentTournamentLinkSlug = eventData.Slug ?? string.Empty;
+                        currentTournamentLinkId = eventData.Id;
+                        currentEntrantsNum = eventData.NumEntrants ?? 0;
 
                         // Update pagination info for the next iteration
-                        var pageInfo = playerData?.TournamentLink?.Entrants?.PageInfo;
-                        if (pageInfo != null)
-                        {
-                            totalPages = pageInfo.TotalPages ?? 1;
-                            Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
-                        }
+                        totalPages = reportedPages.Value;
+                        Console.WriteLine($"Current PlayerStandings Page: {currentPage}/{totalPages}");
                         success = true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
                     {
-                        var errorContent = ex.Content;
-                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                        retryCount++;
-                        if (retryCount >= maxRetries)
+                        rateLimitFailures++;
+                        if (rateLimitFailures < maxRetries)
                         {
-                            Console.WriteLine("Max retries reached. Pausing further requests.");
-                            await _requestThrottler.PauseRequests(_client);
+                            await Task.Delay(delay);
+                            continue;
                         }
-                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                        await Task.Delay(delay);
+
+                        exhaustedTokens.Add(_client.HttpClient.DefaultRequestHeaders.Authorization?.Parameter ?? string.Empty);
+                        Console.WriteLine($"Rate limit reached for {tournamentLink}, page {currentPage}. Pausing and switching bearer; keeping completed pages.");
+                        await _requestThrottler.PauseRequests(_client, exhaustedTokens);
+                        var nextToken = _client.HttpClient.DefaultRequestHeaders.Authorization?.Parameter ?? string.Empty;
+                        if (exhaustedTokens.Contains(nextToken))
+                            throw new ApplicationException(
+                                $"All available bearer tokens are rate limited for {tournamentLink}, page {currentPage}. Aborting operation after exhausting the token rotation.", ex);
+
+                        rateLimitFailures = 0;
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Failed to retrieve player data: {ex.Message + ": " + ex.StackTrace}");
                         retryCount++;
-                        if(retryCount >= maxRetries)
+                        if (retryCount >= maxRetries)
                         {
-                            Console.WriteLine($"Failed Max retries reached. Aborting Operation for {tournamentLink}");
+                            // Throw out of both loops; never advance to another page after exhaustion.
+                            throw new ApplicationException(
+                                $"Failed to retrieve player data for {tournamentLink}, page {currentPage}, after {maxRetries} attempts. Aborting operation.", ex);
                         }
+                        Console.WriteLine($"Player query failed for {tournamentLink}, page {currentPage}, attempt {retryCount}/{maxRetries}: {ex.Message}. Retrying in {delay}ms.");
+                        await Task.Delay(delay);
                     }
                 }
             }

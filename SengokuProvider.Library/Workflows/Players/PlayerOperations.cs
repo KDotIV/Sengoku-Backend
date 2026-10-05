@@ -156,14 +156,17 @@ namespace SengokuProvider.Library.Workflows.Players
             if (!int.TryParse(returnedSlug[2], out var tempBracketId) || tempBracketId <= 0 ||
                 !int.TryParse(returnedSlug[1], out var phaseId) || phaseId <= 0)
                 return new PlayerOnboardResult { Response = "FAILED: Invalid bracket or phase ID", Status = "Failed" };
+
             int tempTournamentId = Convert.ToInt32(returnedSlug[3]);
             var requestKey = $"{tempTournamentId}:{tempBracketId}:{playerId}";
+
             var checkpoint = await _checkpoints.ExecuteAsync(requestKey, async (existing, connection, transaction) =>
             {
                 if (existing != null) return ExpireIfNeeded(existing);
                 var player = await _queryService.GetPlayerDataById(playerId);
                 if (player == null || player.Id <= 0 || player.PlayerLinkID <= 0)
                     throw new ArgumentException("Player was not found or has no start.gg link.");
+
                 var bracket = await _queryService.QueryBracketDataFromStartggByBracketId(tempBracketId);
                 var prepared = await ProcessNewBracketData(bracket, player, tempTournamentId, requestKey);
                 return await AdvanceBracketAsync(prepared, connection, transaction);
@@ -181,6 +184,7 @@ namespace SengokuProvider.Library.Workflows.Players
         {
             var checkpoint = await _checkpoints.GetAsync(operationId);
             if (checkpoint == null) return null; // Retention cleanup may precede a late duplicate.
+
             var resumed = await _checkpoints.ExecuteAsync(checkpoint.RequestKey, async (current, connection, transaction) =>
             {
                 if (current == null) throw new InvalidOperationException("Checkpoint was removed.");
@@ -213,8 +217,10 @@ namespace SengokuProvider.Library.Workflows.Players
         {
             var links = checkpoint.Attempts > 0 ? checkpoint.MissingPlayerLinks
                 : checkpoint.ExpectedOpponents.Select(x => x.PlayerLink).Distinct().ToArray();
+
             var legends = links.Length == 0 ? new List<LegendData>() : await _legendQueryService.GetLegendsByPlayerLink(links);
             checkpoint.MissingPlayerLinks = BracketCardBuilder.Build(checkpoint, legends ?? []);
+
             if (checkpoint.MissingPlayerLinks.Length == 0)
             {
                 checkpoint.Result = checkpoint.ExpectedOpponents.Count == 0
@@ -230,6 +236,7 @@ namespace SengokuProvider.Library.Workflows.Players
             checkpoint.NextAttemptAt = DateTime.UtcNow.AddMinutes(2);
             var legendQueue = _config["ServiceBusSettings:LegendReceivedQueue"];
             var playerQueue = _config["ServiceBusSettings:PlayerReceivedQueue"];
+
             if (string.IsNullOrWhiteSpace(legendQueue) || string.IsNullOrWhiteSpace(playerQueue))
                 throw new InvalidOperationException("LegendReceivedQueue and PlayerReceivedQueue must be configured.");
             await _checkpoints.EnqueueAsync(connection, transaction, checkpoint.OperationId, legendQueue,
@@ -241,8 +248,10 @@ namespace SengokuProvider.Library.Workflows.Players
                         PlayerLinkIds = checkpoint.MissingPlayerLinks, OperationId = checkpoint.OperationId
                     }, MessagePriority = MessagePriority.SystemIntake
                 }, DateTime.UtcNow);
+
             var standings = await _queryService.GetStandingsDataByPlayerLinks(checkpoint.MissingPlayerLinks);
             var linksWithStandings = (standings ?? []).Select(x => x.TournamentLinks.PlayerLinkId).ToHashSet();
+
             // Only bootstrap tournament intake when a missing legend also lacks
             // standings. Do not repeat that work when legends alone are missing.
             if (checkpoint.MissingPlayerLinks.Any(x => !linksWithStandings.Contains(x)))
@@ -250,9 +259,11 @@ namespace SengokuProvider.Library.Workflows.Players
                     new PlayerReceivedData { Command = new IntakePlayersByTournamentCommand
                         { Topic = CommandRegistry.IntakePlayersByTournament, TournamentLink = checkpoint.Data.TournamentLinkID },
                         MessagePriority = MessagePriority.SystemIntake }, DateTime.UtcNow);
+
             await _checkpoints.EnqueueAsync(connection, transaction, checkpoint.OperationId, playerQueue,
                 new PlayerReceivedData { Command = new ResumeBracketProcessingCommand { OperationId = checkpoint.OperationId },
                     MessagePriority = MessagePriority.SystemIntake }, checkpoint.NextAttemptAt < checkpoint.ExpiresAt ? checkpoint.NextAttemptAt : checkpoint.ExpiresAt);
+
             return checkpoint;
         }
 
