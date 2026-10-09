@@ -1020,7 +1020,6 @@ namespace SengokuProvider.Library.Services.Players
                     }
                     catch (Exception ex)
                     {
-                        retryCount++;
                         if (retryCount >= maxRetries)
                         {
                             // Throw out of both loops; never advance to another page after exhaustion.
@@ -1028,6 +1027,7 @@ namespace SengokuProvider.Library.Services.Players
                                 $"Failed to retrieve player data for {tournamentLink}, page {currentPage}, after {maxRetries} attempts. Aborting operation.", ex);
                         }
                         Console.WriteLine($"Player query failed for {tournamentLink}, page {currentPage}, attempt {retryCount}/{maxRetries}: {ex.Message}. Retrying in {delay}ms.");
+                        retryCount++;
                         await Task.Delay(delay);
                     }
                 }
@@ -1315,7 +1315,7 @@ namespace SengokuProvider.Library.Services.Players
             " ORDER BY tl.start_time DESC NULLS LAST, bp.id, ts.path_step NULLS LAST, selected.position", parameters);
         return MapBracketPaths(rows);
     }
-    private List<BracketVictoryPathData> MapBracketPaths(IEnumerable<FlatBracketPathEntrantCards> rows) => rows
+    internal static List<BracketVictoryPathData> MapBracketPaths(IEnumerable<FlatBracketPathEntrantCards> rows) => rows
         .GroupBy(r => new { r.PlayerId, r.BracketPathId }).Select(group => {
             var first = group.First();
             var standings = new List<PlayerStandingResult>();
