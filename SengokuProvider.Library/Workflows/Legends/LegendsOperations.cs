@@ -123,7 +123,7 @@ public class LegendsOperations : ILegendsOperations
     public async Task<bool> AddLeagueToUser(int leagueId, int userId)
     {
         if (leagueId < 0 || userId < 0) throw new ArgumentException("LeagueId and UserId must be valid");
-        var user = await _users.GetUserById(userId);
+        var user = await _users.GetUserById(userId) ?? throw new KeyNotFoundException("The local user does not exist.");
         var leagues = await _legendQuery.GetLeagueByLeagueIds([leagueId]);
         if (leagues.Count == 0) throw new ArgumentNullException(nameof(leagues), "League results were empty");
         var league = leagues.First(x => x.LeagueId == leagueId);

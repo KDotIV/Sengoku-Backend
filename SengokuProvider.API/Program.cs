@@ -1,3 +1,4 @@
+using SengokuProvider.Library.Workflows.Users;
 using Azure.Messaging.ServiceBus;
 using ExcluSightsLibrary.DiscordServices;
 using Google.Apis.Sheets.v4;
@@ -98,11 +99,12 @@ builder.Services.AddScoped<ICommonDatabaseService, CommonDatabaseService>(provid
 {
     return new CommonDatabaseService(connectionString);
 });
+builder.Services.AddScoped<IUserOperations, UserOperations>();
 builder.Services.AddScoped<IUserService, UserService>(provider =>
 {
     var intakeValidator = provider.GetRequiredService<IntakeValidator>();
-    var playerQuery = provider.GetService<IPlayerQueryService>();
-    return new UserService(connectionString, intakeValidator, playerQuery);
+
+    return new UserService(connectionString, intakeValidator);
 });
 builder.Services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>(provider =>
 {

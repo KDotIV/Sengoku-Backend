@@ -12,7 +12,7 @@ namespace SengokuProvider.API.Controllers
     public class PlayerController : Controller
     {
         private readonly ILogger<PlayerController> _log;
-        private readonly IPlayerOperations _playerIntakeService;
+        private readonly IPlayerOperations _playerOpService;
         private readonly IPlayerQueryService _playerQueryService;
         private readonly CommandProcessor _commandProcessor;
 
@@ -20,7 +20,7 @@ namespace SengokuProvider.API.Controllers
             CommandProcessor commandProcessor)
         {
             _log = logger;
-            _playerIntakeService = intakeService;
+            _playerOpService = intakeService;
             _playerQueryService = queryService;
             _commandProcessor = commandProcessor;
         }
@@ -62,7 +62,7 @@ namespace SengokuProvider.API.Controllers
 
             try
             {
-                var result = await _playerIntakeService.IntakePlayerData(command.TournamentLink);
+                var result = await _playerOpService.IntakePlayerData(command.TournamentLink);
                 if (result == 0) { return new OkObjectResult($"No New Standings to Add for Tournament: {command.TournamentLink}"); }
                 if (result > 0) { return new OkObjectResult($"{result} Successful Player Stadings Added"); }
                 else { return new ObjectResult($"Failed to Intake Player with TournamentLink: {command.TournamentLink}"); }
@@ -85,7 +85,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                var result = await _playerIntakeService.OnboardPreviousTournamentData(command);
+                var result = await _playerOpService.OnboardPreviousTournamentData(command);
                 return new OkObjectResult($"Total Successful Tournament Data Inserted: {result}");
             }
             catch (Exception ex)
@@ -138,12 +138,11 @@ namespace SengokuProvider.API.Controllers
         [HttpGet("BracketProcessing/{operationId:guid}")]
         public async Task<IActionResult> GetBracketProcessingStatus(Guid operationId)
         {
-            var result = await _playerIntakeService.GetBracketProcessingStatus(operationId);
+            var result = await _playerOpService.GetBracketProcessingStatus(operationId);
             return result == null ? NotFound() : Ok(result);
         }
-
-        [HttpPost("OnboardBracketRunnerByBracketSlug")]
-        public async Task<IActionResult> OnboardBracketRunnerByBracketSlug([FromBody] OnboardBracketRunnerByBracketSlug command)
+        [HttpPost("OnboardBracketPathByBracketSlug")]
+        public async Task<IActionResult> OnboardBracketPathByBracketSlug([FromBody] OnboardBracketPathByBracketSlug command)
         {
             var parsedRequest = await _commandProcessor.ParseRequest(command);
             if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
@@ -153,7 +152,7 @@ namespace SengokuProvider.API.Controllers
             }
             try
             {
-                var result = await _playerIntakeService.OnboardBracketRunnerByBracketSlug(command.BracketSlug, command.PlayerId);
+                var result = await _playerOpService.OnboardBracketPathByBracketSlug(command.BracketSlug, command.PlayerId);
                 if (result.Status == "Pending")
                     return AcceptedAtAction(nameof(GetBracketProcessingStatus), new { operationId = result.OperationId }, result);
                 if (result.Status is "Failed" or "Expired" || result.Response.StartsWith("FAILED:", StringComparison.Ordinal))
@@ -167,6 +166,24 @@ namespace SengokuProvider.API.Controllers
             catch (Exception ex)
             {
                 _log.LogError(ex, "Error Querying Tournament Data.");
+                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
+            }
+        }
+        [HttpGet("GetBracketPathByPlayerId")]
+        public async Task<IActionResult> GetBracketPathByPlayerId([FromQuery] int playerId)
+        {
+            try
+            {
+                var result = await _playerQueryService.GetBracketPathByPlayerId(playerId);
+                if (result == null)
+                {
+                    return NotFound($"No Bracket Path found for Player ID: {playerId}");
+                }
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Error Querying Bracket Path Data.");
                 return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
             }
         }

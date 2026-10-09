@@ -18,6 +18,20 @@ using SengokuProvider.Worker.Handlers;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
+    ("NOMAR checkpoint resumes all four opponents without refetching bracket", async () =>
+    {
+        var checkpoint = JsonConvert.DeserializeObject<BracketProcessingCheckpoint>(await File.ReadAllTextAsync(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "nomar-checkpoint.json")))!;
+        // Keep the captured payload reusable after its original expiration date.
+        checkpoint.ExpiresAt = DateTime.UtcNow.AddHours(1);
+        var f = new Fixture(); f.Store.Checkpoint = checkpoint;
+        f.Legends.AddRange(checkpoint.ExpectedOpponents.Select((opponent, index) => Fixture.Legend(opponent.PlayerLink, 800001 + index)));
+        var result = await f.Operations.ResumeBracketProcessing(checkpoint.OperationId);
+        Check(result!.Status == "Completed" && f.BracketQueries == 0 && f.Saves == 1, "resume should use the stored snapshot");
+        Check(f.Store.Checkpoint!.Data.EntrantSetCards.Count == 4, "all four matchups retained");
+        Check(f.Store.Checkpoint.Data.EntrantSetCards.All(card => card.PlayerOneID == 774869), "internal player identity retained");
+        Check(f.Store.Checkpoint.Data.EntrantSetCards.Select(card => card.SetID).Distinct().Count() == 4, "matchup identities remain distinct");
+    }),
     ("partial legends checkpoint and resume without fetching bracket again", async () =>
     {
         var f = new Fixture();
@@ -172,7 +186,8 @@ var tests = new (string Name, Func<Task> Run)[]
 foreach (var test in tests) { await test.Run(); Console.WriteLine($"PASS {test.Name}"); }
 Console.WriteLine($"{tests.Length} workflow regression tests passed.");
 await PostgresChecks.Run();
-await PlayerQueryRetryChecks.Run();
+if (!args.Contains("--bracket-only", StringComparer.Ordinal))
+    await PlayerQueryRetryChecks.Run();
 
 static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
 

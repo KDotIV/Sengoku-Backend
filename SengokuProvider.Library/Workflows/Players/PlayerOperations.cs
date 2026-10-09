@@ -138,7 +138,7 @@ namespace SengokuProvider.Library.Workflows.Players
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
-        public async Task<PlayerOnboardResult> OnboardBracketRunnerByBracketSlug(string bracketSlug, int playerId)
+        public async Task<PlayerOnboardResult> OnboardBracketPathByBracketSlug(string bracketSlug, int playerId)
         {
             var onboardResult = new PlayerOnboardResult { Response = "Open" };
 
@@ -173,13 +173,11 @@ namespace SengokuProvider.Library.Workflows.Players
             });
             return checkpoint.Result;
         }
-
         public async Task<PlayerOnboardResult?> GetBracketProcessingStatus(Guid operationId)
         {
             var checkpoint = await _checkpoints.GetAsync(operationId);
             return checkpoint == null ? null : ExpireIfNeeded(checkpoint).Result;
         }
-
         public async Task<PlayerOnboardResult?> ResumeBracketProcessing(Guid operationId)
         {
             var checkpoint = await _checkpoints.GetAsync(operationId);
@@ -202,7 +200,6 @@ namespace SengokuProvider.Library.Workflows.Players
             });
             return resumed.Result;
         }
-
         private static BracketProcessingCheckpoint ExpireIfNeeded(BracketProcessingCheckpoint checkpoint)
         {
             checkpoint.Result.OperationId = checkpoint.OperationId;
@@ -213,7 +210,6 @@ namespace SengokuProvider.Library.Workflows.Players
             }
             return checkpoint;
         }
-
         private async Task<BracketProcessingCheckpoint> AdvanceBracketAsync(BracketProcessingCheckpoint checkpoint,
             NpgsqlConnection connection, NpgsqlTransaction transaction)
         {
@@ -269,7 +265,6 @@ namespace SengokuProvider.Library.Workflows.Players
 
             return checkpoint;
         }
-
         private async Task<BracketProcessingCheckpoint> ProcessNewBracketData(PhaseGroupGraphQL bracketData, PlayerData playerData, int tournamentId, string requestKey)
         {
             if (bracketData?.PhaseGroup?.Sets?.Nodes == null || bracketData.PhaseGroup.Id == 0 || bracketData.PhaseGroup.Sets.Nodes.Count == 0)
@@ -449,8 +444,10 @@ namespace SengokuProvider.Library.Workflows.Players
                     foreach (var candidate in GetPossibleEntrants(opponentSlot, setsById))
                     {
                         var particcipant = candidate.Entrant.Participants?.FirstOrDefault(x => x.Player != null);
+
                         if (candidate.Entrant.Participants?.Count(x => x.Player != null) > 1)
                             throw new ArgumentException("Bracket runner currently supports singles entrants only.");
+
                         if(particcipant?.Player == null || particcipant.Player.Id <= 0)
                             throw new ArgumentException("An opponent entrant has no valid start.gg player link.");
 

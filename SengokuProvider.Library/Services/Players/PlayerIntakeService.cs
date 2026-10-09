@@ -54,7 +54,6 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
             throw;
         }
     }
-
     public async Task<PlayerOnboardResult> SaveVictoryPathData(BracketVictoryPathData data,
         NpgsqlConnection connection, NpgsqlTransaction transaction)
     {
@@ -63,13 +62,16 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
             if (data?.EntrantSetCards == null || data.EntrantSetCards.Count == 0 ||
                 data.EntrantSetCards.Any(x => x.PlayerOneID <= 0 || x.PlayerTwoID <= 0 || string.IsNullOrWhiteSpace(x.SetID)))
                 throw new ArgumentException("Cannot save incomplete bracket data.");
+
             var matchupKeys = data.EntrantSetCards.Select(x => x.SetID).Distinct().Order(StringComparer.Ordinal).ToArray();
             // Also protects callers outside the checkpoint workflow. A retry must reuse
             // the existing path rather than allocate another random primary key.
+
             var identity = $"{data.TournamentLinkID}:{data.PlayerTournamentCard.PlayerID}:{string.Join(',', matchupKeys)}";
             await connection.ExecuteAsync("SELECT pg_advisory_xact_lock(hashtextextended(@identity, 1))", new { identity }, transaction);
             // Checkpoint SetID is a logical matchup key, not a database integer ID.
             // Allocate the mapping in the same transaction as the sets and path.
+
             await connection.ExecuteAsync("SELECT pg_advisory_xact_lock(728349104)", transaction: transaction);
             var setIdSequence = await connection.ExecuteScalarAsync<string>(
                 "SELECT COALESCE(pg_get_serial_sequence('tournament_sets', 'id'), 'bracket_matchup_set_id_seq')", transaction: transaction);
@@ -87,6 +89,7 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                         candidate = await connection.ExecuteScalarAsync<int>("SELECT nextval(CAST(@setIdSequence AS regclass))", new { setIdSequence }, transaction);
                         // Existing sets may predate this mapping. Never overwrite one
                         // merely because the new sequence allocated its integer ID.
+
                         occupied = await connection.ExecuteScalarAsync<bool>("""
                             SELECT EXISTS(SELECT 1 FROM tournament_sets WHERE id::text = @idText)
                                 OR EXISTS(SELECT 1 FROM bracket_matchup_keys WHERE set_id = @candidate)
@@ -105,24 +108,30 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                     AND set_ids @> @setIds AND set_ids <@ @setIds
                 ORDER BY id LIMIT 1
                 """, new { data.TournamentLinkID, data.PlayerTournamentCard.PlayerID, setIds }, transaction);
+
             foreach (var card in data.EntrantSetCards.DistinctBy(x => x.SetID))
                 await connection.ExecuteAsync("""
-                    INSERT INTO tournament_sets (id, playerone_id, playerone_name, playertwo_id, playertwo_name, last_updated)
+                    INSERT INTO tournament_sets (id, playerone_id, playerone_name, playertwo_id, playertwo_name, last_updated, entrantone_id, entranttwo_id, tournament_link)
                     OVERRIDING SYSTEM VALUE
-                    VALUES (@SetID, @PlayerOneID, @EntrantOneName, @PlayerTwoID, @EntrantTwoName, now())
+                    VALUES (@SetID, @PlayerOneID, @EntrantOneName, @PlayerTwoID, @EntrantTwoName, now(), @EntrantOneID, @EntrantTwoID, @TournamentLinkID)
                     ON CONFLICT (id) DO UPDATE SET playerone_id = EXCLUDED.playerone_id,
                         playerone_name = EXCLUDED.playerone_name, playertwo_id = EXCLUDED.playertwo_id,
-                        playertwo_name = EXCLUDED.playertwo_name, last_updated = now()
+                        playertwo_name = EXCLUDED.playertwo_name, last_updated = now(),
+                        entrantone_id = EXCLUDED.entrantone_id, entranttwo_id = EXCLUDED.entranttwo_id,
+                        tournament_link = EXCLUDED.tournament_link
                     """, new { SetID = setIdsByKey[card.SetID], card.PlayerOneID, card.EntrantOneName,
-                        card.PlayerTwoID, card.EntrantTwoName }, transaction);
+                        card.PlayerTwoID, card.EntrantTwoName, card.EntrantOneID, card.EntrantTwoID, data.TournamentLinkID }, transaction);
+
             if (existing == null)
             {
                 // Serialize random-ID allocation too, avoiding a collision between
                 // concurrent saves for different bracket requests.
                 await connection.ExecuteAsync("SELECT pg_advisory_xact_lock(728349102)", transaction: transaction);
                 int pathId;
+
                 do { pathId = _rand.Next(100000, 1000000); }
                 while (await connection.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM bracket_paths WHERE id = @pathId)", new { pathId }, transaction));
+
                 await connection.ExecuteAsync("""
                     INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids)
                     VALUES (@pathId, @TournamentLinkID, @TournamentName, @EventLinkID, @RoundNum, @PlayerID, now(), @setIds)
@@ -242,38 +251,38 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
 
             return totalSuccess;
         }
-        private async Task<int> VerifyPlayer(int playerId)
+    private async Task<int> VerifyPlayer(int playerId)
+    {
+        try
         {
-            try
+            using (var conn = new NpgsqlConnection(_connectionString))
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                await conn.OpenAsync();
+
+                using (var cmd = new NpgsqlCommand(@"SELECT id FROM players WHERE startgg_link = @Input", conn))
                 {
-                    await conn.OpenAsync();
+                    cmd.Parameters.AddWithValue("@Input", playerId);
 
-                    using (var cmd = new NpgsqlCommand(@"SELECT id FROM players WHERE startgg_link = @Input", conn))
+                    using (var reader = await cmd.ExecuteReaderAsync())
                     {
-                        cmd.Parameters.AddWithValue("@Input", playerId);
-
-                        using (var reader = await cmd.ExecuteReaderAsync())
+                        while (await reader.ReadAsync())
                         {
-                            while (await reader.ReadAsync())
-                            {
-                                return reader.GetInt32(reader.GetOrdinal("id"));
-                            }
+                            return reader.GetInt32(reader.GetOrdinal("id"));
                         }
                     }
                 }
             }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-            }
-            return 0;
         }
+        catch (NpgsqlException ex)
+        {
+            throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+        }
+        return 0;
+    }
     public async Task<int> InsertNewPlayerData(List<PlayerData> players)
         {
             try
@@ -321,37 +330,37 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
             }
             return 0;
         }
-        private async Task<bool> SendTournamentLinkEventMessage(int eventLinkId)
+    private async Task<bool> SendTournamentLinkEventMessage(int eventLinkId)
+    {
+        if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null)
         {
-            if (string.IsNullOrEmpty(_config["ServiceBusSettings:eventreceivedqueue"]) || _config == null)
+            Console.WriteLine("Service Bus Settings Cannot be empty or null");
+            return false;
+        }
+        try
+        {
+            var newCommand = new EventReceivedData
             {
-                Console.WriteLine("Service Bus Settings Cannot be empty or null");
+                Command = new LinkTournamentByEventIdCommand
+                {
+                    EventLinkId = eventLinkId,
+                    Topic = CommandRegistry.LinkTournamentByEvent,
+                },
+                MessagePriority = MessagePriority.SystemIntake
+            };
+            var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+            var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:eventreceivedqueue"], messageJson);
+
+            if (!result)
+            {
+                Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
                 return false;
             }
-            try
-            {
-                var newCommand = new EventReceivedData
-                {
-                    Command = new LinkTournamentByEventIdCommand
-                    {
-                        EventLinkId = eventLinkId,
-                        Topic = CommandRegistry.LinkTournamentByEvent,
-                    },
-                    MessagePriority = MessagePriority.SystemIntake
-                };
-                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
-                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:eventreceivedqueue"], messageJson);
-
-                if (!result)
-                {
-                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
-                    return false;
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
-            }
+            return true;
         }
+        catch (Exception ex)
+        {
+            throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+        }
+    }
 }

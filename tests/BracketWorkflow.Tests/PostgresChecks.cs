@@ -31,11 +31,15 @@ static class PostgresChecks
             var migration = await File.ReadAllTextAsync(Path.Combine(root.FullName, "database/migrations/001_bracket_processing.sql"));
             await connection.ExecuteAsync(migration);
             await connection.ExecuteAsync(migration); // safe to apply twice
+            var matchupMigration = await File.ReadAllTextAsync(Path.Combine(root.FullName, "database/migrations/002_bracket_matchup_keys.sql"));
+            await connection.ExecuteAsync(matchupMigration);
+            await connection.ExecuteAsync(matchupMigration);
             await connection.ExecuteAsync("""
-                CREATE TABLE tournament_sets (id text PRIMARY KEY, playerone_id integer, playerone_name text,
+                CREATE TABLE tournament_sets (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, playerone_id integer, playerone_name text,
                     playertwo_id integer, playertwo_name text, last_updated timestamptz);
                 CREATE TABLE bracket_paths (id integer PRIMARY KEY, tournament_link integer, tournament_name text,
-                    event_link integer, round_num text, player_id integer, last_updated timestamptz, set_ids text[]);
+                    event_link integer, round_num text, player_id integer, last_updated timestamptz, set_ids integer[]);
+                INSERT INTO tournament_sets (id, playerone_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Legacy set');
                 """);
             var store = new BracketCheckpointStore(scoped);
             try
@@ -74,9 +78,54 @@ static class PostgresChecks
             });
             await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => intake.SaveVictoryPathData(finished.Data)));
             Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_paths") == 1, "duplicate paths");
-            Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM tournament_sets") == 1, "duplicate cards");
+            Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM tournament_sets") == 2, "duplicate cards or legacy set overwritten");
+            Assert(await connection.ExecuteScalarAsync<string>("SELECT playerone_name FROM tournament_sets WHERE id = 1") == "Legacy set", "legacy ID collision avoided");
+            Assert(await connection.ExecuteScalarAsync<string>("SELECT pg_typeof(set_ids)::text FROM bracket_paths LIMIT 1") == "integer[]", "integer array contract");
             Assert((await store.GetAsync(finished.OperationId))!.Result.Status == "Completed", "completed checkpoint committed");
             Console.WriteLine("PASS PostgreSQL atomic final save and concurrent idempotent path writes");
+
+            var nomar = Newtonsoft.Json.JsonConvert.DeserializeObject<BracketProcessingCheckpoint>(await File.ReadAllTextAsync(
+                Path.Combine(AppContext.BaseDirectory, "Fixtures", "nomar-checkpoint.json")))!;
+            BracketCardBuilder.Build(nomar, nomar.ExpectedOpponents.Select((opponent, index) => Fixture.Legend(opponent.PlayerLink, 800001 + index)));
+            var mappingsBefore = await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_matchup_keys");
+            try
+            {
+                await store.ExecuteAsync(nomar.RequestKey, async (_, conn, tx) =>
+                {
+                    await intake.SaveVictoryPathData(nomar.Data, conn, tx);
+                    throw new InvalidOperationException("Simulated failure after writing sets and path");
+                });
+                throw new Exception("Expected transaction failure");
+            }
+            catch (InvalidOperationException) { }
+            Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_matchup_keys") == mappingsBefore, "mapping allocation rolled back with save");
+            Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_paths") == 1, "path rolled back with checkpoint");
+            await store.ExecuteAsync(nomar.RequestKey, async (_, conn, tx) =>
+            {
+                nomar.Result = await intake.SaveVictoryPathData(nomar.Data, conn, tx);
+                return nomar;
+            });
+            var firstIds = await connection.QuerySingleAsync<int[]>("SELECT set_ids FROM bracket_paths WHERE player_id = 774869");
+            Assert(firstIds.Length == 4 && firstIds.Distinct().Count() == 4, "four distinct integer set references");
+            var replay = await intake.SaveVictoryPathData(nomar.Data);
+            Assert(replay.Successful.Select(int.Parse).Order().SequenceEqual(firstIds.Order()), "resume reuses stable integer identities");
+            Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_paths WHERE player_id = 774869") == 1, "NOMAR replay has one path");
+            Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM tournament_sets WHERE id = ANY(@ids)", new { ids = firstIds }) == 4, "all numeric references resolve");
+            Console.WriteLine("PASS PostgreSQL NOMAR payload, integer[] persistence, mapping rollback and replay");
+            var generatedId = await connection.ExecuteScalarAsync<int>(
+                "INSERT INTO tournament_sets (playerone_name) VALUES ('Independent identity insert') RETURNING id");
+            Assert(!firstIds.Contains(generatedId), "existing identity sequence remains usable by other callers");
+
+            // Exercise deployments where IDs are application-assigned rather than identity/serial.
+            await connection.ExecuteAsync("ALTER TABLE tournament_sets ALTER COLUMN id DROP IDENTITY");
+            nomar.ExpectedOpponents.Add(new ExpectedOpponent(999, 40, "Another candidate", "D", "Direct") { PathSetId = "103228116" });
+            BracketCardBuilder.Build(nomar, [Fixture.Legend(40, 800005)]);
+            var expanded = await intake.SaveVictoryPathData(nomar.Data);
+            var expandedIds = expanded.Successful.Select(int.Parse).ToArray();
+            Assert(expandedIds.Length == 5 && expandedIds.Distinct().Count() == 5, "same-round candidates have distinct database IDs");
+            Assert(firstIds.All(expandedIds.Contains), "fallback allocation preserves prior mappings");
+            Assert(!expandedIds.Contains(generatedId) && !expandedIds.Contains(1), "fallback skips existing IDs");
+            Console.WriteLine("PASS PostgreSQL fallback allocation and multiple candidates in one round");
         }
         finally { await admin.ExecuteAsync($"DROP SCHEMA {schema} CASCADE"); }
     }

@@ -20,3 +20,4 @@ SengokuProvider.Worker/appsettings.Development.json
 /ExcluSightsLibrary/bin/Debug/net8.0
 /ExcluSightsLibrary/obj
 /ExcluSightsLibrary/bin/Release/net8.0
+/tests/BracketWorkflow.Tests/Fixtures

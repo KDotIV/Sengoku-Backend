@@ -281,7 +281,6 @@ namespace SengokuProvider.Library.Services.Players
             };
             return await QueryPlayersById(playerId, result);
         }
-
         private async Task<PlayerData> QueryPlayersById(int playerId, PlayerData result)
         {
             try
@@ -314,10 +313,73 @@ namespace SengokuProvider.Library.Services.Players
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
-
         public async Task<List<Links>> GetPlayersByEntrantLinks(int[] entrantId)
         {
             return await QueryPlayersByEntrantLinks(entrantId);
+        }
+        public async Task<BracketVictoryPathData?> GetBracketPathByPlayerId(int playerId)
+        {
+            return await GetBracketPathByPlayerIds(new int[] { playerId });
+        }
+        public async Task<BracketVictoryPathData?> GetBracketPathByPlayerIds(int[] playerIds)
+        {
+            if(playerIds.Length < 1)
+            {
+                Console.WriteLine("Player Ids cannot be empty or invalid array");
+                return null;
+            }
+            try
+            {
+                using var conn = new NpgsqlConnection(_connectionString);
+                await conn.OpenAsync();
+
+                const string sql = @"SELECT * FROM get_bracket_victory_path(@PlayerIds);";
+                var flatRows = await conn.QueryAsync<FlatBracketPathEntrantCards>(sql, new { PlayerIds = playerIds });
+
+                var result = flatRows.GroupBy(r => r.PlayerId)
+                    .Select(g =>
+                    {
+                        var firstRecord = g.First();
+                        return new BracketVictoryPathData
+                        {
+                            TournamentLinkID = firstRecord.TournamentLink,
+                            EventLinkID = firstRecord.EventLink,
+                            TournamentName = firstRecord.TournamentName,
+                            RoundNum = firstRecord.RoundNum,
+                            PlayerTournamentCard = new PlayerTournamentCard
+                            {
+                                PlayerID = g.Key,
+                                PlayerName = firstRecord.PlayerOneName,
+                                PlayerResults = g.Select(r => new PlayerStandingResult
+                                {
+                                    StandingDetails = new StandingDetails
+                                    {
+                                        GamerTag = firstRecord.PlayerOneName,
+                                        TournamentId = r.TournamentLink
+                                    },
+                                    LastUpdated = DateTime.UtcNow,
+                                }).ToList()
+                            },
+                            EntrantSetCards = g.Select(r => new EntrantSetCard
+                            {
+                               SetID = r.SetId.ToString(),
+                                EntrantOneID = r.EntrantOneId,
+                                EntrantOneName = r.PlayerOneName,
+                                EntrantTwoID = r.EntrantTwoId,
+                                EntrantTwoName = r.PlayerTwoName,
+                            }).ToList()
+                        };
+                    }).FirstOrDefault();
+                return result;
+            }
+            catch (NpgsqlException ex)
+            {
+                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
+            }
+            catch (Exception ex)
+            {
+                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+            }
         }
         private async Task<List<Links>> QueryPlayersByEntrantLinks(int[] entrantIds)
         {

@@ -21,7 +21,7 @@ namespace SengokuProvider.Library.Models.Players
             return false;
         }
     }
-    public class OnboardBracketRunnerByBracketSlug : ICommand
+    public class OnboardBracketPathByBracketSlug : ICommand
     {
         public required string BracketSlug { get; set; }
         public required int PlayerId { get; set; }

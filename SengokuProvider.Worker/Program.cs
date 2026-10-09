@@ -41,8 +41,8 @@ IHost host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IUserService, UserService>(provider =>
         {
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
-            var playerQuery = provider.GetRequiredService<IPlayerQueryService>();
-            return new UserService(connectionString, intakeValidator, playerQuery);
+
+            return new UserService(connectionString, intakeValidator);
         });
         services.AddSingleton<IEventIntakeService>(_ => new EventIntakeService(connectionString));
         services.AddSingleton<IEventOperations>(provider =>

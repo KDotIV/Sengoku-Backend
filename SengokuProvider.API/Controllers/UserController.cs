@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using SengokuProvider.Library.Workflows.Users;
+using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Users;
@@ -11,11 +12,13 @@ namespace SengokuProvider.API.Controllers
     {
         private readonly ILogger<UserController> _log;
         private readonly IUserService _userService;
+        private readonly IUserOperations _userOperations;
         private readonly CommandProcessor _commandProcessor;
-        public UserController(ILogger<UserController> logger, IUserService userService, CommandProcessor commandProcessor)
+        public UserController(ILogger<UserController> logger, IUserService userService, IUserOperations userOperations, CommandProcessor commandProcessor)
         {
             _log = logger;
             _userService = userService;
+            _userOperations = userOperations;
             _commandProcessor = commandProcessor;
         }
 
@@ -70,7 +73,7 @@ namespace SengokuProvider.API.Controllers
                 return new BadRequestObjectResult(parsedRequest.Response);
             }
 
-            UserPlayerDataResponse result = await _userService.SyncStartggDataToUserData(cmd.PlayerName, cmd.UserSlug);
+            UserPlayerDataResponse result = await _userOperations.SyncStartggDataToUserData(cmd.PlayerName, cmd.UserSlug);
             return Ok(result);
         }
     }

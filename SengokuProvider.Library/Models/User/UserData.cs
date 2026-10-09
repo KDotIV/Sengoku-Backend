@@ -1,4 +1,4 @@
-﻿namespace SengokuProvider.Library.Models.User
+namespace SengokuProvider.Library.Models.User
 {
     public class UserData
     {
@@ -8,6 +8,8 @@
         public required string Password { get; set; }
         public required string Email { get; set; }
         public required string PermissionChecksum { get; set; }
+        public int? PlayerId { get; set; }
+        public int? UserLink { get; set; }
     }
 
     public class UserPermissions

@@ -55,8 +55,8 @@ var host = new HostBuilder()
         services.AddScoped<IUserService, UserService>(provider =>
         {
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
-            var playerQuery = provider.GetService<IPlayerQueryService>();
-            return new UserService(connectionString, intakeValidator, playerQuery);
+
+            return new UserService(connectionString, intakeValidator);
         });
         services.AddScoped<IDiscordWebhookHandler, DiscordWebhookHandler>(provider =>
         {
