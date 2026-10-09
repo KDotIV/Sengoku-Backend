@@ -153,8 +153,7 @@ namespace SengokuProvider.Worker.Handlers
                     if (checkpoint == null || checkpoint.Result.Status != "Pending" || checkpoint.ExpiresAt <= DateTime.UtcNow)
                         return 0;
                 }
-                var foundStandings = await currentPlayerQuery.GetStandingsDataByPlayerLinks(onboardCommand.PlayerLinkIds);
-                var newLegends = await _legendsOperations.GenerateNewLegendsByPlayerStandings(foundStandings ?? []);
+                var newLegends = await _legendsOperations.GenerateNewLegendsByPlayerLinks(onboardCommand.PlayerLinkIds);
                 var inserted = newLegends.Count == 0 ? 0 : await _legendFactory.CreateIntakeHandler().InsertNewLegendData(newLegends);
                 // A duplicate onboarding request still wakes the waiting operation.
                 if (onboardCommand.OperationId is Guid resumeId)

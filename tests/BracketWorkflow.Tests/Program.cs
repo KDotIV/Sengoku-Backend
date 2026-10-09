@@ -18,10 +18,9 @@ using SengokuProvider.Worker.Handlers;
 
 var tests = new (string Name, Func<Task> Run)[]
 {
-    ("NOMAR checkpoint resumes all four opponents without refetching bracket", async () =>
+    ("stored snapshot resumes all four opponents without refetching bracket", async () =>
     {
-        var checkpoint = JsonConvert.DeserializeObject<BracketProcessingCheckpoint>(await File.ReadAllTextAsync(
-            Path.Combine(AppContext.BaseDirectory, "Fixtures", "nomar-checkpoint.json")))!;
+        var checkpoint = Fixture.StoredCheckpoint();
         // Keep the captured payload reusable after its original expiration date.
         checkpoint.ExpiresAt = DateTime.UtcNow.AddHours(1);
         var f = new Fixture(); f.Store.Checkpoint = checkpoint;
@@ -31,6 +30,22 @@ var tests = new (string Name, Func<Task> Run)[]
         Check(f.Store.Checkpoint!.Data.EntrantSetCards.Count == 4, "all four matchups retained");
         Check(f.Store.Checkpoint.Data.EntrantSetCards.All(card => card.PlayerOneID == 774869), "internal player identity retained");
         Check(f.Store.Checkpoint.Data.EntrantSetCards.Select(card => card.SetID).Distinct().Count() == 4, "matchup identities remain distinct");
+    }),
+    ("requesting player legend bootstraps even without opponents", async () => {
+        var f = new Fixture { HasOwnLegend = false };
+        f.Bracket.PhaseGroup!.Sets.Nodes = [Fixture.Set("s1", 1, Fixture.Slot("a",100,10), new Slot { Id="bye" })];
+        var pending = await f.Start();
+        Check(pending.Status == "Pending" && f.Store.Checkpoint!.MissingPlayerLinks.SequenceEqual([10]), "own legend is required");
+        f.HasOwnLegend = true;
+        var completed = await f.Operations.ResumeBracketProcessing(pending.OperationId!.Value);
+        Check(completed!.Status == "Completed" && f.Saves == 1, "own legend and empty path complete");
+    }),
+    ("explicit retry reopens expired snapshot", async () => {
+        var f = new Fixture(); var pending = await f.Start();
+        f.Store.Checkpoint!.ExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+        var retry = await f.Operations.RetryBracketProcessing(pending.OperationId!.Value);
+        Check(retry!.Status == "Pending" && retry.OperationId == pending.OperationId && f.Store.Checkpoint.ExpiresAt > DateTime.UtcNow, "retry preserves operation and refreshes expiry");
+        Check(f.BracketQueries == 1, "retry uses saved snapshot");
     }),
     ("partial legends checkpoint and resume without fetching bracket again", async () =>
     {
@@ -96,11 +111,11 @@ var tests = new (string Name, Func<Task> Run)[]
         await f.Operations.ResumeBracketProcessing(result.OperationId.Value);
         Check(f.Store.Checkpoint.Result.Status == "Expired" && f.Store.Messages.Count == 2 && f.Saves == 0, "expired operation stops");
     }),
-    ("bye with no opponents completes without invalid save", async () =>
+    ("bye with no opponents persists an empty path", async () =>
     {
         var f = new Fixture(); f.Bracket.PhaseGroup!.Sets.Nodes = [Fixture.Set("s1", 1, Fixture.Slot("a", 100, 10), new Slot { Id = "bye" })];
         var result = await f.Start();
-        Check(result.Status == "Completed" && f.Saves == 0 && f.Store.Messages.Count == 0, "bye is a completed no-op");
+        Check(result.Status == "Completed" && f.Saves == 1 && f.Store.Messages.Count == 0, "bye path persists");
     }),
     ("same opponent in different rounds has distinct cards", () =>
     {
@@ -205,6 +220,7 @@ sealed class Fixture
     public List<LegendData> Legends { get; } = [];
     public int BracketQueries, Saves;
     public bool HasStandings = true;
+    public bool HasOwnLegend = true;
     public PlayerData Player = new() { Id = 1, PlayerLinkID = 10, PlayerName = "Player", UserLink = 1, LastUpdate = DateTime.UtcNow };
     public PhaseGroupGraphQL Bracket = new() { PhaseGroup = new() { Id = 7, DisplayIdentifier = "Pool A", Sets = new() { Nodes =
         [Set("s1", 1, Slot("a", 100, 10), Slot("b", 200, 20)),
@@ -229,7 +245,7 @@ sealed class Fixture
             "GetTournamentLinksById" => Task.FromResult(new List<TournamentData> { Tournament() }),
             _ => throw new Exception(name)
         });
-        var legends = Stub.For<ILegendQueryService>((name, _) => name == "GetLegendsByPlayerLink" ? Task.FromResult(Legends.ToList()) : throw new Exception(name));
+        var legends = Stub.For<ILegendQueryService>((name, _) => name == "GetLegendsByPlayerLink" ? Task.FromResult(Legends.Concat(HasOwnLegend ? new[] { Legend(Player.PlayerLinkID, Player.Id) } : []).ToList()) : throw new Exception(name));
         var intake = Stub.For<IPlayerIntakeService>((name, _) =>
         {
             if (name != "SaveVictoryPathData") throw new Exception(name);
@@ -239,11 +255,18 @@ sealed class Fixture
             Stub.For<IAzureBusApiService>((_, _) => throw new Exception("Direct bus send bypassed outbox")), intake, Store);
     }
     Task<PhaseGroupGraphQL> BracketQuery() { BracketQueries++; return Task.FromResult(Bracket); }
-    public Task<PlayerOnboardResult> Start() => Operations.OnboardBracketRunnerByBracketSlug("https://start.gg/tournament/test/event/test/brackets/6/7", 1);
+    public Task<PlayerOnboardResult> Start() => Operations.OnboardBracketPathByBracketSlug("https://start.gg/tournament/test/event/test/brackets/6/7", 1);
     static TournamentData Tournament() => new() { Id = 5, EventId = 4, UrlSlug = "test", LastUpdated = DateTime.UtcNow };
     public static LegendData Legend(int link, int player) => new() { Id = player + 100, PlayerLinkId = link, PlayerId = player };
     public static Slot Slot(string id, int entrant, int link) => new() { Id = id, Entrant = new() { Id = entrant, Participants = [new() { Player = new() { Id = link, GamerTag = $"Player {link}" } }] } };
     public static SetNode Set(string id, int round, params Slot[] slots) => new() { Id = id, Identifier = id, Round = round, Slots = slots.ToList() };
+    public static BracketProcessingCheckpoint StoredCheckpoint()
+    {
+        var checkpoint = Checkpoint();
+        checkpoint.Data.PlayerTournamentCard.PlayerID = 774869;
+        checkpoint.ExpectedOpponents = Enumerable.Range(1, 4).Select(i => new ExpectedOpponent(200+i, 20+i, $"Opponent {i}", "Round", "Direct") { PathSetId = i.ToString(), PathStep=i }).ToList();
+        return checkpoint;
+    }
     public static BracketProcessingCheckpoint Checkpoint() => new() { RequestKey = "test", BracketId = 7, Data = new()
         { TournamentLinkID = 5, EventLinkID = 4, PlayerTournamentCard = new() { PlayerID = 1, PlayerName = "Player", EntrantID = 100, PlayerResults = [] }, EntrantSetCards = [] } };
 }

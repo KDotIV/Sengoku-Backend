@@ -25,7 +25,7 @@ public static class BracketCardBuilder
             }
             cards[setId] = new EntrantSetCard
             {
-                SetID = setId,
+                SetID = setId, PathStep = opponent.PathStep, PathSetId = opponent.PathSetId,
                 EntrantOneID = player.EntrantID, PlayerOneID = player.PlayerID, EntrantOneName = player.PlayerName,
                 EntrantTwoID = opponent.EntrantId, PlayerTwoID = legend.PlayerId, EntrantTwoName = opponent.GamerTag
             };

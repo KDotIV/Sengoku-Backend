@@ -21,3 +21,4 @@ SengokuProvider.Worker/appsettings.Development.json
 /ExcluSightsLibrary/obj
 /ExcluSightsLibrary/bin/Release/net8.0
 /tests/BracketWorkflow.Tests/Fixtures
+/database/migrations

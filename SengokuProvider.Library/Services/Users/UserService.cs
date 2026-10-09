@@ -8,51 +8,57 @@ namespace SengokuProvider.Library.Services.Users
     public partial class UserService : IUserService
     {
         private readonly string _connectionString;
-        private readonly IntakeValidator _validator;
-        private readonly Random _rand = new Random();
         public UserService(string connectionString, IntakeValidator validator)
         {
             _connectionString = connectionString;
-            _validator = validator;
         }
         public async Task<int> CreateUser(string username, string email, string password, int playerId = 0)
         {
-            if (!_validator.IsValidIdentifier(username) || !_validator.IsValidIdentifier(email) || !_validator.IsValidIdentifier(password))
-                throw new ArgumentException("Invalid input data");
-            try
+            ArgumentException.ThrowIfNullOrWhiteSpace(username);
+            ArgumentException.ThrowIfNullOrWhiteSpace(email);
+            username = username.Trim();
+            email = email.Trim().ToLowerInvariant();
+            if (username.Length > 100 || email.Length > 254 || !System.Net.Mail.MailAddress.TryCreate(email, out var address) || address.Address != email)
+                throw new ArgumentException("Enter a valid username and email address.");
+            var passwordHash = AccountPassword.Hash(password);
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync();
+            await using var tx = await conn.BeginTransactionAsync();
+            // Serialize registration for the same normalized email, including legacy mixed-case rows.
+            await conn.ExecuteAsync("SELECT pg_advisory_xact_lock(hashtext(@email))", new { email }, tx);
+            if (await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE lower(email) = @email)", new { email }, tx))
+                return 0;
+            if (playerId == 0)
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                // NULL external IDs permit multiple unlinked local players under the existing unique constraint.
+                for (var attempt = 0; attempt < 20; attempt++)
                 {
-                    await conn.OpenAsync();
-
-                    if (CheckDuplicatedUser(email)) { throw new ArgumentException("Email is already in use"); }
-
-                    var userId = await GenerateNewUserId();
-                    var createNewUserCommand = @"INSERT INTO users (id, user_name, email, password, player_id, user_link) VALUES (@UserId, @Username, @Email, @Password, @PlayerId, @UserLink) ON CONFLICT(email) DO NOTHING";
-                    using (var command = new NpgsqlCommand(createNewUserCommand, conn))
-                    {
-                        command.Parameters.AddWithValue("@UserId", userId);
-                        command.Parameters.AddWithValue("@Username", username);
-                        command.Parameters.AddWithValue("@Email", email);
-                        command.Parameters.AddWithValue("@Password", password);
-                        command.Parameters.AddWithValue("@PlayerId", playerId);
-                        command.Parameters.AddWithValue("@UserLink", 0);
-                        var result = await command.ExecuteNonQueryAsync();
-                        if (result > 0)
-                            return userId;
-                        else
-                            return 0; // No row inserted.
-                    }
+                    playerId = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
+                    var inserted = await conn.ExecuteAsync(@"INSERT INTO players (id, player_name, startgg_link, user_link, last_updated)
+                        VALUES (@playerId, @username, NULL, 0, CURRENT_TIMESTAMP) ON CONFLICT (id) DO NOTHING", new { playerId, username }, tx);
+                    if (inserted == 1) break;
+                    playerId = 0;
                 }
+                if (playerId == 0) throw new InvalidOperationException("Unable to allocate a local player ID.");
             }
-            catch (NpgsqlException ex)
+            else
             {
-                throw new ApplicationException("Database error occurred: ", ex);
+                var existing = await conn.QuerySingleOrDefaultAsync<int?>("SELECT id FROM players WHERE id = @playerId FOR UPDATE", new { playerId }, tx);
+                if (existing == null) throw new ArgumentException("The local player does not exist.");
+                if (await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE player_id = @playerId)", new { playerId }, tx))
+                    throw new InvalidOperationException("The player is already associated with an account.");
             }
-            catch (Exception ex)
+            for (var attempt = 0; attempt < 20; attempt++)
             {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
+                var userId = System.Security.Cryptography.RandomNumberGenerator.GetInt32(100000, 1000000);
+                var inserted = await conn.ExecuteAsync(@"INSERT INTO users (id, user_name, email, password, player_id, user_link)
+                    VALUES (@userId, @username, @email, @passwordHash, @playerId, 0) ON CONFLICT (id) DO NOTHING",
+                    new { userId, username, email, passwordHash, playerId }, tx);
+                if (inserted == 0) continue;
+                await tx.CommitAsync();
+                return userId;
             }
+            throw new InvalidOperationException("Unable to allocate a local user ID.");
         }
         public async Task<UserData?> GetUserById(int userId)
         {
@@ -85,33 +91,6 @@ namespace SengokuProvider.Library.Services.Users
             catch (NpgsqlException ex)
             {
                 throw new ApplicationException("Failed to check the user in PostgreSQL.", ex);
-            }
-        }
-        private bool CheckDuplicatedUser(string input)
-        {
-            using (var conn = new NpgsqlConnection(_connectionString))
-            {
-                conn.Open();
-
-                var newQuery = @"SELECT email FROM users WHERE email = @Input";
-                var result = conn.QueryFirstOrDefault<string>(newQuery, new { Input = input });
-
-                return result != null;
-            }
-        }
-        private async Task<int> GenerateNewUserId()
-        {
-            using (var conn = new NpgsqlConnection(_connectionString))
-            {
-                await conn.OpenAsync();
-                while (true)
-                {
-                    var newId = _rand.Next(100000, 1000000);
-
-                    var newQuery = @"SELECT id FROM users WHERE id = @Input";
-                    var queryResult = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = newId });
-                    if (newId != queryResult || queryResult == 0) return newId;
-                }
             }
         }
     }

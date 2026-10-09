@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Npgsql;
@@ -31,7 +32,7 @@ public class LegendsOperations : ILegendsOperations
     private readonly IAzureBusApiService _bus;
     private readonly ICommonDatabaseService _common;
     private readonly IUserService _users;
-    private static readonly Random Rand = new();
+
 
     public LegendsOperations(string connectionString, IConfiguration config, ILegendIntakeService legendIntake,
         ILegendQueryService legendQuery, IEventOperations eventIntake, IEventQueryService eventQuery,
@@ -49,12 +50,32 @@ public class LegendsOperations : ILegendsOperations
         _users = users;
     }
 
+    // A first-time entrant can have an identity without any historical standings.
+    public async Task<List<LegendData>> GenerateNewLegendsByPlayerLinks(int[] playerLinks)
+    {
+        if (playerLinks.Length == 0) return [];
+        await using var connection = new NpgsqlConnection(_connectionString);
+        var players = await connection.QueryAsync<PlayerData>(
+            "SELECT id, player_name AS PlayerName, startgg_link AS PlayerLinkID FROM players WHERE startgg_link = ANY(@playerLinks) ORDER BY id", new { playerLinks });
+        var legends = new List<LegendData>();
+        foreach (var player in players)
+        {
+            var id = player.Id;
+            var history = await _legendQuery.QueryStandingsByPlayerId(id)
+                ?? new StandingsQueryResult { PlayerID = id, StandingData = [] };
+            var legend = await _legendIntake.BuildLegendData(history, player.PlayerName);
+            legend.PlayerLinkId = player.PlayerLinkID;
+            legends.Add(legend);
+        }
+        return legends;
+    }
+
     public async Task<List<LegendData>> GenerateNewLegendsByPlayerStandings(List<PlayerStandingResult> standings)
     {
         var legends = new List<LegendData>();
         if (standings == null || standings.Count == 0) return legends;
 
-        
+
         foreach (var standing in standings.Where(s => s.TournamentLinks?.PlayerId > 0)
             .DistinctBy(s => s.TournamentLinks.PlayerId))
         {
@@ -181,8 +202,8 @@ public class LegendsOperations : ILegendsOperations
     private static string GenerateHashedPassword()
     {
         const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_@.";
-        var regex = new Regex(@"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@_.])[A-Za-z0-9@_.]{10}$");
-        while (true) { var value = new string(Enumerable.Range(0, 10).Select(_ => chars[Rand.Next(chars.Length)]).ToArray()); if (regex.IsMatch(value)) return value; }
+        var regex = new Regex(@"^(?=.*[A-Za-z])(?=.*\d)(?=.*[@_.])[A-Za-z0-9@_.]{16}$");
+        while (true) { var value = new string(Enumerable.Range(0, 16).Select(_ => chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)]).ToArray()); if (regex.IsMatch(value)) return value; }
     }
 
     private static string CleanUrlSlugName(string slug)

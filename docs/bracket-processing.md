@@ -1,5 +1,7 @@
 # Resumable bracket processing
 
+Onboarding now requires an authenticated session and CSRF header; status polling checks the session's local player ownership. See [account-authentication.md](account-authentication.md) for the frontend contract.
+
 Apply `database/migrations/001_bracket_processing.sql` to the Alexandria database
 before deploying the updated API and worker. There is no automatic schema creation.
 Also apply `database/migrations/002_bracket_matchup_keys.sql` before deploying the
@@ -13,7 +15,7 @@ Use the existing `ServiceBusSettings:LegendReceivedQueue` and
 worker running: `BracketOutboxWorker` publishes committed commands and performs
 recovery and cleanup. The API alone cannot progress pending operations.
 
-`POST /api/players/OnboardBracketRunnerByBracketSlug` returns HTTP 202 when legends
+`POST /api/players/OnboardBracketPathByBracketSlug` returns HTTP 202 when legends
 are missing, with `Status = Pending`, `OperationId`, and a Location header pointing
 to `GET /api/players/BracketProcessing/{operationId}`. Completion returns HTTP 200.
 The status endpoint returns Pending, Completed, Failed, or Expired; unknown or

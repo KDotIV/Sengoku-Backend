@@ -28,6 +28,7 @@ namespace SengokuProvider.Library.Workflows.Players
         private readonly IConfiguration _config;
         private readonly IPlayerIntakeService _intakeService;
         private readonly IBracketCheckpointStore _checkpoints;
+        private readonly IBracketTournamentBootstrap? _bootstrap;
 
         private readonly string _connectionString;
         private ConcurrentDictionary<int, int> _playersCache;
@@ -38,7 +39,7 @@ namespace SengokuProvider.Library.Workflows.Players
 
         public PlayerOperations(string connectionString, IConfiguration configuration, ICommonDatabaseService commonServices, IPlayerQueryService playerQueryService,
             ILegendQueryService legendQueryService, IEventQueryService eventQueryService, IAzureBusApiService serviceBus, IPlayerIntakeService intakeService,
-            IBracketCheckpointStore checkpoints)
+            IBracketCheckpointStore checkpoints, IBracketTournamentBootstrap? bootstrap = null)
         {
             _connectionString = connectionString;
             _config = configuration;
@@ -49,6 +50,7 @@ namespace SengokuProvider.Library.Workflows.Players
             _azureBusApiService = serviceBus;
             _intakeService = intakeService;
             _checkpoints = checkpoints;
+            _bootstrap = bootstrap;
             _playersCache = new ConcurrentDictionary<int, int>();
             _playerRegistry = new ConcurrentDictionary<int, string>();
             _eventCache = new HashSet<int>();
@@ -200,6 +202,21 @@ namespace SengokuProvider.Library.Workflows.Players
             });
             return resumed.Result;
         }
+        public async Task<PlayerOnboardResult?> RetryBracketProcessing(Guid operationId)
+        {
+            var checkpoint = await _checkpoints.GetAsync(operationId);
+            if (checkpoint == null) return null;
+            var retried = await _checkpoints.ExecuteAsync(checkpoint.RequestKey, async (current, conn, tx) => {
+                if (current == null) throw new KeyNotFoundException("Operation no longer exists.");
+                ExpireIfNeeded(current);
+                if (current.Result.Status is not ("Failed" or "Expired")) return current;
+                current.ExpiresAt = DateTime.UtcNow.AddHours(24);
+                current.NextAttemptAt = DateTime.MinValue;
+                current.Result = new PlayerOnboardResult { OperationId = current.OperationId, Status = "Pending", Response = "Retrying saved bracket snapshot." };
+                return await AdvanceBracketAsync(current, conn, tx);
+            });
+            return retried.Result;
+        }
         private static BracketProcessingCheckpoint ExpireIfNeeded(BracketProcessingCheckpoint checkpoint)
         {
             checkpoint.Result.OperationId = checkpoint.OperationId;
@@ -215,15 +232,18 @@ namespace SengokuProvider.Library.Workflows.Players
         {
             var links = checkpoint.Attempts > 0 ? checkpoint.MissingPlayerLinks
                 : checkpoint.ExpectedOpponents.Select(x => x.PlayerLink).Distinct().ToArray();
+            if (checkpoint.RequestingPlayerLink > 0 && !checkpoint.RequestingLegendReady)
+                links = links.Append(checkpoint.RequestingPlayerLink).Distinct().ToArray();
 
             var legends = links.Length == 0 ? new List<LegendData>() : await _legendQueryService.GetLegendsByPlayerLink(links);
+            checkpoint.RequestingLegendReady |= (legends ?? []).Any(x => x.PlayerLinkId == checkpoint.RequestingPlayerLink && x.PlayerId == checkpoint.Data.PlayerTournamentCard.PlayerID);
             checkpoint.MissingPlayerLinks = BracketCardBuilder.Build(checkpoint, legends ?? []);
+            if (checkpoint.RequestingPlayerLink > 0 && !checkpoint.RequestingLegendReady)
+                checkpoint.MissingPlayerLinks = checkpoint.MissingPlayerLinks.Append(checkpoint.RequestingPlayerLink).Distinct().ToArray();
 
             if (checkpoint.MissingPlayerLinks.Length == 0)
             {
-                checkpoint.Result = checkpoint.ExpectedOpponents.Count == 0
-                    ? new PlayerOnboardResult { Response = "No opponents to process in this bracket.", Status = "Completed" }
-                    : await _intakeService.SaveVictoryPathData(checkpoint.Data, connection, transaction);
+                checkpoint.Result = await _intakeService.SaveVictoryPathData(checkpoint.Data, connection, transaction);
                 checkpoint.Result.Status = "Completed";
                 return checkpoint;
             }
@@ -275,7 +295,7 @@ namespace SengokuProvider.Library.Workflows.Players
             {
                 var result = new BracketVictoryPathData
                 {
-                    TournamentLinkID = tournamentId,
+                    TournamentLinkID = tournamentId, BracketId = bracketData.PhaseGroup.Id, PlayerStartggLink = playerData.PlayerLinkID,
                     EventLinkID = 0,
                     TournamentName = "Unknown",
                     RoundNum = bracketData.PhaseGroup.DisplayIdentifier ?? "Unknown",
@@ -354,7 +374,7 @@ namespace SengokuProvider.Library.Workflows.Players
                 var expectedOpponents = GetExpectedOpponents(bracketData.PhaseGroup.Sets.Nodes, playerPath, result.PlayerTournamentCard.EntrantID);
 
                 return new BracketProcessingCheckpoint { RequestKey = requestKey, BracketId = bracketData.PhaseGroup.Id,
-                    Data = result, ExpectedOpponents = expectedOpponents };
+                    Data = result, RequestingPlayerLink = playerData.PlayerLinkID, ExpectedOpponents = expectedOpponents };
             }
             catch (Exception ex)
             {
@@ -416,8 +436,10 @@ namespace SengokuProvider.Library.Workflows.Players
             var opponents = new List<ExpectedOpponent>();
             string? previousPathSetId = null;
 
+            int pathStep = 0;
             foreach (var pathSet in playerPath)
             {
+                pathStep++;
                 var slots = pathSet.Slots ?? [];
                 Slot? playerSideSlot;
 
@@ -451,7 +473,7 @@ namespace SengokuProvider.Library.Workflows.Players
                         if(particcipant?.Player == null || particcipant.Player.Id <= 0)
                             throw new ArgumentException("An opponent entrant has no valid start.gg player link.");
 
-                        opponents.Add(new ExpectedOpponent(candidate.Entrant.Id, particcipant.Player.Id, particcipant.Player.GamerTag ?? "Unknown", pathSet.Identifier, candidate.SourcceIdentifier) { PathSetId = pathSet.Id });
+                        opponents.Add(new ExpectedOpponent(candidate.Entrant.Id, particcipant.Player.Id, particcipant.Player.GamerTag ?? "Unknown", pathSet.Identifier, candidate.SourcceIdentifier) { PathSetId = pathSet.Id, PathStep = pathStep });
                     }
                 }
                 previousPathSetId = pathSet.Id;
@@ -490,7 +512,7 @@ namespace SengokuProvider.Library.Workflows.Players
         }   
         private async Task<(bool flowControl, PlayerOnboardResult value, string[] returnedSlug)> VerifyBracketSlug(string bracketSlug, PlayerOnboardResult onboardResult)
         {
-            if (!Uri.TryCreate(bracketSlug, UriKind.Absolute, out var uri))
+            if (!Uri.TryCreate(bracketSlug, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.Host is not ("start.gg" or "www.start.gg") || !string.IsNullOrEmpty(uri.UserInfo) || !uri.IsDefaultPort)
             {
                 onboardResult.Response = "FAILED: bracketSlug is not a valid URL";
                 return (false, onboardResult, Array.Empty<string>());
@@ -500,16 +522,23 @@ namespace SengokuProvider.Library.Workflows.Players
             // Find "brackets" marker
             var bracketIndex = Array.IndexOf(segments, "brackets");
             // we need at least two IDs after it
-            if (bracketIndex < 0 || segments.Length < bracketIndex + 3)
+            if (bracketIndex != 4 || segments.Length != bracketIndex + 3)
             {
                 onboardResult.Response = "FAILED: URL must contain '/brackets/{id1}/{id2}'";
                 return (false, onboardResult, Array.Empty<string>());
             }
 
-            var firstPart = string.Join("/", segments.Take(bracketIndex));
+            var firstPart = StartggNormalization.Normalize(string.Join("/", segments.Take(bracketIndex)), false);
             var id1 = segments[bracketIndex + 1];
             var id2 = segments[bracketIndex + 2];
 
+            if (!int.TryParse(id1, out var phaseId) || phaseId <= 0 || !int.TryParse(id2, out var bracketId) || bracketId <= 0)
+                throw new ArgumentException("Invalid phase or bracket ID.");
+            if (_bootstrap != null)
+            {
+                var tournamentId = await _bootstrap.Ensure(firstPart, phaseId, bracketId);
+                return (true, onboardResult, new[] { firstPart, id1, id2, tournamentId.ToString() });
+            }
             TournamentData tournamentLink = await _eventQueryService.GetTournamentLinkbyUrl(firstPart);
             if (tournamentLink == null || tournamentLink.Id == 0)
             {

@@ -53,7 +53,7 @@ public sealed class BracketCheckpointStore(string connectionString) : IBracketCh
             INSERT INTO bracket_processing_checkpoints (operation_id, request_key, payload, status, expires_at, updated_at)
             VALUES (@OperationId, @RequestKey, CAST(@payload AS jsonb), @status, @ExpiresAt, now())
             ON CONFLICT (request_key) DO UPDATE SET payload = EXCLUDED.payload,
-                status = EXCLUDED.status, updated_at = now()
+                status = EXCLUDED.status, expires_at = EXCLUDED.expires_at, updated_at = now()
             """, new
             {
                 checkpoint.OperationId,

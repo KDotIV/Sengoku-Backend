@@ -2,6 +2,13 @@
 {
     public class BracketVictoryPathData
     {
+        public int BracketPathId { get; set; }
+        public int? BracketId { get; set; }
+        public int PlayerStartggLink { get; set; }
+        public string? TournamentSlug { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public string Lifecycle { get; set; } = "Unknown";
         public required int TournamentLinkID { get; set; }
         public required int EventLinkID { get; set; }
         public string TournamentName { get; set; } = string.Empty;
@@ -11,6 +18,7 @@
     }
     public sealed record ExpectedOpponent(int EntrantId, int PlayerLink, string GamerTag, string pathSetIdentifier, string SourceSetIdentifier)
     {
+        public int? PathStep { get; init; }
         public string PathSetId { get; init; } = string.Empty;
     }
 }

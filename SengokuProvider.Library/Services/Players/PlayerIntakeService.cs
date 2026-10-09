@@ -59,7 +59,7 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
     {
         try
         {
-            if (data?.EntrantSetCards == null || data.EntrantSetCards.Count == 0 ||
+            if (data?.EntrantSetCards == null || data.PlayerTournamentCard.PlayerID <= 0 ||
                 data.EntrantSetCards.Any(x => x.PlayerOneID <= 0 || x.PlayerTwoID <= 0 || string.IsNullOrWhiteSpace(x.SetID)))
                 throw new ArgumentException("Cannot save incomplete bracket data.");
 
@@ -67,7 +67,7 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
             // Also protects callers outside the checkpoint workflow. A retry must reuse
             // the existing path rather than allocate another random primary key.
 
-            var identity = $"{data.TournamentLinkID}:{data.PlayerTournamentCard.PlayerID}:{string.Join(',', matchupKeys)}";
+            var identity = $"{data.TournamentLinkID}:{data.PlayerTournamentCard.PlayerID}:{data.BracketId}:{data.RoundNum}";
             await connection.ExecuteAsync("SELECT pg_advisory_xact_lock(hashtextextended(@identity, 1))", new { identity }, transaction);
             // Checkpoint SetID is a logical matchup key, not a database integer ID.
             // Allocate the mapping in the same transaction as the sets and path.
@@ -101,26 +101,27 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                 }
                 setIdsByKey.Add(key, mappedId.Value);
             }
-            var setIds = setIdsByKey.Values.Order().ToArray(); // Npgsql binds this as integer[].
+            var setIds = data.EntrantSetCards.OrderBy(x => x.PathStep).Select(x => setIdsByKey[x.SetID]).Distinct().ToArray(); // Npgsql binds this as integer[].
             var existing = await connection.QuerySingleOrDefaultAsync<int?>("""
                 SELECT id FROM bracket_paths
                 WHERE tournament_link = @TournamentLinkID AND player_id = @PlayerID
-                    AND set_ids @> @setIds AND set_ids <@ @setIds
+                    AND ((CAST(@BracketId AS integer) IS NOT NULL AND bracket_id = @BracketId)
+                        OR (CAST(@BracketId AS integer) IS NULL AND bracket_id IS NULL AND round_num = @RoundNum AND set_ids @> @setIds AND set_ids <@ @setIds))
                 ORDER BY id LIMIT 1
-                """, new { data.TournamentLinkID, data.PlayerTournamentCard.PlayerID, setIds }, transaction);
+                """, new { data.TournamentLinkID, data.PlayerTournamentCard.PlayerID, data.BracketId, data.RoundNum, setIds }, transaction);
 
             foreach (var card in data.EntrantSetCards.DistinctBy(x => x.SetID))
                 await connection.ExecuteAsync("""
-                    INSERT INTO tournament_sets (id, playerone_id, playerone_name, playertwo_id, playertwo_name, last_updated, entrantone_id, entranttwo_id, tournament_link)
+                    INSERT INTO tournament_sets (id, playerone_id, playerone_name, playertwo_id, playertwo_name, last_updated, entrantone_id, entranttwo_id, tournament_link, path_step, path_set_id)
                     OVERRIDING SYSTEM VALUE
-                    VALUES (@SetID, @PlayerOneID, @EntrantOneName, @PlayerTwoID, @EntrantTwoName, now(), @EntrantOneID, @EntrantTwoID, @TournamentLinkID)
+                    VALUES (@SetID, @PlayerOneID, @EntrantOneName, @PlayerTwoID, @EntrantTwoName, now(), @EntrantOneID, @EntrantTwoID, @TournamentLinkID, @PathStep, @PathSetId)
                     ON CONFLICT (id) DO UPDATE SET playerone_id = EXCLUDED.playerone_id,
                         playerone_name = EXCLUDED.playerone_name, playertwo_id = EXCLUDED.playertwo_id,
                         playertwo_name = EXCLUDED.playertwo_name, last_updated = now(),
                         entrantone_id = EXCLUDED.entrantone_id, entranttwo_id = EXCLUDED.entranttwo_id,
-                        tournament_link = EXCLUDED.tournament_link
+                        tournament_link = EXCLUDED.tournament_link, path_step = EXCLUDED.path_step, path_set_id = EXCLUDED.path_set_id
                     """, new { SetID = setIdsByKey[card.SetID], card.PlayerOneID, card.EntrantOneName,
-                        card.PlayerTwoID, card.EntrantTwoName, card.EntrantOneID, card.EntrantTwoID, data.TournamentLinkID }, transaction);
+                        card.PlayerTwoID, card.EntrantTwoName, card.EntrantOneID, card.EntrantTwoID, data.TournamentLinkID, card.PathStep, card.PathSetId }, transaction);
 
             if (existing == null)
             {
@@ -133,11 +134,16 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                 while (await connection.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM bracket_paths WHERE id = @pathId)", new { pathId }, transaction));
 
                 await connection.ExecuteAsync("""
-                    INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids)
-                    VALUES (@pathId, @TournamentLinkID, @TournamentName, @EventLinkID, @RoundNum, @PlayerID, now(), @setIds)
+                    INSERT INTO bracket_paths (id, tournament_link, tournament_name, event_link, round_num, player_id, last_updated, set_ids, bracket_id, entrant_id, player_startgg_link)
+                    VALUES (@pathId, @TournamentLinkID, @TournamentName, @EventLinkID, @RoundNum, @PlayerID, now(), @setIds, @BracketId, @EntrantID, @PlayerStartggLink)
                     """, new { pathId, data.TournamentLinkID, data.TournamentName, data.EventLinkID, data.RoundNum,
-                        data.PlayerTournamentCard.PlayerID, setIds }, transaction);
+                        data.PlayerTournamentCard.PlayerID, data.BracketId, data.PlayerTournamentCard.EntrantID, data.PlayerStartggLink, setIds }, transaction);
             }
+            else
+                await connection.ExecuteAsync("""
+                    UPDATE bracket_paths SET set_ids = @setIds, entrant_id = @EntrantID,
+                        player_startgg_link = @PlayerStartggLink, last_updated = CURRENT_TIMESTAMP WHERE id = @id
+                    """, new { id = existing.Value, setIds, data.PlayerTournamentCard.EntrantID, data.PlayerStartggLink }, transaction);
             return new PlayerOnboardResult { Response = existing == null ? "Bracket path saved successfully" : "Bracket path already exists",
                 Status = "Completed", Successful = setIds.Select(id => id.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList() };
         }
@@ -222,7 +228,7 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                             return totalSuccess;
                         }
 
-                        insertQuery.Append(" ON CONFLICT (entrant_id) DO UPDATE SET player_id = EXCLUDED.player_id, tournament_link = EXCLUDED.tournament_link, placement = EXCLUDED.placement, entrants_num = EXCLUDED.entrants_num, active = EXCLUDED.active, gained_points = EXCLUDED.gained_points, last_updated = EXCLUDED.last_updated;");
+                        insertQuery.Append(" ON CONFLICT (entrant_id) DO UPDATE SET player_id = EXCLUDED.player_id, tournament_link = EXCLUDED.tournament_link, path_step = EXCLUDED.path_step, path_set_id = EXCLUDED.path_set_id, placement = EXCLUDED.placement, entrants_num = EXCLUDED.entrants_num, active = EXCLUDED.active, gained_points = EXCLUDED.gained_points, last_updated = EXCLUDED.last_updated;");
 
                         using (var cmd = new NpgsqlCommand(insertQuery.ToString(), conn))
                         {

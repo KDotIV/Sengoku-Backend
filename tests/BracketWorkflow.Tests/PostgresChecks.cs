@@ -36,9 +36,9 @@ static class PostgresChecks
             await connection.ExecuteAsync(matchupMigration);
             await connection.ExecuteAsync("""
                 CREATE TABLE tournament_sets (id integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY, playerone_id integer, playerone_name text,
-                    playertwo_id integer, playertwo_name text, last_updated timestamptz);
+                    playertwo_id integer, playertwo_name text, last_updated timestamptz, entrantone_id integer, entranttwo_id integer, tournament_link integer, path_step integer, path_set_id text);
                 CREATE TABLE bracket_paths (id integer PRIMARY KEY, tournament_link integer, tournament_name text,
-                    event_link integer, round_num text, player_id integer, last_updated timestamptz, set_ids integer[]);
+                    event_link integer, round_num text, player_id integer, last_updated timestamptz, set_ids integer[], bracket_id integer, entrant_id integer, player_startgg_link integer);
                 INSERT INTO tournament_sets (id, playerone_name) OVERRIDING SYSTEM VALUE VALUES (1, 'Legacy set');
                 """);
             var store = new BracketCheckpointStore(scoped);
@@ -84,8 +84,7 @@ static class PostgresChecks
             Assert((await store.GetAsync(finished.OperationId))!.Result.Status == "Completed", "completed checkpoint committed");
             Console.WriteLine("PASS PostgreSQL atomic final save and concurrent idempotent path writes");
 
-            var nomar = Newtonsoft.Json.JsonConvert.DeserializeObject<BracketProcessingCheckpoint>(await File.ReadAllTextAsync(
-                Path.Combine(AppContext.BaseDirectory, "Fixtures", "nomar-checkpoint.json")))!;
+            var nomar = Fixture.StoredCheckpoint();
             BracketCardBuilder.Build(nomar, nomar.ExpectedOpponents.Select((opponent, index) => Fixture.Legend(opponent.PlayerLink, 800001 + index)));
             var mappingsBefore = await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_matchup_keys");
             try

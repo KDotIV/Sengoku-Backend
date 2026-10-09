@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using GraphQL.Client.Http;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -15,7 +15,7 @@ using System.Net.Http.Headers;
 
 namespace SengokuProvider.Library.Services.Players
 {
-    public class PlayerQueryService : IPlayerQueryService
+    public partial class PlayerQueryService : IPlayerQueryService
     {
         private readonly GraphQLHttpClient _client;
         private readonly string _connectionString;
@@ -32,6 +32,27 @@ namespace SengokuProvider.Library.Services.Players
             _commonDatabaseServices = commonServices;
             _client.HttpClient.DefaultRequestHeaders.Clear();
             _client.HttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _configuration["GraphQLSettings:PlayerBearer"]);
+        }
+        public Task<List<BracketVictoryPathData>> GetBracketPathByPlayerId(int playerId) => GetBracketPathByPlayerIds([playerId]);
+        public Task<List<BracketVictoryPathData>> GetBracketPathByPlayerIds(int[] playerIds)
+        {
+            ArgumentNullException.ThrowIfNull(playerIds);
+            if (playerIds.Length == 0) return Task.FromResult(new List<BracketVictoryPathData>());
+            if (playerIds.Any(id => id <= 0)) throw new ArgumentException("Player IDs must be valid.");
+
+            return QueryBracketPaths("bp.player_id = ANY(@playerIds)", new { playerIds });
+        }
+        public Task<List<BracketVictoryPathData>> GetBracketPathByPlayerName(string playerName)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(playerName);
+            if (playerName.Length > 100) throw new ArgumentException("Player name is too long.");
+
+            return QueryBracketPaths("lower(p.player_name) = lower(@playerName)", new { playerName = playerName.Trim() });
+        }
+        public Task<List<BracketVictoryPathData>> GetBracketPathByTournamentSlug(string tournamentSlug)
+        {
+            var slug = StartggNormalization.Normalize(tournamentSlug);
+            return QueryBracketPaths(slug.Contains('/') ? "tl.url_slug = @slug" : "split_part(tl.url_slug, '/event/', 2) = @slug", new { slug });
         }
         public async Task<List<PlayerData>> GetRegisteredPlayersByTournamentId(int[] tournamentIds)
         {
@@ -317,70 +338,6 @@ namespace SengokuProvider.Library.Services.Players
         {
             return await QueryPlayersByEntrantLinks(entrantId);
         }
-        public async Task<BracketVictoryPathData?> GetBracketPathByPlayerId(int playerId)
-        {
-            return await GetBracketPathByPlayerIds(new int[] { playerId });
-        }
-        public async Task<BracketVictoryPathData?> GetBracketPathByPlayerIds(int[] playerIds)
-        {
-            if(playerIds.Length < 1)
-            {
-                Console.WriteLine("Player Ids cannot be empty or invalid array");
-                return null;
-            }
-            try
-            {
-                using var conn = new NpgsqlConnection(_connectionString);
-                await conn.OpenAsync();
-
-                const string sql = @"SELECT * FROM get_bracket_victory_path(@PlayerIds);";
-                var flatRows = await conn.QueryAsync<FlatBracketPathEntrantCards>(sql, new { PlayerIds = playerIds });
-
-                var result = flatRows.GroupBy(r => r.PlayerId)
-                    .Select(g =>
-                    {
-                        var firstRecord = g.First();
-                        return new BracketVictoryPathData
-                        {
-                            TournamentLinkID = firstRecord.TournamentLink,
-                            EventLinkID = firstRecord.EventLink,
-                            TournamentName = firstRecord.TournamentName,
-                            RoundNum = firstRecord.RoundNum,
-                            PlayerTournamentCard = new PlayerTournamentCard
-                            {
-                                PlayerID = g.Key,
-                                PlayerName = firstRecord.PlayerOneName,
-                                PlayerResults = g.Select(r => new PlayerStandingResult
-                                {
-                                    StandingDetails = new StandingDetails
-                                    {
-                                        GamerTag = firstRecord.PlayerOneName,
-                                        TournamentId = r.TournamentLink
-                                    },
-                                    LastUpdated = DateTime.UtcNow,
-                                }).ToList()
-                            },
-                            EntrantSetCards = g.Select(r => new EntrantSetCard
-                            {
-                               SetID = r.SetId.ToString(),
-                                EntrantOneID = r.EntrantOneId,
-                                EntrantOneName = r.PlayerOneName,
-                                EntrantTwoID = r.EntrantTwoId,
-                                EntrantTwoName = r.PlayerTwoName,
-                            }).ToList()
-                        };
-                    }).FirstOrDefault();
-                return result;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
-            }
-        }
         private async Task<List<Links>> QueryPlayersByEntrantLinks(int[] entrantIds)
         {
             if (entrantIds.Length < 1)
@@ -426,7 +383,7 @@ namespace SengokuProvider.Library.Services.Players
         }
         private async Task<List<PlayerStandingResult>> QueryStandingsByPlayerLinks(int[] playerLinks)
         {
-            if(playerLinks.Length < 1)
+            if (playerLinks.Length < 1)
             {
                 Console.WriteLine("Player Links cannot be empty or invalid array");
                 return new List<PlayerStandingResult>();
@@ -594,7 +551,9 @@ namespace SengokuProvider.Library.Services.Players
             int existing = await CheckExistingPlayerbase(queryResult.UserNode.Player.Id);
 
             if (existing > 0) { result.PlayerId = existing; }
-            else { result.PlayerId = queryResult.UserNode.Player.Id; }
+            else { result.PlayerId = 0; }
+            result.LocalPlayerId = existing > 0 ? existing : null;
+            result.StartggPlayerId = queryResult.UserNode.Player.Id;
             result.PlayerName = queryResult.UserNode.Player.GamerTag ?? "";
             result.userLink = queryResult.UserNode.Id;
 
@@ -1061,6 +1020,7 @@ namespace SengokuProvider.Library.Services.Players
                     }
                     catch (Exception ex)
                     {
+                        retryCount++;
                         if (retryCount >= maxRetries)
                         {
                             // Throw out of both loops; never advance to another page after exhaustion.
@@ -1068,7 +1028,6 @@ namespace SengokuProvider.Library.Services.Players
                                 $"Failed to retrieve player data for {tournamentLink}, page {currentPage}, after {maxRetries} attempts. Aborting operation.", ex);
                         }
                         Console.WriteLine($"Player query failed for {tournamentLink}, page {currentPage}, attempt {retryCount}/{maxRetries}: {ex.Message}. Retrying in {delay}ms.");
-                        retryCount++;
                         await Task.Delay(delay);
                     }
                 }
@@ -1284,49 +1243,135 @@ namespace SengokuProvider.Library.Services.Players
             };
             return result;
         }
-        private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int[] tournamentLinks)
+    private async Task<List<PlayerData>> QueryPlayerDataByTournamentId(int[] tournamentLinks)
+    {
+        List<PlayerData> playerResult = new List<PlayerData>();
+        try
         {
-            List<PlayerData> playerResult = new List<PlayerData>();
-            try
+            using (var conn = new NpgsqlConnection(_connectionString))
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                await conn.OpenAsync();
+                using (var cmd = new NpgsqlCommand(@"SELECT * FROM get_players_by_tournament_link(@TournamentLinks)", conn))
                 {
-                    await conn.OpenAsync();
-                    using (var cmd = new NpgsqlCommand(@"SELECT * FROM get_players_by_tournament_link(@TournamentLinks)", conn))
-                    {
-                        cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@TournamentLinks", tournamentLinks));
+                    cmd.Parameters.Add(_commonDatabaseServices.CreateDBIntArrayType("@TournamentLinks", tournamentLinks));
 
-                        using (var reader = await cmd.ExecuteReaderAsync())
+                    using (var reader = await cmd.ExecuteReaderAsync())
+                    {
+                        if (!reader.HasRows)
                         {
-                            if (!reader.HasRows)
+                            Console.WriteLine("No players found with that TournamentLink Id");
+                            return playerResult;
+                        }
+                        while (await reader.ReadAsync())
+                        {
+                            playerResult.Add(new PlayerData
                             {
-                                Console.WriteLine("No players found with that TournamentLink Id");
-                                return playerResult;
-                            }
-                            while (await reader.ReadAsync())
-                            {
-                                playerResult.Add(new PlayerData
-                                {
-                                    Id = reader.GetInt32(reader.GetOrdinal("id")),
-                                    PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
-                                    UserLink = reader.GetInt32(reader.GetOrdinal("user_link")),
-                                    PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link")),
-                                    LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
-                                });
-                            }
+                                Id = reader.GetInt32(reader.GetOrdinal("id")),
+                                PlayerName = reader.GetString(reader.GetOrdinal("player_name")),
+                                UserLink = reader.GetInt32(reader.GetOrdinal("user_link")),
+                                PlayerLinkID = reader.GetInt32(reader.GetOrdinal("startgg_link")),
+                                LastUpdate = reader.GetDateTime(reader.GetOrdinal("last_updated"))
+                            });
                         }
                     }
                 }
-                return playerResult;
             }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException("Database error occurred: ", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException("Unexpected Error Occurred: ", ex);
-            }
+            return playerResult;
         }
+        catch (NpgsqlException ex)
+        {
+            throw new ApplicationException("Database error occurred: ", ex);
+        }
+        catch (Exception ex)
+        {
+            throw new ApplicationException("Unexpected Error Occurred: ", ex);
+        }
+    }
+    private async Task<List<BracketVictoryPathData>> QueryBracketPaths(string filter, object parameters)
+    {
+        // filter contains only the fixed expressions above; all user data is bound.
+        const string select = """
+        SELECT bp.id AS BracketPathId, bp.bracket_id AS BracketId, bp.tournament_link AS TournamentLink,
+            bp.tournament_name AS TournamentName, bp.event_link AS EventLink, bp.round_num AS RoundNum,
+            bp.player_id AS PlayerId, p.player_name AS PlayerName, p.startgg_link AS PlayerStartggLink,
+            tl.url_slug AS TournamentSlug, tl.startgg_state AS StartggState, tl.start_time AS StartTime, tl.end_time AS EndTime,
+            bp.last_updated AS LastUpdated, COALESCE(bp.entrant_id, s.entrant_id, 0) AS EntrantId,
+            s.placement AS Placement, s.entrants_num AS EntrantsNum, s.active AS IsActive, s.last_updated AS StandingUpdated,
+            ts.id AS SetId, ts.playerone_id AS PlayerOneId, ts.playertwo_id AS PlayerTwoId,
+            ts.playerone_name AS PlayerOneName, ts.playertwo_name AS PlayerTwoName,
+            ts.entrantone_id AS EntrantOneId, ts.entranttwo_id AS EntrantTwoId, ts.path_step AS PathStep, ts.path_set_id AS PathSetId
+        FROM bracket_paths bp
+        JOIN players p ON p.id = bp.player_id
+        LEFT JOIN tournament_links tl ON tl.id = bp.tournament_link
+        LEFT JOIN LATERAL (SELECT * FROM standings st WHERE st.player_id = bp.player_id AND st.tournament_link = bp.tournament_link
+            ORDER BY st.last_updated DESC NULLS LAST, st.entrant_id LIMIT 1) s ON true
+        LEFT JOIN LATERAL unnest(bp.set_ids) WITH ORDINALITY selected(set_id, position) ON true
+        LEFT JOIN tournament_sets ts ON ts.id = selected.set_id
+        WHERE
+        """;
+        await using var conn = new NpgsqlConnection(_connectionString);
+
+        var rows = await conn.QueryAsync<FlatBracketPathEntrantCards>(select + " " + filter +
+            " ORDER BY tl.start_time DESC NULLS LAST, bp.id, ts.path_step NULLS LAST, selected.position", parameters);
+        return MapBracketPaths(rows);
+    }
+    private List<BracketVictoryPathData> MapBracketPaths(IEnumerable<FlatBracketPathEntrantCards> rows) => rows
+        .GroupBy(r => new { r.PlayerId, r.BracketPathId }).Select(group => {
+            var first = group.First();
+            var standings = new List<PlayerStandingResult>();
+            if (first.Placement.HasValue)
+                standings.Add(new PlayerStandingResult
+                {
+                    StandingDetails = new StandingDetails
+                    {
+                        GamerTag = first.PlayerName,
+                        TournamentId = first.TournamentLink,
+                        EventId = first.EventLink,
+                        TournamentName = first.TournamentName,
+                        Placement = first.Placement.Value,
+                        IsActive = first.IsActive
+                    },
+
+                    TournamentLinks = new Links { PlayerId = first.PlayerId, PlayerLinkId = first.PlayerStartggLink, EntrantId = first.EntrantId },
+
+                    EntrantsNum = first.EntrantsNum,
+                    UrlSlug = first.TournamentSlug,
+                    LastUpdated = first.StandingUpdated ?? first.LastUpdated
+                });
+            return new BracketVictoryPathData
+            {
+                BracketPathId = first.BracketPathId,
+                BracketId = first.BracketId,
+                PlayerStartggLink = first.PlayerStartggLink,
+                TournamentLinkID = first.TournamentLink,
+                EventLinkID = first.EventLink,
+                TournamentName = first.TournamentName,
+                TournamentSlug = first.TournamentSlug,
+                RoundNum = first.RoundNum,
+                StartTime = first.StartTime,
+                EndTime = first.EndTime,
+                Lifecycle = first.StartggState is "COMPLETED" or "3" ? "Completed" : first.StartggState is "ACTIVE" or "2" ? "InProgress" : first.StartTime > DateTime.UtcNow ? "Upcoming" : first.EndTime <= DateTime.UtcNow ? "Completed" :
+                    first.StartTime <= DateTime.UtcNow && first.EndTime > DateTime.UtcNow ? "InProgress" : "Unknown",
+                PlayerTournamentCard = new PlayerTournamentCard
+                {
+                    PlayerID = first.PlayerId,
+                    PlayerName = first.PlayerName,
+                    EntrantID = first.EntrantId,
+                    PlayerResults = standings
+                },
+                EntrantSetCards = group.Where(row => row.SetId > 0).Select(row => new EntrantSetCard
+                {
+                    SetID = row.SetId.ToString(),
+                    PlayerOneID = row.PlayerOneId,
+                    PlayerTwoID = row.PlayerTwoId,
+                    EntrantOneID = row.EntrantOneId,
+                    EntrantTwoID = row.EntrantTwoId,
+                    EntrantOneName = row.PlayerOneName,
+                    EntrantTwoName = row.PlayerTwoName,
+                    PathStep = row.PathStep,
+                    PathSetId = row.PathSetId
+                }).ToList()
+            };
+        }).ToList();
     }
 }

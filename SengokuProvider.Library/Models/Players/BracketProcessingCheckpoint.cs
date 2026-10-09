@@ -7,6 +7,8 @@ public sealed class BracketProcessingCheckpoint
     public int SchemaVersion { get; set; } = 1;
     public Guid OperationId { get; set; } = Guid.NewGuid();
     public required string RequestKey { get; set; }
+    public int RequestingPlayerLink { get; set; }
+    public bool RequestingLegendReady { get; set; }
     public int BracketId { get; set; }
     public required BracketVictoryPathData Data { get; set; }
     public List<ExpectedOpponent> ExpectedOpponents { get; set; } = [];

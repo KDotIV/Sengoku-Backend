@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.RateLimiting;
 using SengokuProvider.Library.Workflows.Users;
 using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.User;
@@ -28,6 +29,9 @@ namespace SengokuProvider.API.Controllers
             return new ObjectResult("Request was not valid");
         }
         [HttpPost("CreateUser")]
+        [ValidateAntiForgeryToken]
+        [EnableRateLimiting("account-entry")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
         public async Task<IActionResult> CreateNewUser([FromBody] CreateUserCommand command)
         {
             if (command == null)
@@ -37,7 +41,7 @@ namespace SengokuProvider.API.Controllers
             }
 
             var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.StartsWith("BadRequest", StringComparison.Ordinal))
             {
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);
@@ -46,10 +50,20 @@ namespace SengokuProvider.API.Controllers
             try
             {
                 var result = await _userService.CreateUser(parsedRequest.UserName, parsedRequest.Email, parsedRequest.Password);
-                if (result > 0) return new OkObjectResult($"User {parsedRequest.UserName} created successfully.");
+                if (result > 0)
+                {
+                    var user = await _userService.GetUserById(result);
+                    if (user?.PlayerId is not > 0) throw new InvalidOperationException("Registration has no local player.");
+                    return Ok(new { userId = result, playerId = user.PlayerId.Value,
+                        response = $"User {parsedRequest.UserName} created successfully." });
+                }
+                return Conflict(new { response = "Unable to create an account with those details." });
 
-                _log.LogError("Create User execution failed.");
-                return new ObjectResult("Error message") { StatusCode = StatusCodes.Status500InternalServerError };
+
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(new { response = ex.Message });
             }
             catch (Exception ex)
             {
@@ -67,7 +81,7 @@ namespace SengokuProvider.API.Controllers
                 return new BadRequestObjectResult("Command cannot be null.") { StatusCode = StatusCodes.Status400BadRequest };
             }
             var parsedRequest = await _commandProcessor.ParseRequest(cmd);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
+            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.StartsWith("BadRequest", StringComparison.Ordinal))
             {
                 _log.LogError($"Request parsing failed: {parsedRequest.Response}");
                 return new BadRequestObjectResult(parsedRequest.Response);

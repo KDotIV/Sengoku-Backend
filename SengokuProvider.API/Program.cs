@@ -1,3 +1,4 @@
+using SengokuProvider.API.Authentication;
 using SengokuProvider.Library.Workflows.Users;
 using Azure.Messaging.ServiceBus;
 using ExcluSightsLibrary.DiscordServices;
@@ -73,17 +74,11 @@ builder.Services.AddSingleton<EventListenerManager>(provider =>
 // start socket at app boot
 builder.Services.AddHostedService<DiscordStartupService>();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAllOrigins", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
-    });
-});
+builder.AddAccountAuthentication(connectionString!);
 
 //Scopes
+builder.Services.AddScoped<IBracketTournamentBootstrap>(sp => new BracketTournamentBootstrap(connectionString!,
+    sp.GetRequiredService<GraphQLHttpClient>(), sp.GetRequiredService<RequestThrottler>(), sp.GetRequiredService<IEventOperations>()));
 builder.Services.AddScoped<IBracketCheckpointStore>(_ => new BracketCheckpointStore(connectionString!));
 builder.Services.AddScoped<IAzureBusApiService, AzureBusApiService>(provider =>
 {
@@ -166,7 +161,7 @@ builder.Services.AddScoped<IPlayerOperations>(provider =>
     var serviceBus = provider.GetService<IAzureBusApiService>();
     var playerIntakeService = provider.GetRequiredService<IPlayerIntakeService>();
     var bracketCheckpointStore = provider.GetRequiredService<IBracketCheckpointStore>();
-    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, bracketCheckpointStore);
+    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, bracketCheckpointStore, provider.GetRequiredService<IBracketTournamentBootstrap>());
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {
@@ -216,7 +211,7 @@ builder.Services.AddScoped<ICustomerReportService, CustomerReportService>(sp =>
     return new CustomerReportService(customerQuery, email, sheets, log);
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -227,9 +222,11 @@ var app = builder.Build();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseCors("AllowAllOrigins");
+app.UseCors("AccountFrontend");
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

@@ -1,5 +1,7 @@
 # Linking start.gg profiles
 
+For the new registration, login, session and CSRF contract, see [account-authentication.md](account-authentication.md). Public profile association below is not verified ownership.
+
 Apply `database/migrations/20261006_user_startgg_profile.sql` before using the workflow.
 It adds `users.startgg_profile` (JSONB) and unique indexes on positive
 `users.user_link` and `users.player_id`. It reuses the existing

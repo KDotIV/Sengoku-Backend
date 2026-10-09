@@ -12,6 +12,21 @@
     }
     public class FlatBracketPathEntrantCards
     {
+        public int? BracketId { get; set; }
+        public string? TournamentSlug { get; set; }
+        public string? StartggState { get; set; }
+        public DateTime? StartTime { get; set; }
+        public DateTime? EndTime { get; set; }
+        public DateTime LastUpdated { get; set; }
+        public DateTime? StandingUpdated { get; set; }
+        public string PlayerName { get; set; } = "";
+        public int PlayerStartggLink { get; set; }
+        public int EntrantId { get; set; }
+        public int? Placement { get; set; }
+        public int EntrantsNum { get; set; }
+        public bool IsActive { get; set; }
+        public int? PathStep { get; set; }
+        public string? PathSetId { get; set; }
         public int BracketPathId { get; set; }
         public int TournamentLink { get; set; }
         public string TournamentName { get; set; } = string.Empty;

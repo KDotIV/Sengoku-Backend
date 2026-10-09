@@ -20,6 +20,9 @@ namespace SengokuProvider.Library.Services.Players
         public Task<PhaseGroupGraphQL> QueryBracketDataFromStartggByBracketId(int bracketId);
         public Task<List<PlayerStandingResult>> GetStandingsDataByPlayerIds(int[] playerIds, int[] tournamentIds);
         public Task<List<Links>> GetPlayersByEntrantLinks(int[] entrantId);
-        public Task<BracketVictoryPathData?> GetBracketPathByPlayerId(int playerId);
+        public Task<List<BracketVictoryPathData>> GetBracketPathByPlayerId(int playerId) => GetBracketPathByPlayerIds([playerId]);
+        public Task<List<BracketVictoryPathData>> GetBracketPathByPlayerIds(int[] playerIds);
+        Task<List<BracketVictoryPathData>> GetBracketPathByPlayerName(string playerName);
+        Task<List<BracketVictoryPathData>> GetBracketPathByTournamentSlug(string tournamentSlug);
     }
 }

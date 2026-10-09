@@ -2,6 +2,9 @@
 {
     public class UserPlayerData
     {
+        public int? LocalPlayerId { get; set; }
+        public int StartggPlayerId { get; set; }
+        public bool Verified { get; set; } = false;
         public required int PlayerId { get; set; }
         public required string PlayerName { get; set; }
         public required string PlayerEmail { get; set; }

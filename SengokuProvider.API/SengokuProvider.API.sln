@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.10.12224.181 stable
+VisualStudioVersion = 18.10.12224.181
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SengokuProvider.API", "SengokuProvider.API.csproj", "{70A185E4-FEA9-4719-AC63-1053FF0C017F}"
 EndProject
@@ -25,6 +25,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{B5473BBE
 	ProjectSection(SolutionItems) = preProject
 		..\tests\UserOnboarding.Tests\UserOnboarding.Tests.csproj = ..\tests\UserOnboarding.Tests\UserOnboarding.Tests.csproj
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccountAuthentication.Tests", "..\tests\AccountAuthentication.Tests\AccountAuthentication.Tests.csproj", "{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BracketPathQuery.Tests", "..\tests\BracketPathQuery.Tests\BracketPathQuery.Tests.csproj", "{F72CDF29-78C9-B51E-05E1-B848593CC544}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -69,6 +73,18 @@ Global
 		{F3837294-431D-D8B8-67F2-4DAA42F37264}.QA|Any CPU.Build.0 = Debug|Any CPU
 		{F3837294-431D-D8B8-67F2-4DAA42F37264}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F3837294-431D-D8B8-67F2-4DAA42F37264}.Release|Any CPU.Build.0 = Release|Any CPU
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}.QA|Any CPU.ActiveCfg = Debug|Any CPU
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}.QA|Any CPU.Build.0 = Debug|Any CPU
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F72CDF29-78C9-B51E-05E1-B848593CC544}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F72CDF29-78C9-B51E-05E1-B848593CC544}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F72CDF29-78C9-B51E-05E1-B848593CC544}.QA|Any CPU.ActiveCfg = Debug|Any CPU
+		{F72CDF29-78C9-B51E-05E1-B848593CC544}.QA|Any CPU.Build.0 = Debug|Any CPU
+		{F72CDF29-78C9-B51E-05E1-B848593CC544}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F72CDF29-78C9-B51E-05E1-B848593CC544}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -80,6 +96,8 @@ Global
 		{709CB3C0-85DA-4B41-A434-7FBE29770ED5} = {9B18D3C2-D611-485D-8FA2-036AC6FE0CFC}
 		{3814B999-5371-7453-5E5F-A1471D53C51E} = {FACDBAB8-DDD1-4C7C-B0EA-40EE5FC647D0}
 		{F3837294-431D-D8B8-67F2-4DAA42F37264} = {B5473BBE-9773-4722-BE18-A2218D051396}
+		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16} = {B5473BBE-9773-4722-BE18-A2218D051396}
+		{F72CDF29-78C9-B51E-05E1-B848593CC544} = {B5473BBE-9773-4722-BE18-A2218D051396}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CB2BCAA9-54AD-45BD-8328-8690D5B4699F}

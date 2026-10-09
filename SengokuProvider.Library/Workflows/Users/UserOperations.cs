@@ -88,7 +88,7 @@ public sealed class UserOperations : IUserOperations
         return new UserPlayerDataResponse
         {
             Data = data,
-            Response = data.PlayerId > 0 ? "Successfully Retrieved User" : "Failed to Retrieve User"
+            Response = data.StartggPlayerId > 0 || data.PlayerId > 0 ? "Successfully Retrieved User" : "Failed to Retrieve User"
         };
     }
 }
