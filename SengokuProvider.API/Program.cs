@@ -161,7 +161,8 @@ builder.Services.AddScoped<IPlayerOperations>(provider =>
     var serviceBus = provider.GetService<IAzureBusApiService>();
     var playerIntakeService = provider.GetRequiredService<IPlayerIntakeService>();
     var bracketCheckpointStore = provider.GetRequiredService<IBracketCheckpointStore>();
-    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, bracketCheckpointStore, provider.GetRequiredService<IBracketTournamentBootstrap>());
+    return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, 
+        bracketCheckpointStore, provider.GetRequiredService<IBracketTournamentBootstrap>());
 });
 builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
 {
