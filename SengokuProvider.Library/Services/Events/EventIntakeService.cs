@@ -88,7 +88,7 @@ public sealed class EventIntakeService : IEventIntakeService
                         foreach (var newAddress in data)
                         {
                             var createNewInsertCommand = @"
-                                INSERT INTO addresses (address, latitude, longitude) 
+                                INSERT INTO addresses (address, latitude, longitude)
                                 VALUES (@Address, @Latitude, @Longitude) RETURNING id;";
 
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
@@ -139,32 +139,27 @@ public sealed class EventIntakeService : IEventIntakeService
                             if (newEvent == null) continue;
                             await EnsureLinkIdExists(newEvent.LinkID, conn);
 
-                            var createNewInsertCommand = @"INSERT INTO events (event_name, event_description, region, address_id, start_time, end_time, link_id, closing_registration_date,registration_open,online_tournament, url_slug, last_updated) 
-                            VALUES (@Event_Name, @Event_Description, @Region, @Address_Id, @Start_Time, @End_Time, @Link_Id, @ClosingRegistration, @IsRegistrationOpen, @IsOnline, @Slug, @Updated)
-                            ON CONFLICT (link_id) DO UPDATE SET
-                                event_name = EXCLUDED.event_name,
-                                event_description = EXCLUDED.event_description,
-                                start_time = EXCLUDED.start_time,
-                                end_time = EXCLUDED.end_time,
-                                closing_registration_date = EXCLUDED.closing_registration_date,
-                                registration_open = EXCLUDED.registration_open,
-                                online_tournament = EXCLUDED.online_tournament,
-                                url_slug = EXCLUDED.url_slug;";
+                            var createNewInsertCommand = @"SELECT event_feed_intake_event(@Event_Name,@Event_Description,@Region,@Address_Id,
+                                @Start_Time,@End_Time,@Link_Id,@ClosingRegistration,@IsRegistrationOpen,@IsOnline,@Slug,@Updated,@City,@State,@Country)";
                             using (var command = new NpgsqlCommand(createNewInsertCommand, conn))
                             {
+                                command.Transaction = transaction;
+                                command.Parameters.AddWithValue("@City", newEvent.City ?? string.Empty);
+                                command.Parameters.AddWithValue("@State", newEvent.AddrState?.ToUpperInvariant() ?? string.Empty);
+                                command.Parameters.AddWithValue("@Country", newEvent.CountryCode?.ToUpperInvariant() ?? string.Empty);
                                 command.Parameters.AddWithValue("@Event_Name", newEvent.EventName ?? string.Empty);
                                 command.Parameters.AddWithValue(@"Event_Description", newEvent.EventDescription ?? string.Empty);
                                 command.Parameters.AddWithValue(@"Region", newEvent.Region ?? string.Empty);
                                 command.Parameters.AddWithValue("@Address_Id", newEvent.AddressID);
-                                command.Parameters.AddWithValue(@"Start_Time", newEvent.StartTime ?? default);
-                                command.Parameters.AddWithValue(@"End_Time", newEvent.EndTime ?? default);
+                                command.Parameters.AddWithValue(@"Start_Time", NpgsqlTypes.NpgsqlDbType.Timestamp, UtcClock(newEvent.StartTime));
+                                command.Parameters.AddWithValue(@"End_Time", NpgsqlTypes.NpgsqlDbType.Timestamp, UtcClock(newEvent.EndTime));
                                 command.Parameters.AddWithValue(@"Link_Id", newEvent.LinkID);
-                                command.Parameters.AddWithValue(@"ClosingRegistration", newEvent.ClosingRegistration ?? default);
+                                command.Parameters.AddWithValue(@"ClosingRegistration", NpgsqlTypes.NpgsqlDbType.Timestamp, UtcClock(newEvent.ClosingRegistration));
                                 command.Parameters.AddWithValue(@"IsRegistrationOpen", newEvent.IsRegistrationOpen ?? default);
                                 command.Parameters.AddWithValue(@"IsOnline", newEvent.IsOnline ?? false);
                                 command.Parameters.AddWithValue(@"Slug", newEvent.UrlSlug ?? string.Empty);
-                                command.Parameters.AddWithValue(@"Updated", newEvent.LastUpdate);
-                                var result = await command.ExecuteNonQueryAsync();
+                                command.Parameters.AddWithValue(@"Updated", NpgsqlTypes.NpgsqlDbType.Timestamp, UtcClock(newEvent.LastUpdate));
+                                var result = Convert.ToInt32(await command.ExecuteScalarAsync());
                                 if (result > 0) totalSuccess++;
                                 Console.WriteLine($"Updated Event: {newEvent.LinkID} {newEvent.EventName}");
                             }
@@ -293,6 +288,11 @@ public sealed class EventIntakeService : IEventIntakeService
 
             return false;
         }
+        // PostgreSQL's legacy timestamp columns store UTC clock values without a timezone.
+        private static object UtcClock(DateTime? value) => value.HasValue
+            ? DateTime.SpecifyKind(value.Value.Kind == DateTimeKind.Local ? value.Value.ToUniversalTime() : value.Value, DateTimeKind.Unspecified)
+            : DBNull.Value;
+
         private async Task EnsureLinkIdExists(int linkId, NpgsqlConnection conn)
         {
             var cmdText = @"

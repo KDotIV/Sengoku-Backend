@@ -1,4 +1,4 @@
-﻿using GraphQL.Client.Http;
+using GraphQL.Client.Http;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
@@ -12,7 +12,7 @@ using System.Net;
 
 namespace SengokuProvider.Library.Services.Events
 {
-    public class EventQueryService : IEventQueryService
+    public partial class EventQueryService : IEventQueryService
     {
         private readonly string _connectionString;
         private readonly ICommonDatabaseService _commonServices;
@@ -445,7 +445,7 @@ namespace SengokuProvider.Library.Services.Events
                             filter: {
                                 id: $tournamentId
                                     }}) {
-                                    nodes {id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt,slug}}}";
+                                    nodes {id,name,addrState,countryCode,city,isOnline,lat,lng,registrationClosesAt,isRegistrationOpen,venueAddress,startAt,endAt,slug}}}";
 
             var request = new GraphQLHttpRequest
             {

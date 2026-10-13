@@ -30,6 +30,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AccountAuthentication.Tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BracketPathQuery.Tests", "..\tests\BracketPathQuery.Tests\BracketPathQuery.Tests.csproj", "{F72CDF29-78C9-B51E-05E1-B848593CC544}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventFeeds.Tests", "..\tests\EventFeeds.Tests\EventFeeds.Tests.csproj", "{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +87,12 @@ Global
 		{F72CDF29-78C9-B51E-05E1-B848593CC544}.QA|Any CPU.Build.0 = Debug|Any CPU
 		{F72CDF29-78C9-B51E-05E1-B848593CC544}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F72CDF29-78C9-B51E-05E1-B848593CC544}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}.QA|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}.QA|Any CPU.Build.0 = Debug|Any CPU
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -98,6 +106,7 @@ Global
 		{F3837294-431D-D8B8-67F2-4DAA42F37264} = {B5473BBE-9773-4722-BE18-A2218D051396}
 		{68A73C92-0E01-AFA9-A56B-A71B5EFA6E16} = {B5473BBE-9773-4722-BE18-A2218D051396}
 		{F72CDF29-78C9-B51E-05E1-B848593CC544} = {B5473BBE-9773-4722-BE18-A2218D051396}
+		{C6BA9647-5F84-BC0F-D7C2-720E9C2C7473} = {B5473BBE-9773-4722-BE18-A2218D051396}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {CB2BCAA9-54AD-45BD-8328-8690D5B4699F}

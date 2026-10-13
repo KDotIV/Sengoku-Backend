@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 
 namespace SengokuProvider.Library.Models.Events
 {
@@ -23,6 +23,9 @@ namespace SengokuProvider.Library.Models.Events
 
         [JsonProperty("name")]
         public required string Name { get; set; }
+
+        [JsonProperty("countryCode")]
+        public string? CountryCode { get; set; }
 
         [JsonProperty("addrState")]
         public string AddrState { get; set; } = string.Empty;

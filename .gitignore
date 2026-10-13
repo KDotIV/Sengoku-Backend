@@ -21,4 +21,8 @@ SengokuProvider.Worker/appsettings.Development.json
 /ExcluSightsLibrary/obj
 /ExcluSightsLibrary/bin/Release/net8.0
 /tests/BracketWorkflow.Tests/Fixtures
-/database/migrations
+/database/migrations/*
+!/database/migrations/20261013_event_feeds.sql
+!/database/migrations/20261013_event_feed_functions.sql
+/build-event-feeds.log
+!/database/migrations/20261013_event_feed_integration_ux.sql
