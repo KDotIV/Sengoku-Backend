@@ -11,8 +11,10 @@ public sealed partial class EventFeedStore(string connectionString, IDataProtect
     private readonly IDataProtector _protector = protection.CreateProtector("Sengoku.EventFeeds.Discord.v1");
     private const string Columns = "id, user_id AS UserId, name, provider, destination_protected AS DestinationProtected, filters::text AS Filters, frequency_hours AS FrequencyHours, enabled, next_run_at AS NextRunAtUtc, version, schedule_mode AS ScheduleMode, daily_at_utc AS DailyAtUtc, discord_guild_id AS DiscordGuildId, discord_channel_id AS DiscordChannelId";
     private static EventFeedView View(FeedRow row) => new(row.Id, row.Name, row.Provider,
-        JsonSerializer.Deserialize<EventFeedFilter>(row.Filters)!, new FeedSchedule {
-            Mode = row.ScheduleMode, IntervalHours = row.ScheduleMode == "Interval" ? row.FrequencyHours : null,
+        JsonSerializer.Deserialize<EventFeedFilter>(row.Filters)!, new FeedSchedule 
+        {
+            Mode = row.ScheduleMode, 
+            IntervalHours = row.ScheduleMode == "Interval" ? row.FrequencyHours : null,
             UtcTime = row.DailyAtUtc.HasValue ? TimeOnly.FromTimeSpan(row.DailyAtUtc.Value).ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture) : null
         }, row.Enabled, row.ScheduleMode == "OnInsert" || row.DestinationProtected == null ? null : row.NextRunAtUtc,
         row.Version, row.DestinationProtected == null ? "AwaitingDiscord" : "Connected", row.DiscordGuildId, row.DiscordChannelId);
@@ -21,6 +23,7 @@ public sealed partial class EventFeedStore(string connectionString, IDataProtect
     {
         var json = await conn.ExecuteScalarAsync<string>(new CommandDefinition("SELECT event_feed_catalogue()::text", cancellationToken: ct))
             ?? throw new InvalidOperationException("Feed catalogue is unavailable.");
+
         return JsonSerializer.Deserialize<FeedCatalogue>(json) ?? throw new InvalidOperationException("Feed catalogue is invalid.");
     }, ct);
     private async Task<T> Database<T>(Func<NpgsqlConnection, Task<T>> action, CancellationToken ct)
@@ -58,10 +61,14 @@ public sealed partial class EventFeedStore(string connectionString, IDataProtect
     public Task<EventFeedView?> Save(int userId, Guid? id, SaveEventFeedRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 100 || request.Name.Any(char.IsControl)) throw new ArgumentException("Use a feed name of 1–100 characters.");
+
         if (request.Filter == null) throw new ArgumentException("Filters are required.");
+
         var filter = request.Filter.Normalize();
         if (request.Schedule == null) throw new ArgumentException("A schedule is required.");
+
         var daily = request.Schedule.Validate();
+
         return Database(async conn =>
         {
             var row = await conn.QuerySingleOrDefaultAsync<FeedRow>(new CommandDefinition(

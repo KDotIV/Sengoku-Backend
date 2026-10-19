@@ -24,9 +24,12 @@ public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFact
     public async Task<string> Begin(int userId, Guid feedId, string sessionToken, CancellationToken ct)
     {
         CheckEnabled();
+
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+
         if (!await connections.BeginAuthorization(userId, feedId, Hash(sessionToken), Hash(state), ct))
             throw new ArgumentException("Feed or session unavailable. Reload and try again.");
+
         return "https://discord.com/oauth2/authorize?response_type=code&scope=webhook.incoming&client_id="
             + Uri.EscapeDataString(config["DiscordOAuth:ClientId"]!) + "&redirect_uri=" + Uri.EscapeDataString(config["DiscordOAuth:RedirectUri"]!) + "&state=" + state;
     }
@@ -35,28 +38,39 @@ public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFact
     {
         CheckEnabled();
         if (state is not { Length: 64 } || !state.All(Uri.IsHexDigit)) throw new ArgumentException("Invalid Discord authorization state.");
+
         var pending = await connections.ConsumeAuthorization(userId, Hash(sessionToken), Hash(state), ct)
             ?? throw new ArgumentException("Discord authorization expired or was already used. Reconnect Discord.");
+
         if (!string.IsNullOrEmpty(error)) throw new ArgumentException("Discord connection was declined.");
         if (string.IsNullOrWhiteSpace(code) || code.Length > 4096) throw new ArgumentException("Missing Discord authorization code.");
+
         using var client = clients.CreateClient("DiscordFeedOAuth");
+
         using var form = new FormUrlEncodedContent(new Dictionary<string,string> {
             ["client_id"] = config["DiscordOAuth:ClientId"]!, ["client_secret"] = config["DiscordOAuth:ClientSecret"]!,
             ["grant_type"] = "authorization_code", ["code"] = code, ["redirect_uri"] = config["DiscordOAuth:RedirectUri"]!
         });
+
         using var response = await client.PostAsync("https://discord.com/api/v10/oauth2/token", form, ct);
+
         if (!response.IsSuccessStatusCode) throw new HttpRequestException("Discord rejected authorization. Reconnect Discord.");
+
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+
         if (!json.RootElement.TryGetProperty("webhook", out var webhook) || webhook.ValueKind != JsonValueKind.Object)
             throw new HttpRequestException("Discord did not return a channel webhook.");
+
         static string Required(JsonElement obj, string property) => obj.TryGetProperty(property, out var value)
             && value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()) ? value.GetString()!
             : throw new HttpRequestException("Discord returned an incomplete webhook.");
+
         var id = Required(webhook, "id");
         var token = Required(webhook, "token");
         var guild = Required(webhook, "guild_id");
         var channel = Required(webhook, "channel_id");
         var destination = DiscordEventFeedOutlet.ValidateWebhook($"https://discord.com/api/webhooks/{id}/{token}");
+
         try
         {
             if (!await connections.ConnectDiscord(userId, pending.FeedId, pending.Version, destination, guild, channel, ct))

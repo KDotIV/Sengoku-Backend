@@ -40,6 +40,7 @@ Check((await discord.Send(webhook, digest, default)).Status == "Unknown", "ambig
 transport.Status = HttpStatusCode.NotFound;
 Check((await discord.Send(webhook, digest, default)).Status == "InvalidDestination", "deleted webhook classified");
 Console.WriteLine("PASS filter validation, Southeast preset, safe webhook URLs, Discord formatting, acknowledgements and rate limits");
+await WebhookConnectionChecks.Run();
 if (args.Length < 1) { Console.WriteLine("SKIP PostgreSQL checks: pass appsettings path to use a disposable test schema."); return; }
 using var settings = JsonDocument.Parse(await File.ReadAllTextAsync(args[0]));
 var configured = settings.RootElement.GetProperty("ConnectionStrings").GetProperty("AlexandriaConnectionString").GetString()!;

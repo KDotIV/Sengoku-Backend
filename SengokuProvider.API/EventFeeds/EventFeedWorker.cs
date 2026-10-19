@@ -50,6 +50,7 @@ public static class EventFeedConfiguration
         builder.Services.AddScoped<IEventFeedDispatcher>(sp => sp.GetRequiredService<EventFeedStore>());
         builder.Services.AddScoped<IDiscordFeedConnectionStore>(sp => sp.GetRequiredService<EventFeedStore>());
         builder.Services.AddScoped<IDiscordFeedConnection, DiscordFeedConnection>();
+        builder.Services.AddScoped<DiscordWebhookConnection>();
         builder.Services.AddScoped<IEventFeedQueryService>(sp => (IEventFeedQueryService)sp.GetRequiredService<IEventQueryService>());
         builder.Services.AddHttpClient("DiscordFeedOAuth", client => client.Timeout = TimeSpan.FromSeconds(20))
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();

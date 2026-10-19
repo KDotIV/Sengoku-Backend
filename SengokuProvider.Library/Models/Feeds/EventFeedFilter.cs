@@ -20,14 +20,18 @@ public sealed record EventFeedFilter
     {
         if (GameIds == null || GameIds.Length is < 1 or > 20 || GameIds.Any(id => id <= 0))
             throw new ArgumentException("Select between 1 and 20 games.");
+
         if (RegionIds == null || RegionIds.Length > 60 || RegionIds.Any(s => s == null || !Regex.IsMatch(s, @"\A[a-z0-9-]{1,50}\z")))
             throw new ArgumentException("Invalid region selection.");
+
         if (States == null || States.Length > 60 || States.Any(s => s == null || !Regex.IsMatch(s.Trim(), @"\A[A-Za-z]{2}\z")))
             throw new ArgumentException("States must be two-letter codes from the catalogue.");
+
         if (Attendance is not ("InPerson" or "Online" or "Both")) throw new ArgumentException("Invalid attendance selection.");
         if (Attendance != "Online" && RegionIds.Length == 0 && States.Length == 0) throw new ArgumentException("Select at least one region.");
         if (LookAheadDays is < 1 or > 90 || MinimumEntrants is < 0 or > 1000000 || MaxEvents is < 1 or > 10 || City?.Length > 100)
             throw new ArgumentException("Invalid feed limits (1–90 days, 1–10 events).");
+
         return this with { GameIds = GameIds.Distinct().ToArray(), RegionIds = RegionIds.Distinct().ToArray(),
             States = States.Select(s => s.Trim().ToUpperInvariant()).Distinct().ToArray(), City = string.IsNullOrWhiteSpace(City) ? null : City.Trim() };
     }

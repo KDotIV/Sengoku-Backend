@@ -114,3 +114,30 @@ dotnet run --project tests/EventFeeds.Tests/EventFeeds.Tests.csproj --no-build -
 Tests create/drop a disposable schema using the configured connection, apply migrations twice, and mock all Discord HTTP. They cover editable catalogues, schedules, owner isolation, encryption, HTTP authentication/CSRF, concurrent delivery claims, insert ordering and rollback, batches, retries/recovery, and OAuth session binding/replay. No production schema migration or real Discord message is performed by tests. Without the appsettings path, only non-database checks run.
 
 References: [Discord OAuth2 and incoming webhooks](https://github.com/discord/discord-api-docs/blob/main/developers/topics/oauth2.mdx), [Discord rate limits](https://github.com/discord/discord-api-docs/blob/main/developers/topics/rate-limits.mdx).
+
+## Connect an existing Discord webhook
+
+`POST /api/event-feeds/discord/webhook` accepts an existing incoming channel webhook. It requires the account session cookie and `X-CSRF-TOKEN`, just like other feed writes. OAuth client configuration is not required for this path.
+
+```json
+{
+  "feedName": "Georgia Strive Feed",
+  "webhookUrl": "<your Discord webhook URL>"
+}
+```
+
+Alternatively, replace `feedName` with `feedId`:
+
+```json
+{
+  "feedId": "3ee8d4bc-0ee0-4f11-a243-eea51e20a3e7",
+  "webhookUrl": "<your Discord webhook URL>",
+  "expectedVersion": 2
+}
+```
+
+Provide exactly one selector. Names are trimmed and matched exactly, ignoring case, within the current user's feeds. Duplicate matching names return 409; use the GUID to disambiguate. Missing or unowned feeds return 404. `expectedVersion` is optional; when supplied it must match the current version. Concurrent edits during verification are rejected even when it is omitted.
+
+The API verifies the webhook with Discord using GET, requires an incoming server/channel webhook, and encrypts the URL using the existing connection store. Only HTTPS discord.com webhook URLs without query parameters or fragments are accepted. Redirects are disabled. Invalid/deleted webhooks return 400; provider/transport failures return a generic 500 without exposing credentials. Success returns 200 with the updated feed, its incremented version, and `Connected` status, never the webhook URL/token.
+
+Attaching replaces the feed's destination but never deletes the old or supplied webhook. It does not send a test message or change the feed's filters, enabled flag, or schedule mode. Delivery still requires the worker and `EventFeeds:DeliveryEnabled`. Use a normal text-channel webhook: forum/media channels require thread parameters that this delivery pipeline does not support. Treat webhook URLs as secrets and keep request bodies out of access logs.

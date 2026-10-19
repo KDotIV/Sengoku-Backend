@@ -14,24 +14,37 @@ namespace SengokuProvider.API.Controllers;
 public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryService events, IDiscordFeedConnection discord, IConfiguration config, ILogger<EventFeedsController> log) : ControllerBase
 {
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, System.Globalization.CultureInfo.InvariantCulture);
+
     [HttpGet("options")]
     public Task<IActionResult> Options(CancellationToken ct) => Handle(async () => {
         var catalogue = await store.Options(ct);
+
         return Ok(new { catalogue.Games, catalogue.Regions, catalogue.Schedules,
             discordConnectionAvailable = discord.Enabled, deliveryEnabled = config.GetValue<bool>("EventFeeds:DeliveryEnabled") });
     });
     [HttpPost("{id:guid}/discord/connect"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> ConnectDiscord(Guid id, CancellationToken ct) => Handle(async () => {
         if (!discord.Enabled) return Problem("Discord connection is not configured.", statusCode: 503);
+
         var session = Request.Cookies[SessionAuthenticationHandler.CookieName];
         if (session == null) return Unauthorized();
+
         return Ok(new { authorizationUrl = await discord.Begin(UserId, id, session, ct) });
     });
+    [HttpPost("discord/webhook"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
+    public Task<IActionResult> ConnectWebhook(ConnectDiscordWebhookRequest request,
+        [FromServices] DiscordWebhookConnection connection, CancellationToken ct) => Handle(async () => {
+        var feed = await connection.Connect(UserId, request, ct);
+        return feed == null ? NotFound() : Ok(feed);
+    });
+
     [HttpGet("discord/callback"), EnableRateLimiting("account-entry")]
     public Task<IActionResult> DiscordCallback(string? state, string? code, string? error, CancellationToken ct) => Handle(async () => {
         if (!discord.Enabled) return Problem("Discord connection is not configured.", statusCode: 503);
+
         var session = Request.Cookies[SessionAuthenticationHandler.CookieName];
         if (session == null) return Unauthorized();
+
         return Ok(await discord.Complete(UserId, session, state, code, error, ct));
     });
     [HttpGet]
@@ -41,15 +54,18 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
         var feed = await store.Get(UserId, id, ct); return feed == null ? NotFound() : Ok(feed);
     });
     [HttpGet("{id:guid}/deliveries")]
-    public Task<IActionResult> History(Guid id, CancellationToken ct) => Handle(async () => {
+    public Task<IActionResult> History(Guid id, CancellationToken ct) => Handle(async () => 
+    {
         if (await store.Get(UserId, id, ct) == null) return NotFound();
         return Ok(await store.History(UserId, id, ct));
     });
     [HttpPost("preview"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> Preview(EventFeedFilter filter, CancellationToken ct) => Handle(async () =>
         Ok(await events.GetUpcomingFeedEvents(filter, DateTime.UtcNow, ct)));
-    [HttpPost, ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
-    public Task<IActionResult> Create(SaveEventFeedRequest request, CancellationToken ct) => Handle(async () => {
+
+    [HttpPost("create"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
+    public Task<IActionResult> Create(SaveEventFeedRequest request, CancellationToken ct) => Handle(async () => 
+    {
         var feed = await store.Save(UserId, null, request, ct);
         return CreatedAtAction(nameof(Get), new { id = feed!.Id }, feed);
     });
