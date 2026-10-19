@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Common.Interfaces;
@@ -27,36 +27,10 @@ namespace SengokuProvider.API.Controllers
         {
             return new OkObjectResult("I'm Alive...");
         }
+        // Legacy subscriptions had no account ownership or protected webhook storage.
         [HttpPost("SubscribeDiscordWebhookToFeed")]
-        public async Task<IActionResult> CreateFeedToDiscordWebhook([FromBody] CreateDiscordFeedCommand command)
-        {
-            if (command == null)
-            {
-                _logger.LogError("Command cannot be null");
-                return new BadRequestObjectResult("Command cannot be null") { StatusCode = StatusCodes.Status400BadRequest };
-            }
-            var parsedRequest = await _commandProcessor.ParseRequest(command);
-            if (!string.IsNullOrEmpty(parsedRequest.Response) && parsedRequest.Response.Equals("BadRequest"))
-            {
-                _logger.LogError($"Request parsing failed: {parsedRequest.Response}");
-                return new BadRequestObjectResult(parsedRequest.Response);
-            }
-            try
-            {
-                var result = await _discordWebhook.SubscribeToFeed(command.ServerName, command.SubscribedChannel, command.WebhookUrl, command.FeedId);
-                if (result)
-                {
-                    return Ok(result);
-                }
-                _logger.LogError("SubscribeToFeed execution failed.");
-                return new ObjectResult("Unexpected Error Occured");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error subscribing to feed.");
-                return new ObjectResult($"Error message: {ex.Message} - {ex.StackTrace}") { StatusCode = StatusCodes.Status500InternalServerError };
-            }
-        }
+        public IActionResult CreateFeedToDiscordWebhook() => StatusCode(StatusCodes.Status410Gone,
+            new { response = "Use the authenticated /api/event-feeds endpoints to configure Discord event digests." });
         [HttpGet("GetFeedsByType")]
         public async Task<IActionResult> GetFeedsByType([FromQuery] int feedType)
         {

@@ -1,3 +1,4 @@
+using SengokuProvider.API.EventFeeds;
 using SengokuProvider.API.Authentication;
 using SengokuProvider.Library.Workflows.Users;
 using Azure.Messaging.ServiceBus;
@@ -75,6 +76,7 @@ builder.Services.AddSingleton<EventListenerManager>(provider =>
 builder.Services.AddHostedService<DiscordStartupService>();
 
 builder.AddAccountAuthentication(connectionString!);
+builder.AddEventFeeds(connectionString!);
 
 //Scopes
 builder.Services.AddScoped<IBracketTournamentBootstrap>(sp => new BracketTournamentBootstrap(connectionString!,

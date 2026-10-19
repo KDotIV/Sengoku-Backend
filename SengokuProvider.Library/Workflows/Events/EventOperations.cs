@@ -339,12 +339,13 @@ namespace SengokuProvider.Library.Workflows.Events
                     {
                         LinkID = node.Id,
                         EventName = node.Name,
+                        City = node.City, AddrState = node.AddrState, CountryCode = node.CountryCode,
                         EventDescription = "Sample description",
                         Region = regionId,
                         AddressID = addressId,
                         StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
                         EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
-                        ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
+                        ClosingRegistration = node.RegistrationClosesAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime : null,
                         IsRegistrationOpen = node.IsRegistrationOpen,
                         IsOnline = node.IsOnline,
                         LastUpdate = DateTime.UtcNow,
@@ -358,10 +359,11 @@ namespace SengokuProvider.Library.Workflows.Events
                     {
                         LinkID = node.Id,
                         EventName = node.Name,
+                        City = node.City, AddrState = node.AddrState, CountryCode = node.CountryCode,
                         EventDescription = "Sample description",
                         StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
                         EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
-                        ClosingRegistration = DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime,
+                        ClosingRegistration = node.RegistrationClosesAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime : null,
                         IsRegistrationOpen = node.IsRegistrationOpen,
                         IsOnline = node.IsOnline,
                         LastUpdate = DateTime.UtcNow,
@@ -507,9 +509,9 @@ namespace SengokuProvider.Library.Workflows.Events
         #region Query Commands
         private async Task<EventGraphQLResult?> QueryStartggTournamentDataByEventLink(int eventLinkId)
         {
-            var tempQuery = @"query TournamentQuery($tournamentId: ID) { 
-                                tournaments(query: {filter: {id: $tournamentId}}) { 
-                                    nodes { id, name, addrState, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug, 
+            var tempQuery = @"query TournamentQuery($tournamentId: ID) {
+                                tournaments(query: {filter: {id: $tournamentId}}) {
+                                    nodes { id, name, addrState,countryCode, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug,
                                         events { id, slug, numEntrants, videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
@@ -570,7 +572,7 @@ namespace SengokuProvider.Library.Workflows.Events
                             filter: {
                               videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
                             }}) {
-                            nodes { id name slug startAt endAt events { id, slug, videogame { id }}}}}";
+                            nodes { id name slug startAt endAt addrState countryCode city lat lng venueAddress registrationClosesAt isRegistrationOpen isOnline events { id, slug, numEntrants, videogame { id }}}}}";
 
             var request = new GraphQLHttpRequest
             {
@@ -628,13 +630,13 @@ namespace SengokuProvider.Library.Workflows.Events
         }
         private async Task<EventGraphQLResult?> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
         {
-            var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) 
+            var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp)
         { tournaments(query: {
             perPage: $perPage, page: $pagenum
             filter: {
                 addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                     }}) {
-                    nodes { id,name,addrState,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
+                    nodes { id,name,addrState,countryCode,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
                     pageInfo { total totalPages page perPage }}}";
 
             var allNodes = new List<EventNode>();
@@ -712,8 +714,8 @@ namespace SengokuProvider.Library.Workflows.Events
         private async Task<TournamentLinkGraphQLResult?> QueryStartggTournamentDataByLinkId(int tournamentLink)
         {
             var tempQuery = @"query getEventById($id: ID) {
-                                        event(id: $id) { id slug numEntrants videogame { id } 
-                                            tournament { id, name, addrState, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug }}}";
+                                        event(id: $id) { id slug numEntrants videogame { id }
+                                            tournament { id, name, addrState,countryCode, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug }}}";
             var request = new GraphQLHttpRequest
             {
                 Query = tempQuery,
