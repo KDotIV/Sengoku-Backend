@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Dapper;
 using Npgsql;
 using System.Net.Http.Headers;
@@ -6,7 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using SengokuProvider.Library.Models.User;
-namespace SengokuProvider.API.Authentication;
+namespace SengokuProvider.Library.Services.Users;
 
 public sealed record VerifiedStartggLink(int UserId, int PlayerId, int StartggUserId, int StartggPlayerId, string Slug, DateTime VerifiedAt);
 
@@ -160,3 +162,4 @@ public sealed class StartggOAuthService(string connectionString, IConfiguration 
         public int? UserLink { get; set; } 
     }
 }
+

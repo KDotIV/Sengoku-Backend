@@ -41,7 +41,7 @@ static class WebhookConnectionChecks
         Console.WriteLine("PASS webhook name/GUID connection, ownership, ambiguity, version conflicts and provider validation");
     }
     static void Check(bool ok, string message) { if (!ok) throw new Exception(message); }
-    static async Task Reject<T>(Func<Task<EventFeedView?>> action) where T : Exception
+    static async Task Reject<T>(Func<Task<EventFeedSubscriptionView?>> action) where T : Exception
     { try { await action(); } catch (T) { return; } throw new Exception("Expected " + typeof(T).Name); }
     sealed class Transport : HttpMessageHandler, IHttpClientFactory
     {
@@ -59,11 +59,16 @@ static class WebhookConnectionChecks
     }
     sealed class Store : IEventFeedStore, IDiscordFeedConnectionStore
     {
-        public EventFeedView Feed = new(Guid.NewGuid(), "Georgia Strive Feed", "Discord", new(), new(), true, null, 2, "AwaitingDiscord", null, null);
+        public EventFeedSubscriptionView Feed = new(Guid.NewGuid(), "Georgia Strive Feed", "Discord", new(), new(), true, null, 2, "AwaitingDiscord", null, null);
         public bool Duplicate, Conflict;
         public int AttachedVersion, Attachments;
-        public Task<EventFeedView?> Get(int userId, Guid id, CancellationToken ct) => Task.FromResult(userId == 1 && id == Feed.Id ? Feed : null);
-        public Task<IReadOnlyList<EventFeedView>> List(int userId, CancellationToken ct) => Task.FromResult<IReadOnlyList<EventFeedView>>(userId != 1 ? [] : Duplicate ? [Feed, Feed with { Id = Guid.NewGuid() }] : [Feed]);
+        private EventFeedDefinition Definition => new(Feed.Id, 1, Feed.Name, ["Discord"], Feed.Filter, Feed.Schedule, true, 1);
+        public Task<EventFeedDefinition?> Get(int userId, Guid id, CancellationToken ct) => Task.FromResult<EventFeedDefinition?>(id == Feed.Id ? Definition : null);
+        public Task<EventFeedSubscriptionView?> GetSubscription(int userId, Guid id, CancellationToken ct) => Task.FromResult(userId == 1 && id == Feed.Id ? Feed : null);
+        public Task<EventFeedSubscriptionView?> Subscribe(int userId, Guid id, string provider, CancellationToken ct) => Task.FromResult(userId == 1 && id == Feed.Id ? Feed : null);
+        public Task<IReadOnlyList<EventFeedSubscriptionView>> Subscriptions(int userId, CancellationToken ct) => throw new NotSupportedException();
+        public Task<bool> Unsubscribe(int userId, Guid id, CancellationToken ct) => throw new NotSupportedException();
+        public Task<IReadOnlyList<EventFeedDefinition>> List(int userId, CancellationToken ct) => Task.FromResult<IReadOnlyList<EventFeedDefinition>>(Duplicate ? [Definition, Definition with { Id = Guid.NewGuid() }] : [Definition]);
         public Task<bool> ConnectDiscord(int userId, Guid id, int version, string webhook, string guild, string channel, CancellationToken ct)
         {
             if (Conflict) throw new FeedConflictException("Concurrent edit");
@@ -74,7 +79,7 @@ static class WebhookConnectionChecks
         }
         public Task<FeedCatalogue> Options(CancellationToken ct) => throw new NotSupportedException();
         public Task<IReadOnlyList<FeedDelivery>> History(int userId, Guid id, CancellationToken ct) => throw new NotSupportedException();
-        public Task<EventFeedView?> Save(int userId, Guid? id, SaveEventFeedRequest request, CancellationToken ct) => throw new NotSupportedException();
+        public Task<EventFeedDefinition?> Save(int userId, Guid? id, SaveEventFeedRequest request, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> Delete(int userId, Guid id, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> BeginAuthorization(int userId, Guid id, string session, string state, CancellationToken ct) => throw new NotSupportedException();
         public Task<DiscordAuthorizationState?> ConsumeAuthorization(int userId, string session, string state, CancellationToken ct) => throw new NotSupportedException();

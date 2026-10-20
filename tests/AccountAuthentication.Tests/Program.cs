@@ -14,9 +14,9 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using SengokuProvider.API.Authentication;
-using SengokuProvider.API.Controllers;
+using SengokuProvider.Library.Configurations;
 using SengokuProvider.Library.Services.Users;
+using SengokuProvider.API.Controllers;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Workflows.Users;
 
@@ -41,6 +41,7 @@ try
     await db.OpenAsync();
     await db.ExecuteAsync("""
         CREATE TABLE players (id integer PRIMARY KEY, player_name text NOT NULL, startgg_link integer UNIQUE, user_link integer, last_updated timestamptz);
+        CREATE TABLE user_permissions(id integer PRIMARY KEY,user_type integer);
         CREATE TABLE users (id integer PRIMARY KEY, user_name text NOT NULL, email text UNIQUE NOT NULL, password text NOT NULL,
             player_id integer NOT NULL REFERENCES players(id), user_link integer NOT NULL);
         """);

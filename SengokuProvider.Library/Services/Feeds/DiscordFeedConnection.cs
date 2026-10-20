@@ -9,8 +9,8 @@ namespace SengokuProvider.Library.Services.Feeds;
 public interface IDiscordFeedConnection
 {
     bool Enabled { get; }
-    Task<string> Begin(int userId, Guid feedId, string sessionToken, CancellationToken ct);
-    Task<EventFeedView> Complete(int userId, string sessionToken, string? state, string? code, string? error, CancellationToken ct);
+    Task<string> Begin(int userId, Guid subscriptionId, string sessionToken, CancellationToken ct);
+    Task<EventFeedSubscriptionView> Complete(int userId, string sessionToken, string? state, string? code, string? error, CancellationToken ct);
 }
 
 public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFactory clients, IDiscordFeedConnectionStore connections, IEventFeedStore feeds) : IDiscordFeedConnection
@@ -21,20 +21,21 @@ public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFact
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private void CheckEnabled() { if (!Enabled) throw new InvalidOperationException("Discord connection is not configured."); }
 
-    public async Task<string> Begin(int userId, Guid feedId, string sessionToken, CancellationToken ct)
+    public async Task<string> Begin(int userId, Guid subscriptionId, string sessionToken, CancellationToken ct)
     {
         CheckEnabled();
 
+        var subscription = await feeds.GetSubscription(userId, subscriptionId, ct) ?? throw new ArgumentException("Subscription unavailable.");
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
 
-        if (!await connections.BeginAuthorization(userId, feedId, Hash(sessionToken), Hash(state), ct))
+        if (!await connections.BeginAuthorization(userId, subscriptionId, Hash(sessionToken), Hash(state), ct))
             throw new ArgumentException("Feed or session unavailable. Reload and try again.");
 
         return "https://discord.com/oauth2/authorize?response_type=code&scope=webhook.incoming&client_id="
             + Uri.EscapeDataString(config["DiscordOAuth:ClientId"]!) + "&redirect_uri=" + Uri.EscapeDataString(config["DiscordOAuth:RedirectUri"]!) + "&state=" + state;
     }
 
-    public async Task<EventFeedView> Complete(int userId, string sessionToken, string? state, string? code, string? error, CancellationToken ct)
+    public async Task<EventFeedSubscriptionView> Complete(int userId, string sessionToken, string? state, string? code, string? error, CancellationToken ct)
     {
         CheckEnabled();
         if (state is not { Length: 64 } || !state.All(Uri.IsHexDigit)) throw new ArgumentException("Invalid Discord authorization state.");
@@ -73,8 +74,8 @@ public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFact
 
         try
         {
-            if (!await connections.ConnectDiscord(userId, pending.FeedId, pending.Version, destination, guild, channel, ct))
-                throw new ArgumentException("The feed was removed. Create a feed before connecting Discord.");
+            if (!await connections.ConnectDiscord(userId, pending.SubscriptionId, pending.Version, destination, guild, channel, ct))
+                throw new ArgumentException("The subscription was removed. Subscribe before connecting Discord.");
         }
         catch (FeedConflictException)
         {
@@ -88,7 +89,7 @@ public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFact
             throw;
         }
         // Do not return provider tokens or webhook secrets to the browser.
-        return await feeds.Get(userId, pending.FeedId, ct) ?? throw new ArgumentException("The feed was removed.");
+        return await feeds.GetSubscription(userId, pending.SubscriptionId, ct) ?? throw new ArgumentException("The subscription was removed.");
     }
     private static async Task RemoveUnattached(HttpClient client, string destination)
     {

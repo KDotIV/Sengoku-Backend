@@ -12,16 +12,21 @@ public sealed class ConnectDiscordWebhookRequest
     public int? ExpectedVersion { get; init; }
 }
 
-public sealed class DiscordWebhookConnection(IHttpClientFactory clients, IEventFeedStore feeds, IDiscordFeedConnectionStore connections)
+public interface IDiscordWebhookConnection
 {
-    public async Task<EventFeedView?> Connect(int userId, ConnectDiscordWebhookRequest request, CancellationToken ct)
+    Task<EventFeedSubscriptionView?> Connect(int userId, ConnectDiscordWebhookRequest request, CancellationToken ct);
+}
+public sealed class DiscordWebhookConnection(IHttpClientFactory clients, IEventFeedStore feeds, IDiscordFeedConnectionStore connections) : IDiscordWebhookConnection
+{
+    public async Task<EventFeedSubscriptionView?> Connect(int userId, ConnectDiscordWebhookRequest request, CancellationToken ct)
     {
         var name = request.FeedName?.Trim();
         if (request.FeedId.HasValue == !string.IsNullOrEmpty(name) || request.FeedId == Guid.Empty
             || name?.Length > 100 || request.ExpectedVersion is < 1)
             throw new ArgumentException("Provide exactly one of feedId or feedName, and a positive expectedVersion if supplied.");
 
-        EventFeedView? feed;
+        EventFeedDefinition? feed;
+
         if (request.FeedId is Guid id) feed = await feeds.Get(userId, id, ct);
         else
         {
@@ -30,10 +35,15 @@ public sealed class DiscordWebhookConnection(IHttpClientFactory clients, IEventF
             feed = matches.SingleOrDefault();
         }
         if (feed == null) return null;
-        if (request.ExpectedVersion is int version && version != feed.Version)
-            throw new FeedConflictException("The feed changed. Reload before reconnecting.");
 
         var destination = DiscordEventFeedOutlet.ValidateWebhook(request.WebhookUrl);
+        var subscription = await feeds.Subscribe(userId, feed.Id, "Discord", ct);
+
+        if (subscription == null) return null;
+
+        if (request.ExpectedVersion is int version && version != subscription.Version)
+            throw new FeedConflictException("The subscription changed. Reload before reconnecting.");
+
         using var client = clients.CreateClient("DiscordFeedOAuth"); // Redirects and URL logging are disabled.
         using var response = await client.GetAsync(destination, ct);
 
@@ -63,8 +73,8 @@ public sealed class DiscordWebhookConnection(IHttpClientFactory clients, IEventF
         // The stored version also protects callers who omit expectedVersion against concurrent edits.
         // An existing user-owned webhook must never be deleted on an attachment conflict.
 
-        if (!await connections.ConnectDiscord(userId, feed.Id, feed.Version, destination, guild, channel, ct)) return null;
+        if (!await connections.ConnectDiscord(userId, subscription.Id, subscription.Version, destination, guild, channel, ct)) return null;
 
-        return await feeds.Get(userId, feed.Id, ct);
+        return await feeds.GetSubscription(userId, subscription.Id, ct);
     }
 }

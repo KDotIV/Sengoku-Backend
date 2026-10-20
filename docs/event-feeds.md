@@ -1,143 +1,106 @@
-# Discord feed integrations
+# Shared event feeds and subscriptions
 
-The API supports this frontend flow: **Integrations → Discord Feeds → choose games, regions, and schedule → save → Connect Discord → select server/channel in Discord → connected feed**. Feed services are in `SengokuProvider.Library`; the API contains the controller and hosted worker. This backend repository does not implement the frontend screens.
+Admins manage the feed catalogue. Signed-in users browse enabled feeds and subscribe; each subscription owns its provider connection, encrypted destination, delivery schedule state, and history.
 
-## Dynamic options
+## Storage and authorization
 
-`GET /api/event-feeds/options` returns:
+- `event_feeds`: creator (`user_id`), name, filters, supported providers, schedule, enabled flag, version, and creation time. No webhook or Discord destination fields.
+- `event_feed_subscriptions`: GUID, feed/user foreign keys, selected provider, encrypted destination, Discord server/channel IDs, enabled flag, next-run time, and version. Unique `(feed_id,user_id,provider)` makes repeated subscribe requests idempotent.
+- Delivery jobs, insert notifications, and OAuth states reference subscriptions. `event_feed_delivery_targets` joins shared definitions with subscriptions for the worker. Filters and schedule definitions have one authoritative copy.
+- `user_permissions.id` references `users.id`; `user_type=0` is Admin, matching the existing C# enum. Session authentication loads the role on each request. No username or user ID is hardcoded in authorization. Missing permissions never grant admin access.
+- Feed create/update/delete require the Admin role and the SQL functions independently check the same permission. Subscription access always checks its owner. All writes use the store's database try/catch wrapper and parameterized Dapper commands. Version conflicts return 409.
 
-- `games`: IDs and display names read from the existing `public.games` table; new games appear without code changes.
-- `regions`: IDs, labels and state membership from `event_feed_regions`. Selected region IDs are stored, and their current membership is resolved during previews and delivery. Editing membership affects existing feeds.
-- `schedules`: enabled schedule types, labels, default interval values and whether a UTC time is required, from `event_feed_schedules`.
-- `discordConnectionAvailable` and `deliveryEnabled`: configuration readiness.
+## API
 
-Region seeds include Southeast, Northeast, Midwest, Pacific Northwest, West, and Southwest (for the remaining southern/western states). Southeast is AL, FL, GA, KY, LA, MS, NC, SC, TN, VA as requested. Other mappings are editable initial product defaults, not an official geographic standard. Reapplying the migration preserves administrator edits. Disable a region to remove it from selection; existing feeds referring to a retired region pause with a failed delivery outcome instead of blocking other feeds.
-
-Game/region selections are validated against the database on save and preview. Structural safety limits remain in code: at most 20 games, 60 regions/states, 10 events per message, and a 90-day lookahead. Schedule *behavior* remains implemented by the application/SQL; adding a new schedule engine requires code, while labels, defaults, availability and region membership are data.
-
-## Requests and responses
-
-All endpoints require the current account session. POST, PUT, DELETE and preview require the existing `X-CSRF-TOKEN` antiforgery header. The OAuth GET callback is protected by a random, single-use state tied to the account, session, feed and feed version.
+All routes below start with `/api/event-feeds`. All require the account session cookie. POST/PUT/DELETE also require `X-CSRF-TOKEN`; the OAuth GET callback instead validates single-use state and the same session.
 
 | Method | Route | Purpose |
-| --- | --- | --- |
-| GET | `/api/event-feeds/options` | Populate the integration form |
-| POST | `/api/event-feeds/preview` | Preview an EventFeedFilter without sending |
-| POST | `/api/event-feeds` | Save filters and schedule before connecting Discord |
-| GET | `/api/event-feeds` | List the current user's feeds |
-| GET | `/api/event-feeds/{id}` | Read configuration, connection status and version |
-| PUT | `/api/event-feeds/{id}` | Update using `expectedVersion` |
-| DELETE | `/api/event-feeds/{id}` | Remove feed and its delivery history |
-| POST | `/api/event-feeds/{id}/discord/connect` | Return Discord `authorizationUrl` |
-| GET | `/api/event-feeds/discord/callback` | Exchange `code` and `state`; return connected feed |
-| GET | `/api/event-feeds/{id}/deliveries` | Most recent 50 delivery outcomes |
+|---|---|---|
+| GET | `/options` | Games, regions, schedules, OAuth and worker readiness |
+| GET | `/` | Enabled shared feeds (admins also see disabled feeds) |
+| GET | `/{feedId}` | Shared definition |
+| POST | `/create` | Admin: create shared definition |
+| PUT | `/{feedId}` | Admin: edit with `expectedVersion` |
+| DELETE | `/{feedId}` | Admin: remove definition and subscriptions |
+| POST | `/preview` | Preview matching events; body is the filter object |
+| POST | `/{feedId}/subscriptions` | Subscribe; body `{"provider":"Discord"}` |
+| GET | `/subscriptions` | Current user's subscriptions |
+| GET | `/subscriptions/{subscriptionId}` | Current user's subscription |
+| DELETE | `/subscriptions/{subscriptionId}` | Unsubscribe; does not delete the shared feed or remote webhook |
+| GET | `/subscriptions/{subscriptionId}/deliveries` | Current user's latest 50 delivery outcomes |
+| POST | `/subscriptions/{subscriptionId}/discord/connect` | Begin OAuth for this subscription |
+| GET | `/discord/callback` | Finish OAuth and return the connected subscription |
+| POST | `/discord/webhook` | Subscribe/connect an existing webhook by feed name or GUID |
 
-Create request (replace `gameIds` with IDs returned by options):
+Admin create example (use game IDs from options):
 
 ```json
 {
-  "name": "Southeast fighting game tournaments",
+  "name": "Georgia Strive Feed",
+  "providers": ["Discord"],
   "filter": {
-    "gameIds": [1],
+    "gameIds": [8681, 37, 48548, 33945],
     "regionIds": ["southeast"],
+    "city": "Atlanta",
     "attendance": "InPerson",
     "lookAheadDays": 14,
-    "registrationOpenOnly": true,
     "minimumEntrants": 0,
-    "maxEvents": 10
+    "registrationOpenOnly": true,
+    "maxEvents": 5
   },
-  "schedule": { "mode": "Interval", "intervalHours": 6 },
+  "schedule": { "mode": "OnInsert" },
   "enabled": true
 }
 ```
 
-Other schedules:
+Other schedules are `{"mode":"Interval","intervalHours":6}` or `{"mode":"Daily","utcTime":"16:05"}` (UTC). OnInsert must omit time fields. Definition edits use the definition version, invalidate stale snapshots/OAuth states, and advance subscription versions; reconnecting a subscription does not change the definition version.
 
-```json
-{ "mode": "Daily", "utcTime": "18:30" }
-{ "mode": "OnInsert" }
-```
-
-Interval accepts any whole number of hours from 1 to 8760. Daily requires `HH:mm` in UTC and does not drift with local daylight saving changes. Interval schedules begin one interval after connection/save; daily schedules start at the next occurrence of the selected time. Missed scheduled runs produce one current digest rather than a burst of old messages. `schedule` is required. The old `frequencyHours`, `firstDeliveryAt` and `webhookUrl` request fields are replaced by this contract.
-
-A newly saved feed returns `connectionStatus: "AwaitingDiscord"` and cannot deliver, even if enabled. After connecting, it returns `Connected` and the selected guild/channel IDs. No webhook token or URL is returned. For disconnected or OnInsert feeds, `nextRunAtUtc` is null. Feed updates require the latest version; successful Discord connection increments that version too. Updates cancel pending snapshots/notifications and restart the schedule using the new settings.
-
-Advanced filters also support explicit `states` and case-insensitive exact `city`. Attendance is InPerson, Online, or Both. Online events ignore geographic selection; Both combines matching US locations with online events. Online eligibility by location is not inferred. Messages show city/state or Online, signup link, event time, and entrants from the latest local intake; absent entrants are Unknown.
-
-## Why Connect Discord instead of copying a generated token
-
-Discord owns the webhook endpoint and token for its channels. A token generated by our API cannot be pasted into Discord to register a channel. The `webhook.incoming` OAuth scope lets the user authorize the target server/channel, and Discord returns the created webhook to our backend. The backend encrypts it with ASP.NET Data Protection and sends digests to it. The user does not handle a token.
-
-Configure a Discord application with an exact HTTPS redirect URI, then set:
-
-```text
-DiscordOAuth:ClientId
-DiscordOAuth:ClientSecret
-DiscordOAuth:RedirectUri
-```
-
-Environment equivalents use double underscores, such as `DiscordOAuth__ClientSecret`. Keep the secret in server configuration/secret storage. A typical callback path is `https://<your-api-host>/api/event-feeds/discord/callback`. The backend callback returns JSON; the integrations frontend should handle completion and refresh the feed. If using a frontend callback route, forward the code/state to the API with the same authenticated session. Never put a webhook token or client secret into the frontend.
-
-Authorization state expires after ten minutes, is consumed before code exchange, and cannot be replayed from another session/account. If the feed was edited during authorization, connection fails rather than silently overwriting newer settings. Known attachment conflicts trigger best-effort cleanup of the newly created, unused webhook; a network failure can leave an unattached webhook in Discord. Reconnecting does not delete previously connected webhooks, and deleting a feed stops our sends but does not remove the Discord integration itself.
-
-## Insert-triggered delivery
-
-Database triggers record newly usable tournaments in a durable notification queue. Both the event metadata and tournament link must exist; missing geography delays capture for in-person events. A candidate queue reconciles concurrent transactions where neither insertion trigger could see the other side yet. Updates to already observed tournaments do not reannounce them, and transaction rollback also rolls back notifications.
-
-Only enabled, connected OnInsert feeds receive newly captured tournaments. Existing catalogue entries are marked observed when the migration is first installed and are not replayed. Pending notifications are filtered at processing time and batched to the requested maximum; additional entries remain queued for subsequent messages. Events outside the selected filters are consumed without a message. The worker polls every 30 seconds, so this is near-real-time delivery after commit, subject to queue volume and Discord rate limits.
-
-Scheduled digests intentionally include all currently matching upcoming events each time; OnInsert digests include only newly captured tournaments. Preview always shows current matches, not the insert queue.
-
-## Deployment
-
-Apply migrations in order before deploying the API or intake worker:
-
-1. `database/migrations/20261013_event_feeds.sql`
-2. `database/migrations/20261013_event_feed_functions.sql`
-3. `database/migrations/20261013_event_feed_integration_ux.sql`
-
-The third migration requires the existing `games`, `users`, `user_sessions`, `events` and `tournament_links` tables. It preserves earlier feed destinations/settings as Interval feeds. SQL is parameterized and functions use SECURITY INVOKER. Grant the runtime/ingestion roles the necessary table and function permissions, including the notification/candidate tables used by intake triggers; the routines do not elevate privileges. Use a migration role for DDL. Database access uses `ConnectionStrings:AlexandriaConnectionString` from normal appsettings/environment configuration.
-
-Refresh old event records to populate explicit `city`, `addr_state` and `country_code`; broad `regions.province` labels are not state codes. Configure persistent shared Data Protection keys using the existing `Authentication:DataProtectionKeyPath`, with restricted access and key encryption at rest. All API instances need the same key ring/application name.
-
-Set `EventFeeds:DeliveryEnabled=true` only after migration/configuration. Delivery is off by default. The worker locks and durably claims a job before HTTP. Discord 429 delays are honored with up to five attempts. Ambiguous timeouts/server errors/interrupted sends pause a feed as Unknown so an operator can inspect the channel before resuming. Exactly-once delivery across PostgreSQL and Discord is not promised. Terminal jobs scrub payloads and copied destinations; transport logging is disabled and Discord mentions are suppressed.
-
-The legacy unowned subscription route returns 410; old plaintext subscriptions are not imported. Preview broadcast metadata remains available for a future Twitch/YouTube channel guide; this change does not implement that UI or live-status polling.
-
-## Tests
-
-```powershell
-dotnet build tests/EventFeeds.Tests/EventFeeds.Tests.csproj -m:1
-dotnet run --project tests/EventFeeds.Tests/EventFeeds.Tests.csproj --no-build -- SengokuProvider.API/appsettings.json
-```
-
-Tests create/drop a disposable schema using the configured connection, apply migrations twice, and mock all Discord HTTP. They cover editable catalogues, schedules, owner isolation, encryption, HTTP authentication/CSRF, concurrent delivery claims, insert ordering and rollback, batches, retries/recovery, and OAuth session binding/replay. No production schema migration or real Discord message is performed by tests. Without the appsettings path, only non-database checks run.
-
-References: [Discord OAuth2 and incoming webhooks](https://github.com/discord/discord-api-docs/blob/main/developers/topics/oauth2.mdx), [Discord rate limits](https://github.com/discord/discord-api-docs/blob/main/developers/topics/rate-limits.mdx).
-
-## Connect an existing Discord webhook
-
-`POST /api/event-feeds/discord/webhook` accepts an existing incoming channel webhook. It requires the account session cookie and `X-CSRF-TOKEN`, just like other feed writes. OAuth client configuration is not required for this path.
+An existing webhook can be attached using:
 
 ```json
 {
   "feedName": "Georgia Strive Feed",
-  "webhookUrl": "<your Discord webhook URL>"
+  "webhookUrl": "<existing Discord webhook URL>"
 }
 ```
 
-Alternatively, replace `feedName` with `feedId`:
+Or provide `feedId` instead of `feedName`. Names match exactly ignoring case after trimming, across the shared catalogue; ambiguous names return 409. `expectedVersion`, when supplied here, is the **subscription** version. A new subscription starts at version 1. The endpoint subscribes the current user if necessary and returns the connected subscription, including its `id` and shared `feedId`. It never returns the webhook secret. Connection is verified with GET and does not send a test message. Only normal Discord incoming channel webhooks are supported; forum/media channels require thread parameters not supported by this pipeline.
 
-```json
-{
-  "feedId": "3ee8d4bc-0ee0-4f11-a243-eea51e20a3e7",
-  "webhookUrl": "<your Discord webhook URL>",
-  "expectedVersion": 2
-}
+For OAuth, subscribe first, then use the returned subscription `id` in `/subscriptions/{id}/discord/connect`. Open `authorizationUrl` in the same authenticated session. Another user's subscription is never connectable, even for an admin. OAuth states expire after ten minutes and cannot be replayed. Configuration still uses `DiscordOAuth:ClientId`, `ClientSecret`, and `RedirectUri`; the webhook path does not require OAuth configuration.
+
+## Delivery
+
+`EventFeeds:DeliveryEnabled=true` enables the worker at startup; it polls every 30 seconds. Each eligible subscriber gets its own job and encrypted destination snapshot. Concurrent workers lock definitions before subscriptions and claim jobs with `SKIP LOCKED`. Shared feed edits serialize with delivery preparation and reject changes while a send is in progress.
+
+Interval/daily subscriptions send current matching events. OnInsert captures newly usable tournaments for subscribers connected at capture time; it does not replay the existing catalogue or generate empty jobs while idle. Matching rules, limits and message formatting are unchanged. Empty results record `Skipped/NoMatches`. Retryable rate limits are capped at five attempts; ambiguous sends are not automatically replayed. Failure or recovery pauses only the affected subscription, never all subscribers or the shared definition. Reconnect a paused subscription to resume it.
+
+## Migration and rollout
+
+The recovered schema-only snapshots in `database/schema/event-feed-*-before.sql` document the database inspected on 2026-10-20. They contain no account records or destination credentials. They are test fixtures/reference material, not a fresh-install migration for the entire Sengoku database.
+
+1. Stop API/intake workers and back up the database.
+2. Apply `database/migrations/20261020_shared_event_feeds.sql` with `psql -v ON_ERROR_STOP=1 -f ...`. It is a one-time transactional migration for the recovered schema. An in-flight `Sending` job blocks migration. Unexpected legacy permission mappings fail their FK validation rather than granting access.
+3. Assign administrator permissions explicitly. For the user identified by the project owner:
+
+   ```sql
+   INSERT INTO user_permissions(id,user_type)
+   SELECT id,0 FROM users WHERE id=491942 AND user_name='Oni_Shogi'
+   ON CONFLICT(id) DO UPDATE SET user_type=EXCLUDED.user_type;
+   ```
+
+4. Deploy/restart the updated API, retaining the existing Data Protection key ring. Update clients to use subscription IDs for OAuth and history.
+
+Existing feed IDs and definitions are retained. Every old personal feed gets a subscription with the same GUID as its old feed, preserving encrypted destinations, versions and delivery history. Old pending OAuth states are invalidated. No remote webhook is deleted. Existing feed creators retain attribution, but only admins can subsequently edit those shared definitions.
+
+Configuration classes now live in `SengokuProvider.Library/Configurations`. Authentication services live in the existing `Services/Users` namespace. `AddEventFeeds<EventFeedWorker>` registers the API-hosted worker without creating a library-to-API reference.
+
+## Verification
+
+```powershell
+dotnet build tests/EventFeeds.Tests/EventFeeds.Tests.csproj -m:1
+dotnet run --project tests/EventFeeds.Tests/EventFeeds.Tests.csproj --no-build
+# Disposable database schema; mocked Discord; cleans up afterward:
+dotnet run --project tests/EventFeeds.Tests/EventFeeds.Tests.csproj --no-build -- SengokuProvider.API/appsettings.json
 ```
 
-Provide exactly one selector. Names are trimmed and matched exactly, ignoring case, within the current user's feeds. Duplicate matching names return 409; use the GUID to disambiguate. Missing or unowned feeds return 404. `expectedVersion` is optional; when supplied it must match the current version. Concurrent edits during verification are rejected even when it is omitted.
-
-The API verifies the webhook with Discord using GET, requires an incoming server/channel webhook, and encrypts the URL using the existing connection store. Only HTTPS discord.com webhook URLs without query parameters or fragments are accepted. Redirects are disabled. Invalid/deleted webhooks return 400; provider/transport failures return a generic 500 without exposing credentials. Success returns 200 with the updated feed, its incremented version, and `Connected` status, never the webhook URL/token.
-
-Attaching replaces the feed's destination but never deletes the old or supplied webhook. It does not send a test message or change the feed's filters, enabled flag, or schedule mode. Delivery still requires the worker and `EventFeeds:DeliveryEnabled`. Use a normal text-channel webhook: forum/media channels require thread parameters that this delivery pipeline does not support. Treat webhook URLs as secrets and keep request bodies out of access logs.
+Coverage includes migration preservation, admin enforcement and revocation, catalogue visibility, subscription ownership/idempotency, encryption, delivery fan-out, failure isolation, OAuth state ownership/replay, insert fan-out, HTTP authorization/CSRF, and unsubscribe/delete behavior. No real Discord messages are sent.

@@ -21,16 +21,24 @@ public sealed record SaveEventFeedRequest
     public string Name { get; init; } = "";
     public EventFeedFilter Filter { get; init; } = new();
     public FeedSchedule Schedule { get; init; } = null!;
+    public string[] Providers { get; init; } = ["Discord"];
     public bool Enabled { get; init; }
     public int ExpectedVersion { get; init; }
 }
-public sealed record EventFeedView(Guid Id, string Name, string Provider, EventFeedFilter Filter, FeedSchedule Schedule,
-    bool Enabled, DateTime? NextRunAtUtc, int Version, string ConnectionStatus, string? DiscordGuildId, string? DiscordChannelId);
+public sealed record EventFeedDefinition(Guid Id, int CreatedByUserId, string Name, string[] Providers, EventFeedFilter Filter, FeedSchedule Schedule, bool Enabled, int Version);
+public sealed record SubscribeEventFeedRequest(string Provider = "Discord");
+public sealed record EventFeedSubscriptionView(Guid Id, string Name, string Provider, EventFeedFilter Filter, FeedSchedule Schedule,
+    bool Enabled, DateTime? NextRunAtUtc, int Version, string ConnectionStatus, string? DiscordGuildId, string? DiscordChannelId)
+{
+    public Guid FeedId { get; init; }
+}
 public sealed class FeedConflictException(string message) : Exception(message);
 internal sealed class FeedRow
 {
     public Guid Id { get; set; }
     public int UserId { get; set; }
+    public Guid FeedId { get; set; }
+    public string[] Providers { get; set; } = [];
     public string Name { get; set; } = "";
     public string Provider { get; set; } = "Discord";
     public string? DestinationProtected { get; set; }
@@ -48,6 +56,7 @@ public sealed class FeedDelivery
 {
     public Guid Id { get; set; }
     public Guid FeedId { get; set; }
+    public Guid SubscriptionId { get; set; }
     public string Status { get; set; } = "";
     public int Attempts { get; set; }
     public DateTime ScheduledFor { get; set; }

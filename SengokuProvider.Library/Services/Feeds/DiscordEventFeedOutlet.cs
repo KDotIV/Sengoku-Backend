@@ -24,6 +24,7 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
             || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0
             || !Regex.IsMatch(uri.AbsolutePath, @"\A/api/(?:v10/)?webhooks/[0-9]{17,20}/[A-Za-z0-9_-]{20,200}\z"))
             throw new ArgumentException("Use an HTTPS discord.com webhook URL without query parameters.");
+
         return uri.AbsoluteUri;
     }
     public static string SignupUrl(string slug)
@@ -39,10 +40,14 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
         if (digest.Events.Count is < 1 or > 10) throw new ArgumentException("A digest must contain 1–10 events.");
         var embeds = digest.Events.Select(e => new {
             title = Text(e.Name, 180), url = SignupUrl(e.SignupSlug),
-            description = $"{Text(e.Location, 100)}\n<t:{new DateTimeOffset(DateTime.SpecifyKind(e.StartUtc, DateTimeKind.Utc)).ToUnixTimeSeconds()}:F>\nEntrants: {(e.Entrants?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unknown")}\n[View / register on start.gg]({SignupUrl(e.SignupSlug)})"
+            description = $"{Text(e.Location, 100)}" +
+            $"\n<t:{new DateTimeOffset(DateTime.SpecifyKind(e.StartUtc, DateTimeKind.Utc)).ToUnixTimeSeconds()}:F>" +
+            $"\nEntrants: {(e.Entrants?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unknown")}\n[View / register on start.gg]({SignupUrl(e.SignupSlug)})"
         }).ToArray();
+
         if (embeds.Any(e => e.url.Length > 2048 || e.description.Length > 4096) || embeds.Sum(e => e.title.Length + e.description.Length) > 6000)
             throw new ArgumentException("Event data exceeds Discord's embed limits.");
+
         return new {
             content = Text(digest.Name, 100) + (digest.HasMore ? " — first matches; more events match your filters." : " — upcoming tournaments"),
             allowed_mentions = new { parse = Array.Empty<string>() },

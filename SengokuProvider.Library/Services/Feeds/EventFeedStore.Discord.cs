@@ -4,7 +4,7 @@ using SengokuProvider.Library.Models.Feeds;
 
 namespace SengokuProvider.Library.Services.Feeds;
 
-public sealed record DiscordAuthorizationState(Guid FeedId, int Version);
+public sealed record DiscordAuthorizationState(Guid SubscriptionId, int Version);
 public interface IDiscordFeedConnectionStore
 {
     Task<bool> BeginAuthorization(int userId, Guid feedId, string sessionHash, string stateHash, CancellationToken ct);
@@ -25,6 +25,7 @@ public sealed partial class EventFeedStore : IDiscordFeedConnectionStore
     public Task<bool> ConnectDiscord(int userId, Guid feedId, int version, string webhook, string guildId, string channelId, CancellationToken ct)
     {
         var secret = _protector.Protect(DiscordEventFeedOutlet.ValidateWebhook(webhook));
+
         return Database(conn => conn.ExecuteScalarAsync<bool>(new CommandDefinition(
             "SELECT event_feed_connect(@userId,@feedId,@version,@secret,@guildId,@channelId)",
             new { userId, feedId, version, secret, guildId, channelId }, cancellationToken: ct)), ct);

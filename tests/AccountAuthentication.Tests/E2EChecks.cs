@@ -10,11 +10,11 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
-using SengokuProvider.API.Authentication;
+using SengokuProvider.Library.Configurations;
+using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
-using SengokuProvider.Library.Services.Users;
 
 static class E2EChecks
 {

@@ -1,9 +1,14 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using SengokuProvider.Library.Services.Users;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 
-namespace SengokuProvider.API.Authentication;
+namespace SengokuProvider.Library.Configurations;
 
 public static class AccountAuthenticationConfiguration
 {
@@ -31,6 +36,7 @@ public static class AccountAuthenticationConfiguration
         var keyPath = builder.Configuration["Authentication:DataProtectionKeyPath"];
 
         if (!string.IsNullOrWhiteSpace(keyPath)) protection.PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+
         builder.Services.AddRateLimiter(options => {
             options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
             options.AddPolicy("account-entry", context => RateLimitPartition.GetFixedWindowLimiter(
@@ -60,3 +66,4 @@ public static class AccountAuthenticationConfiguration
         HttpOnly = true, Secure = true, SameSite = CookieSameSite(configuration), Path = "/", IsEssential = true
     };
 }
+

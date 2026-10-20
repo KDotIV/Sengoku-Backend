@@ -1,9 +1,11 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 
-namespace SengokuProvider.API.Authentication;
+namespace SengokuProvider.Library.Services.Users;
 
 public sealed class SessionAuthenticationHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder,
@@ -24,6 +26,8 @@ public sealed class SessionAuthenticationHandler(
             new Claim(ClaimTypes.Name, account.UserName),
             new Claim("player_id", account.PlayerId.ToString(System.Globalization.CultureInfo.InvariantCulture))
         }, SchemeName);
+        if (account.IsAdmin) identity.AddClaim(new Claim(ClaimTypes.Role, "Admin"));
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName));
     }
 }
+

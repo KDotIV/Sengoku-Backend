@@ -16,7 +16,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SengokuProvider.API.Authentication;
+using SengokuProvider.Library.Configurations;
+using SengokuProvider.Library.Services.Users;
 using SengokuProvider.API.Controllers;
 using SengokuProvider.Library.Services.Feeds;
 using SengokuProvider.Library.Services.Events;
@@ -34,6 +35,7 @@ static class HttpChecks
         builder.Services.AddSingleton<IEventFeedStore>(store);
         builder.Services.AddSingleton<IDiscordFeedConnectionStore>(store);
         builder.Services.AddSingleton<IDiscordFeedConnection,DiscordFeedConnection>();
+        builder.Services.AddSingleton<IDiscordWebhookConnection,DiscordWebhookConnection>();
         builder.Services.AddSingleton(query);
         builder.Services.AddAuthentication("FeedTest").AddScheme<AuthenticationSchemeOptions, TestAuth>("FeedTest",_=>{});
         builder.Services.AddControllersWithViews().AddApplicationPart(typeof(EventFeedsController).Assembly);
@@ -48,22 +50,23 @@ static class HttpChecks
             using var client=new HttpClient(new HttpClientHandler { UseCookies=false }) { BaseAddress=new Uri(address) };
             Check((await client.GetAsync("/api/event-feeds")).StatusCode==HttpStatusCode.Unauthorized,"anonymous requests rejected");
             client.DefaultRequestHeaders.Add("X-Test-User","2");
-            Check((await client.GetAsync($"/api/event-feeds/{feedId}")).StatusCode==HttpStatusCode.NotFound,"foreign feed hidden over HTTP");
+            Check((await client.GetAsync($"/api/event-feeds/{feedId}")).StatusCode==HttpStatusCode.OK,"shared feed visible to subscribers");
+            Check((await client.PostAsJsonAsync("/api/event-feeds/create",new {})).StatusCode==HttpStatusCode.Forbidden,"ordinary users cannot create feeds");
             client.DefaultRequestHeaders.Remove("X-Test-User"); client.DefaultRequestHeaders.Add("X-Test-User","1");
             Check((await client.GetAsync($"/api/event-feeds/{feedId}")).IsSuccessStatusCode,"owner reads feed");
             using var options = await client.GetAsync("/api/event-feeds/options");
             using var catalogue = JsonDocument.Parse(await options.Content.ReadAsStringAsync());
-            Check(catalogue.RootElement.GetProperty("games").EnumerateArray().Any(g=>g.GetProperty("id").GetInt32()==222),"HTTP options uses live game catalogue");
+            Check(catalogue.RootElement.GetProperty("games").EnumerateArray().Any(g=>g.GetProperty("id").GetInt32()==1),"HTTP options uses live game catalogue");
             Check(catalogue.RootElement.GetProperty("schedules").EnumerateArray().Any(s=>s.GetProperty("id").GetString()=="OnInsert"),"HTTP options includes insert schedule");
             Check(!catalogue.RootElement.GetProperty("discordConnectionAvailable").GetBoolean(),"unconfigured Discord connection reported to UI");
             var request=new { name="HTTP Feed",filter=new { gameIds=new[]{1},regionIds=new[]{"southeast"} },schedule=new { mode="Interval",intervalHours=6 } };
-            using var noCsrf = await client.PostAsJsonAsync("/api/event-feeds",request);
+            using var noCsrf = await client.PostAsJsonAsync("/api/event-feeds/create",request);
             Check(noCsrf.StatusCode==HttpStatusCode.BadRequest,$"CSRF required on write (received {(int)noCsrf.StatusCode})");
             using var csrf=await client.GetAsync("/test-csrf");
             using var json=JsonDocument.Parse(await csrf.Content.ReadAsStringAsync());
             client.DefaultRequestHeaders.Add("X-CSRF-TOKEN",json.RootElement.GetProperty("token").GetString());
             client.DefaultRequestHeaders.Add("Cookie",string.Join("; ",csrf.Headers.GetValues("Set-Cookie").Select(value=>value.Split(';')[0])));
-            using var created=await client.PostAsJsonAsync("/api/event-feeds",request);
+            using var created=await client.PostAsJsonAsync("/api/event-feeds/create",request);
             Check(created.StatusCode==HttpStatusCode.Created,"authenticated CSRF-protected create");
             var body=await created.Content.ReadAsStringAsync();
             Check(!body.Contains("webhook") && !body.Contains("abcdefghijklmnopqrstuvwxyz"),"response contains no destination secret");
@@ -83,9 +86,6 @@ public sealed class TestAuth(IOptionsMonitor<AuthenticationSchemeOptions> option
     {
         var id=Request.Headers["X-Test-User"].ToString();
         if(id is not ("1" or "2")) return Task.FromResult(AuthenticateResult.NoResult());
-        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(new[]{new Claim(ClaimTypes.NameIdentifier,id)},Scheme.Name)),Scheme.Name)));
+        return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(new ClaimsIdentity(id=="1" ? new[]{new Claim(ClaimTypes.NameIdentifier,id),new Claim(ClaimTypes.Role,"Admin")} : new[]{new Claim(ClaimTypes.NameIdentifier,id)},Scheme.Name)),Scheme.Name)));
     }
 }
-
-
-

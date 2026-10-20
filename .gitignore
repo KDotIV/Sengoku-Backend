@@ -26,3 +26,6 @@ SengokuProvider.Worker/appsettings.Development.json
 !/database/migrations/20261013_event_feed_functions.sql
 /build-event-feeds.log
 !/database/migrations/20261013_event_feed_integration_ux.sql
+
+!/database/migrations/20261020_shared_event_feeds.sql
+/database
