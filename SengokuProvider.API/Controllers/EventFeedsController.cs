@@ -1,7 +1,8 @@
+using SengokuDispatcher.Library.Models.Feeds;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using SengokuProvider.Library.Services.Feeds;
+using SengokuDispatcher.Library.Services.Feeds;
 using SengokuProvider.Library.Models.Feeds;
 using SengokuProvider.Library.Services.Events;
 using System.Security.Claims;
@@ -104,6 +105,7 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
         catch (UnauthorizedAccessException) { return Forbid(); }
         catch (ArgumentException ex) { return BadRequest(new { response = ex.Message }); }
         catch (FeedConflictException ex) { return Conflict(new { response = ex.Message }); }
+        catch (HttpRequestException) { return Problem("Dispatcher communication is unavailable.", statusCode: 503); }
         catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {

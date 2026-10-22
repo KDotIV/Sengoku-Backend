@@ -1,6 +1,8 @@
+using SengokuDispatcher.Library.Services.Comms;
+using SengokuDispatcher.Library.Models.Feeds;
 using System.Net;
 using SengokuProvider.Library.Models.Feeds;
-using SengokuProvider.Library.Services.Feeds;
+using SengokuDispatcher.Library.Services.Feeds;
 
 static class WebhookConnectionChecks
 {
@@ -9,7 +11,7 @@ static class WebhookConnectionChecks
         const string url = "https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz0123456789";
         var store = new Store();
         using var http = new Transport();
-        var service = new DiscordWebhookConnection(http, store, store);
+        var service = new DiscordWebhookConnection(http, store, store, new Acknowledgement());
         var request = new ConnectDiscordWebhookRequest { FeedName = " georgia strive feed ", WebhookUrl = url };
         var connected = await service.Connect(1, request, default);
         Check(connected?.ConnectionStatus == "Connected" && store.AttachedVersion == 2, "name connection uses snapshot version");
@@ -43,6 +45,11 @@ static class WebhookConnectionChecks
     static void Check(bool ok, string message) { if (!ok) throw new Exception(message); }
     static async Task Reject<T>(Func<Task<EventFeedSubscriptionView?>> action) where T : Exception
     { try { await action(); } catch (T) { return; } throw new Exception("Expected " + typeof(T).Name); }
+    internal sealed class Acknowledgement : IDiscordWebhookHandler
+    {
+        public Task SendThreadUpdateMessage(int gameId, string messageContent, long threadId, object? attachments = default) => Task.CompletedTask;
+        public Task<bool> SendLeaderboardUpdateMessage(string webhookUrl, string messageContent, string[] roleIds, object? attachments = default) => Task.FromResult(true);
+    }
     sealed class Transport : HttpMessageHandler, IHttpClientFactory
     {
         public const string ValidBody = """{"type":1,"id":"123456789012345678","guild_id":"223456789012345678","channel_id":"323456789012345678"}""";

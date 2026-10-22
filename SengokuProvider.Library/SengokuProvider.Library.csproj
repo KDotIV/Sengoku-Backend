@@ -13,7 +13,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="GeoAPI" Version="1.7.5" />
     <PackageReference Include="GraphQL.Client" Version="6.1.0" />

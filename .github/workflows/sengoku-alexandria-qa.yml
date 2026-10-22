@@ -36,23 +36,17 @@ jobs:
       run: dotnet test "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-build
     - name: Publish API
       run: dotnet publish SengokuProvider.API/SengokuProvider.API.csproj --configuration ${{ env.CONFIGURATION }} --no-build --output "${{ env.AZURE_WEBAPP_PACKAGE_PATH }}"
-    - name: Publish worker
-      run: dotnet publish SengokuProvider.Worker/SengokuProvider.Worker.csproj --configuration ${{ env.CONFIGURATION }} --no-build --output ./worker-publish
-    - name: Package existing continuous WebJobs
+    - name: Run regression checks
       shell: pwsh
-      run: |
-        # Preserve the three existing Azure WebJob names instead of creating a fourth worker.
-        foreach ($jobName in @('SengokuProvider.Worker-1', 'SengokuProvider.Worker-2', 'SengokuProvider.Worker-3')) {
-          $jobPath = Join-Path $env:AZURE_WEBAPP_PACKAGE_PATH "App_Data/jobs/continuous/$jobName"
-          New-Item -ItemType Directory -Path $jobPath -Force | Out-Null
-          Copy-Item -Path ./worker-publish/* -Destination $jobPath -Recurse -Force
-          @('@echo off', 'cd /d "%~dp0"', 'dotnet SengokuProvider.Worker.dll', 'exit /b %errorlevel%') | Set-Content -Path (Join-Path $jobPath 'run.cmd') -Encoding ascii
-          foreach ($file in @('SengokuProvider.Worker.dll', 'SengokuProvider.Worker.runtimeconfig.json', 'run.cmd')) {
-            if (-not (Test-Path (Join-Path $jobPath $file))) {
-              throw "WebJob $jobName is missing $file"
-            }
-          }
-        }
+      run: ./tests/Run-RegressionTests.ps1 -Configuration Release
+    - name: Publish Dispatcher
+      run: dotnet publish SengokuDispatcher.API/SengokuDispatcher.API.csproj --configuration ${{ env.CONFIGURATION }} --no-build --output ./dispatcher-publish
+    - name: Upload Dispatcher artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dispatcher-api
+        path: ./dispatcher-publish
+        if-no-files-found: error
     - name: Publish Artifacts
       uses: actions/upload-artifact@v4
       with:

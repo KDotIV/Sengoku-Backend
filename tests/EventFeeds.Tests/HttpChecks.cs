@@ -19,7 +19,7 @@ using Microsoft.Extensions.Options;
 using SengokuProvider.Library.Configurations;
 using SengokuProvider.Library.Services.Users;
 using SengokuProvider.API.Controllers;
-using SengokuProvider.Library.Services.Feeds;
+using SengokuDispatcher.Library.Services.Feeds;
 using SengokuProvider.Library.Services.Events;
 
 static class HttpChecks
@@ -36,6 +36,7 @@ static class HttpChecks
         builder.Services.AddSingleton<IDiscordFeedConnectionStore>(store);
         builder.Services.AddSingleton<IDiscordFeedConnection,DiscordFeedConnection>();
         builder.Services.AddSingleton<IDiscordWebhookConnection,DiscordWebhookConnection>();
+        builder.Services.AddSingleton<SengokuDispatcher.Library.Services.Comms.IDiscordWebhookHandler, WebhookConnectionChecks.Acknowledgement>();
         builder.Services.AddSingleton(query);
         builder.Services.AddAuthentication("FeedTest").AddScheme<AuthenticationSchemeOptions, TestAuth>("FeedTest",_=>{});
         builder.Services.AddControllersWithViews().AddApplicationPart(typeof(EventFeedsController).Assembly);

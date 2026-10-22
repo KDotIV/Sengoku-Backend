@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using SengokuDispatcher.Library.Models.Common;
+using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Models.Leagues;
 using SengokuProvider.Library.Services.Common;
-using SengokuProvider.Library.Services.Comms;
+using SengokuDispatcher.Library.Services.Comms;
 using SengokuProvider.Library.Services.Legends;
-using SengokuProvider.Library.Workflows.Legends;
+using SengokuDispatcher.Library.Workflows.Legends;
 
 namespace SengokuProvider.API.Controllers
 {

@@ -1,3 +1,4 @@
+using SengokuDispatcher.Library.Services.Players;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
@@ -5,7 +6,7 @@ using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
-using SengokuProvider.Library.Workflows.Players;
+using SengokuDispatcher.Library.Workflows.Players;
 
 namespace SengokuProvider.API.Controllers
 {

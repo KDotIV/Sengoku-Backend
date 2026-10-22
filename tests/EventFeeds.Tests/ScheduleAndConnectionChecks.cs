@@ -1,3 +1,4 @@
+using SengokuDispatcher.Library.Models.Feeds;
 using Dapper;
 using Npgsql;
 using System.Text.Json;
@@ -5,7 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using SengokuProvider.Library.Models.Feeds;
-using SengokuProvider.Library.Services.Feeds;
+using SengokuDispatcher.Library.Services.Feeds;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Users;
 

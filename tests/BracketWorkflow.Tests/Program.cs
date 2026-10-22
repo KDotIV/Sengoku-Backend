@@ -1,3 +1,5 @@
+using SengokuDispatcher.Library.Services.Common.Interfaces;
+using SengokuDispatcher.Library.Services.Players;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
@@ -12,9 +14,9 @@ using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Legends;
 using SengokuProvider.Library.Services.Players;
-using SengokuProvider.Library.Workflows.Players;
-using SengokuProvider.Library.Workflows.Legends;
-using SengokuProvider.Worker.Handlers;
+using SengokuDispatcher.Library.Workflows.Players;
+using SengokuDispatcher.Library.Workflows.Legends;
+using SengokuDispatcher.Library.Models.Messaging;
 
 var tests = new (string Name, Func<Task> Run)[]
 {

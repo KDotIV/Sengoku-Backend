@@ -1,14 +1,7 @@
-﻿using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries;
 
 namespace SengokuProvider.Library.Models.Common
 {
-    public struct DiscordWebhookConfig
-    {
-        public static readonly string BaseWebhookUrl = "";
-        public static readonly long Tekken8ThreadId = 1273004220831891517;
-        public static readonly long StreetFighter6ThreadId = 1273004373890568314;
-        public static readonly long GuiltyGearStriveThreadId = 1273004304764108810;
-    }
     public struct CommonConstants
     {
         public static readonly Dictionary<int, int> EnhancedPointDistribution = new Dictionary<int, int>
@@ -29,8 +22,7 @@ namespace SengokuProvider.Library.Models.Common
     }
     public struct BearerConstants
     {
-        public static readonly string[] BearerArray = ["4e76a0d061c9c8a99c2083146095552c", "bb228ea8c9ded56583d67519bc4906ab", "d35ead8324dce3507a87b901b0be46b5",
-            "6bf80b5ac9b1ced2815fe49d539d1f75"];
+        public static readonly string[] BearerArray = [];
         public static readonly Queue<string> TokenQueue = new Queue<string>(BearerArray);
     }
     public struct StartggGameIds

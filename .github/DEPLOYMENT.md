@@ -1,46 +1,34 @@
-# Alexandria deployments
+# Provider and Dispatcher deployment
 
-Both workflows build their configured branches, but deploy only `master`, which is
-the branch currently trusted by Azure OIDC. Manual runs are supported; select
-`master` to deploy. Deployments to each app are serialized.
+`EventTournamentScheduler.yml` now builds/tests the solution, publishes only `SengokuDispatcher.API`, and deploys the artifact to the existing `sengoku-dispatcher` Web App. It is manually triggered; select `master` to deploy. Other branches build/test only. Deployment uses `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`, matching Provider's OIDC identity. That identity needs deployment access to the new app; being in the same resource group does not establish that an app-scoped role covers both apps. No workflow was triggered during this review.
 
-Both workflows read the subscription from the `AZURE_SUBSCRIPTION_ID` repository secret.
-Both workflows use `AZURE_TENANT_ID`. The QA app uses `AZURE_CLIENT_ID`.
-The Function uses `AZURE_FUNCTIONAPP_CLIENT_ID` when set, otherwise `AZURE_CLIENT_ID`.
+The Provider workflow continues to deploy `sengoku-alexandria-qa`. Neither package contains the retired scheduler or continuous Provider WebJobs.
 
-## Required Azure permission (one-time administrator operation)
+## Verified Azure context (2026-10-22)
 
-The existing `sengoku-gh-deploy` identity (client ID
-`1e2199d3-ee38-4e79-8012-34c9b1d65ebc`, principal object ID
-`1c9734d1-1c96-49ca-9d2e-1102559166b1`) can deploy the QA app, but does not
-currently have a deployment role on the Function App. If `AZURE_CLIENT_ID`
-selects this identity, an administrator must run:
+Both apps exist in resource group `Alexandria` in the selected subscription:
 
-```powershell
-# First select the intended subscription in your local Azure CLI session.
-$deploymentSubscriptionId = az account show --query id --output tsv
-az role assignment create --assignee-object-id 1c9734d1-1c96-49ca-9d2e-1102559166b1 --assignee-principal-type ServicePrincipal --role "Website Contributor" --scope "/subscriptions/$deploymentSubscriptionId/resourceGroups/Alexandria/providers/Microsoft.Web/sites/EventTournamentScheduler"
-```
+- Provider: `https://sengoku-alexandria-qa.azurewebsites.net`
+- Dispatcher: `https://sengoku-dispatcher-fvdfhpcrcdd3afag.eastus-01.azurewebsites.net`
 
-Alternatively, set `AZURE_FUNCTIONAPP_CLIENT_ID` to a dedicated identity with
-Website Contributor on that Function App and a federated credential for issuer
-`https://token.actions.githubusercontent.com`, audience `api://AzureADTokenExchange`,
-and subject `repo:KDotIV/Sengoku-Backend:ref:refs/heads/master`.
-The workflow cannot grant itself missing permissions. This repository change
-does not execute the administrator operation above.
+Dispatcher currently reports Always On disabled and Windows runtime configuration `v9.0`. Enable Always On and configure/verify .NET 8 hosting for these net8.0 projects before cutover. No cloud configuration was changed.
 
-## Deployment packages
+## Required configuration before cutover
 
-The Function artifact includes hidden files so `.azurefunctions` survives transfer
-between jobs. The downloaded package and Function access are checked before deployment.
+- Provider: set `Dispatcher__BaseUrl` to the exact Dispatcher URL above, `Dispatcher__ApiKey` to the same independent service key configured on Dispatcher, and `Dispatcher__DiscordOAuthEnabled=true` to expose Discord OAuth connection support. The browser continues to use Provider.
+- Dispatcher: set `DiscordOAuth__RedirectUri=https://sengoku-alexandria-qa.azurewebsites.net/api/event-feeds/discord/callback` and register this exact URI in the Discord application. The localhost value in the supplied settings is for local development.
+- Both applications must use the same persistent Data Protection key ring and `Sengoku.Accounts` application name. A blank `Authentication__DataProtectionKeyPath` gives separate app-local keys. Matching path strings on separate app-local disks do not share keys; configure a genuinely shared mounted store and preserve the existing keys.
+- `Dispatcher__DiscordEnabled` enables the ExclusiveInsights socket bot, not EventFeeds webhook delivery. Set it to false unless `ExclusiveInsightsSettings__CustomerPoolConnectionString`, `ExclusiveInsightsSettings__DiscordBotToken`, and the reporting settings (`SendGridSettings__ApiKey`, `SendGridSettings__FromEmail`) are supplied. EventFeeds delivery and OAuth still work independently when this flag is false.
+- `EventFeeds__DeliveryEnabled=true` starts feed processing. `Dispatcher__ServiceBusEnabled=true` starts broker consumption/publishing; `Dispatcher__SchedulingEnabled=true` starts intake scheduling and requires Service Bus. Stop all legacy deployed workers/schedulers before enabling the replacements.
+- Keep exactly one scheduling instance enabled. `IntakeScheduleRunner` prevents overlap only within its process and runs two jobs on startup; multiple replicas would each schedule the same work. Distributed scheduling coordination is not implemented by this extraction.
+- The supplied `Dispatcher__ApiKey` has the format of a Discord bot token. Use a distinct randomly generated service key shared only by Provider and Dispatcher; bot credentials belong in their bot setting.
 
-The QA artifact contains only the published API at its root, with separately
-published worker files under `App_Data/jobs/continuous/SengokuProvider.Worker-1`,
-`SengokuProvider.Worker-2`, and `SengokuProvider.Worker-3`. Each gets an explicit
-`run.cmd`. This preserves the three existing job names and updates all three to
-the same worker version. Each instance runs all hosted services registered by
-the worker program. Always On is already enabled in Azure.
+The ignored local file `local-settings/sengoku-dispatcher.azure-settings.json` is an exact flattening of the supplied settings for Azure Portal Environment variables / App settings / Advanced edit. It preserves the localhost callback, blank key path, and enabled bot flag, so apply the corrections above before importing it. All values are strings, hierarchy uses double underscores, and array keys end in `__0` through `__3`. Keep this credential-bearing file out of commits and build artifacts.
 
-After deployment, verify the Function is indexed and all three WebJobs restart
-successfully. A successful upload does not verify application startup or its
-database and Service Bus connections.
+## Boundary review
+
+Provider retains frontend controllers, cookie authentication/CSRF, feed management, tournament queries and aggregation/intake orchestration. It resolves remote adapters for Service Bus publishing, Discord OAuth/webhook validation, Discord notifications and ExclusiveInsights. Sharing orchestration implementations from Dispatcher.Library does not register background workers in Provider.
+
+Dispatcher owns Service Bus clients and event/player/legend consumers, bracket outbox publishing, scheduled intake, EventFeeds delivery, Discord socket listeners, Discord HTTP calls and reporting integrations. Its API controllers expose only authenticated `/internal` operations; `/health/live` is the public liveness endpoint. The two transport SDKs are referenced only by Dispatcher.Library.
+
+The final review corrected shared GraphQL authentication for array configuration and removed embedded token-rotation credentials in favor of configured tokens. Regression coverage checks the configured token, Provider remote adapters, private endpoint authentication, frontend controller ownership, worker propagation and full data workflows.

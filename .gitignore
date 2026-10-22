@@ -29,3 +29,45 @@ SengokuProvider.Worker/appsettings.Development.json
 
 !/database/migrations/20261020_shared_event_feeds.sql
 /database
+/SengokuDispatcher.API/bin/Debug/net8.0
+/SengokuDispatcher.API/obj
+/SengokuDispatcher.API/Properties
+/SengokuDispatcher.Library/bin/Debug/net8.0
+/SengokuDispatcher.Library/obj
+
+# Version the database contracts required by regression suites.
+!/database/
+/database/*
+!/database/migrations/
+!/database/schema/
+!/database/migrations/001_bracket_processing.sql
+!/database/migrations/002_bracket_matchup_keys.sql
+!/database/migrations/20261006_user_startgg_profile.sql
+!/database/migrations/20261009_user_authentication.sql
+!/database/migrations/20261010_registration_bracket_e2e.sql
+/database/schema/*
+!/database/schema/event-feed-tables-before.sql
+!/database/schema/event-feed-functions-before.sql
+/database
+
+# Keep regression SQL available in clean checkouts while ignoring other database exports.
+!/database/
+/database/*
+!/database/migrations/
+/database/migrations/*
+!/database/migrations/001_bracket_processing.sql
+!/database/migrations/002_bracket_matchup_keys.sql
+!/database/migrations/20261006_user_startgg_profile.sql
+!/database/migrations/20261009_user_authentication.sql
+!/database/migrations/20261010_registration_bracket_e2e.sql
+!/database/migrations/20261020_shared_event_feeds.sql
+!/database/schema/
+/database/schema/*
+!/database/schema/event-feed-tables-before.sql
+!/database/schema/event-feed-functions-before.sql
+
+# Local Azure Portal exports contain credentials; never publish or commit them.
+/local-settings/
+# Dispatcher runtime configuration is supplied privately through Azure app settings.
+/SengokuDispatcher.API/appsettings.json
+/database

@@ -1,10 +1,11 @@
+using SengokuDispatcher.Library.Services.Players;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
-using SengokuProvider.Library.Workflows.Events;
+using SengokuDispatcher.Library.Workflows.Events;
 using SengokuProvider.Library.Models.Events;
 using Dapper;
 using SengokuProvider.Library.Services.Legends;
-using SengokuProvider.Library.Workflows.Legends;
+using SengokuDispatcher.Library.Workflows.Legends;
 using Npgsql;
 using System.Net;
 using System.Text;

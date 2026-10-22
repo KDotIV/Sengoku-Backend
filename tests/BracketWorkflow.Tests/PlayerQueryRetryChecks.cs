@@ -120,7 +120,14 @@ static class PlayerQueryRetryChecks
 
     private static PlayerQueryService Service(GraphQLHttpClient client)
     {
-        var config = Stub.For<IConfiguration>((name, _) => name == "get_Item" ? "test-token" : throw new Exception(name));
+        var values = new Dictionary<string, string?> { ["GraphQLSettings:PlayerBearer"] = "test-token" };
+        lock (BearerConstants.TokenQueue)
+        {
+            int index = 0;
+            foreach (var token in BearerConstants.TokenQueue)
+                values[$"GraphQLSettings:Bearer:{index++}"] = token;
+        }
+        var config = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         return new PlayerQueryService("", config, client, new RequestThrottler(config), null!);
     }
     private static GraphQLHttpClient Client(HttpMessageHandler handler) => new(

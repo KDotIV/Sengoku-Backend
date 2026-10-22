@@ -1,9 +1,10 @@
+using SengokuDispatcher.Library.Services.Players;
 using Dapper;
 using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Players;
-using SengokuProvider.Worker.Handlers;
+using SengokuDispatcher.Library.Models.Messaging;
 
 static class PostgresChecks
 {
@@ -55,6 +56,33 @@ static class PostgresChecks
             Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_processing_outbox") == 0, "outbox rollback");
             Assert(await connection.ExecuteScalarAsync<int>("SELECT count(*) FROM bracket_processing_checkpoints") == 0, "checkpoint rollback");
             Console.WriteLine("PASS PostgreSQL checkpoint/outbox rollback and repeatable migration");
+
+            var pending = Fixture.Checkpoint();
+            pending.RequestKey = "pending-outbox";
+            pending.Result.Status = "Pending";
+            await store.ExecuteAsync(pending.RequestKey, async (_, conn, tx) =>
+            {
+                // Production queues the notification before inserting its checkpoint.
+                await store.EnqueueAsync(conn, tx, pending.OperationId, "players",
+                    new PlayerReceivedData
+                    {
+                        Command = new ResumeBracketProcessingCommand { OperationId = pending.OperationId },
+                        MessagePriority = MessagePriority.SystemIntake
+                    }, DateTime.UtcNow);
+                return pending;
+            });
+            Assert(await connection.ExecuteScalarAsync<int>(
+                "SELECT count(*) FROM bracket_processing_outbox WHERE operation_id = @OperationId AND attempts = 0 AND sent_at IS NULL",
+                new { pending.OperationId }) == 1, "pending notification committed with its checkpoint");
+            await store.ExecuteAsync(pending.RequestKey, (current, _, _) =>
+            {
+                current!.Result.Status = "Completed";
+                return Task.FromResult(current);
+            });
+            Assert(await connection.ExecuteScalarAsync<int>(
+                "SELECT count(*) FROM bracket_processing_outbox WHERE operation_id = @OperationId",
+                new { pending.OperationId }) == 0, "completion removes unsent notifications");
+            Console.WriteLine("PASS PostgreSQL pending outbox commit and completion cleanup");
 
             var concurrent = Enumerable.Range(0, 12).Select(_ => store.ExecuteAsync("serialized", (current, _, _) =>
             {

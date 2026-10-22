@@ -4,7 +4,7 @@ using System.Text.Json;
 using Dapper;
 using Npgsql;
 using Microsoft.AspNetCore.DataProtection;
-using SengokuProvider.Library.Services.Feeds;
+using SengokuDispatcher.Library.Services.Feeds;
 
 using SengokuProvider.Library.Models.Feeds;
 using SengokuProvider.Library.Services.Events;
@@ -41,6 +41,8 @@ transport.Status = HttpStatusCode.NotFound;
 Check((await discord.Send(webhook, digest, default)).Status == "InvalidDestination", "deleted webhook classified");
 Console.WriteLine("PASS filter validation, Southeast preset, safe webhook URLs, Discord formatting, acknowledgements and rate limits");
 await WebhookConnectionChecks.Run();
+await DispatcherChecks.Run();
+await ProviderBoundaryChecks.Run();
 if (args.Length < 1) { Console.WriteLine("SKIP PostgreSQL checks: pass appsettings path to use a disposable test schema."); return; }
 await ScheduleAndConnectionChecks.Run(args[0]);
 

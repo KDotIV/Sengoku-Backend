@@ -1,8 +1,8 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Events;
-using SengokuProvider.Library.Workflows.Events;
+using SengokuDispatcher.Library.Workflows.Events;
 using SengokuProvider.Library.Services.Orgs;
 
 namespace SengokuProvider.API.Controllers

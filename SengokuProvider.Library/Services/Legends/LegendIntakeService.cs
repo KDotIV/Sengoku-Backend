@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using Microsoft.Extensions.Configuration;
 using Newtonsoft.Json;
 using Npgsql;
@@ -12,7 +12,6 @@ using SengokuProvider.Library.Services.Common.Interfaces;
 using SengokuProvider.Library.Services.Events;
 using SengokuProvider.Library.Services.Players;
 using SengokuProvider.Library.Services.Users;
-using SengokuProvider.Worker.Handlers;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;

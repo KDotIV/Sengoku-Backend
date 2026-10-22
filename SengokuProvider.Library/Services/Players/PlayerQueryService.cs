@@ -1020,6 +1020,7 @@ namespace SengokuProvider.Library.Services.Players
                     }
                     catch (Exception ex)
                     {
+                        retryCount++;
                         if (retryCount >= maxRetries)
                         {
                             // Throw out of both loops; never advance to another page after exhaustion.
@@ -1027,7 +1028,6 @@ namespace SengokuProvider.Library.Services.Players
                                 $"Failed to retrieve player data for {tournamentLink}, page {currentPage}, after {maxRetries} attempts. Aborting operation.", ex);
                         }
                         Console.WriteLine($"Player query failed for {tournamentLink}, page {currentPage}, attempt {retryCount}/{maxRetries}: {ex.Message}. Retrying in {delay}ms.");
-                        retryCount++;
                         await Task.Delay(delay);
                     }
                 }
