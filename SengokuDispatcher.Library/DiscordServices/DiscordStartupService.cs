@@ -14,7 +14,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             try
             {
                 _log.LogInformation("Starting Discord socket initialization…");
-                await _listenerManager.InitializeAllAsync(cancellationToken);
+                //await _listenerManager.InitializeAllAsync(cancellationToken);
                 _log.LogInformation("Discord socket initialization completed.");
             }
             catch (Exception ex)
