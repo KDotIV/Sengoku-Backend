@@ -8,20 +8,19 @@ namespace SengokuProvider.Library.Services.Users;
 
 public partial class UserService
 {
-    /// <summary>
-    /// Persists a fetched public profile for an authorized local user/player pair.
-    /// This association does not prove ownership of the external account.
-    /// </summary>
     public async Task<StartggProfileLink> SaveStartggProfile(int userId, int playerId, CommonUserNode profile,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(userId);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(playerId);
         ArgumentNullException.ThrowIfNull(profile);
+
         if (profile.Id <= 0 || profile.Player == null || profile.Player.Id <= 0 || string.IsNullOrWhiteSpace(profile.Slug))
             throw new ArgumentException("A complete start.gg user and player profile is required.", nameof(profile));
+
         var link = new StartggProfileLink(userId, playerId, profile.Id, profile.Player.Id, profile.Slug);
         var json = JsonConvert.SerializeObject(profile);
+
         try
         {
             await using var conn = new NpgsqlConnection(_connectionString);

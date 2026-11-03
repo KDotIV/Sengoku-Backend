@@ -21,6 +21,7 @@ public partial class EventQueryService : IEventFeedQueryService
                     minimum = filter.MinimumEntrants, openOnly = filter.RegistrationOpenOnly,
                     attendance = filter.Attendance, states = filter.States, city = filter.City, limit = filter.MaxEvents + 1
                 }, cancellationToken: ct))).ToList();
+
             foreach (var row in rows)
             {
                 row.StartTimeUtc = DateTime.SpecifyKind(row.StartTimeUtc, DateTimeKind.Utc);

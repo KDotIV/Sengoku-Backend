@@ -31,6 +31,7 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
         var path = slug?.Trim('/') ?? "";
         if (!Regex.IsMatch(path, @"\Atournament/[a-zA-Z0-9_-]+(?:/event/[a-zA-Z0-9_-]+)?\z"))
             throw new ArgumentException("Invalid start.gg tournament slug.");
+
         return "https://start.gg/" + path;
     }
     private static string Text(string value, int max) => new(value.Where(c => !char.IsControl(c)).Take(max).ToArray());
@@ -41,8 +42,10 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
             title = Text(e.Name, 180), url = SignupUrl(e.SignupSlug),
             description = $"{Text(e.Location, 100)}\n<t:{new DateTimeOffset(DateTime.SpecifyKind(e.StartUtc, DateTimeKind.Utc)).ToUnixTimeSeconds()}:F>\nEntrants: {(e.Entrants?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unknown")}\n[View / register on start.gg]({SignupUrl(e.SignupSlug)})"
         }).ToArray();
+
         if (embeds.Any(e => e.url.Length > 2048 || e.description.Length > 4096) || embeds.Sum(e => e.title.Length + e.description.Length) > 6000)
             throw new ArgumentException("Event data exceeds Discord's embed limits.");
+
         return new {
             content = Text(digest.Name, 100) + (digest.HasMore ? " — first matches; more events match your filters." : " — upcoming tournaments"),
             allowed_mentions = new { parse = Array.Empty<string>() },

@@ -45,15 +45,20 @@ public sealed class UserOperations : IUserOperations
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(userId);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(playerId);
+
         cancellationToken.ThrowIfCancellationRequested();
         await _throttler.WaitIfPaused();
+
         var response = await _client.SendQueryAsync<UserGraphQLResult>(request, cancellationToken);
+
         // GraphQL may return partial data alongside errors. Never persist partial identities.
         if (response.Errors is { Length: > 0 })
             throw new ApplicationException("start.gg rejected the profile lookup.");
+
         var profile = response.Data?.UserNode;
         if (profile == null || profile.Id <= 0)
             throw new KeyNotFoundException("The start.gg user was not found.");
+
         if (profile.Player == null || profile.Player.Id <= 0 || string.IsNullOrWhiteSpace(profile.Slug))
             throw new InvalidOperationException("The start.gg user has no complete player profile.");
         return await _users.SaveStartggProfile(userId, playerId, profile, cancellationToken);

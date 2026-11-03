@@ -29,6 +29,7 @@ public sealed class DiscordWebhookConnection(IHttpClientFactory clients, IEventF
             if (matches.Length > 1) throw new FeedConflictException("Multiple feeds have that name. Use feedId instead.");
             feed = matches.SingleOrDefault();
         }
+
         if (feed == null) return null;
         if (request.ExpectedVersion is int version && version != feed.Version)
             throw new FeedConflictException("The feed changed. Reload before reconnecting.");
@@ -39,6 +40,7 @@ public sealed class DiscordWebhookConnection(IHttpClientFactory clients, IEventF
 
         if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             throw new ArgumentException("The Discord webhook is invalid or no longer available.");
+
         if (!response.IsSuccessStatusCode) throw new HttpRequestException("Unable to verify the Discord webhook. Try again later.");
 
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
