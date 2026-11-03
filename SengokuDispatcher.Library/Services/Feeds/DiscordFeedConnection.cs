@@ -100,6 +100,7 @@ public sealed class DiscordFeedConnection(IConfiguration config, IHttpClientFact
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         try { using var response = await client.DeleteAsync(destination, timeout.Token); }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException) { }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException) {
+            Sengoku.Observability.OperationLog.Failure(ex); }
     }
 }

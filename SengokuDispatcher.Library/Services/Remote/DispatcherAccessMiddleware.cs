@@ -30,6 +30,7 @@ public sealed class DispatcherAccessMiddleware(RequestDelegate next, IConfigurat
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { throw; }
         catch (Exception ex) when (!context.Response.HasStarted)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             context.Response.StatusCode = ex switch
             {
                 FeedConflictException => StatusCodes.Status409Conflict,

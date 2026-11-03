@@ -93,6 +93,7 @@ public class LegendsOperations : ILegendsOperations
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Generating New Legend for PlayerID: {standing.TournamentLinks.PlayerId} - {ex.Message}");
                 var player = await _playerQuery.GetPlayerDataById(standing.TournamentLinks.PlayerId);
                 await SendPlayerIntakeMessage(player.PlayerLinkID, player.PlayerName);
@@ -139,7 +140,8 @@ public class LegendsOperations : ILegendsOperations
             return await _users.CreateUser(playerName, playerEmail, GenerateHashedPassword(), playerId) > 0
                 ? "Successfully Registered!" : "User already registered";
         }
-        catch (Exception ex) { return ex.Message; }
+        catch (Exception ex) {
+            Sengoku.Observability.OperationLog.Failure(ex); return ex.Message; }
     }
 
     public async Task<bool> AddLeagueToUser(int leagueId, int userId)
@@ -165,7 +167,8 @@ public class LegendsOperations : ILegendsOperations
     private async Task<int> UpdateTournamentStandings(int[] ids)
     {
         try { await _eventQuery.GetTournamentLinksById(ids); return await _eventIntake.IntakeTournamentsByLinkId(ids); }
-        catch (Exception ex) { Console.WriteLine($"Error while Updating Tournament Standings: {ex.Message} - {ex.StackTrace}"); return 0; }
+        catch (Exception ex) {
+            Sengoku.Observability.OperationLog.Failure(ex); Console.WriteLine($"Error while Updating Tournament Standings: {ex.Message} - {ex.StackTrace}"); return 0; }
     }
 
     private async Task<HashSet<int>> ExtractPlayerIds(int[] tournamentLinks)

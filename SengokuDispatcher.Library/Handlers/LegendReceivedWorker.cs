@@ -10,6 +10,7 @@ using SengokuProvider.Library.Services.Common;
 using SengokuDispatcher.Library.Factories;
 using SengokuDispatcher.Library.Workflows.Legends;
 using SengokuProvider.Library.Services.Players;
+using Sengoku.Observability;
 
 namespace SengokuDispatcher.Library.Handlers
 {
@@ -20,13 +21,15 @@ namespace SengokuDispatcher.Library.Handlers
         private readonly IPlayerHandlerFactory _playerFactory;
         private readonly ILegendsOperations _legendsOperations;
         private readonly IConfiguration _configuration;
+        private readonly OperationLogger _operations;
         private readonly IBracketCheckpointStore _checkpoints;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
-        public LegendReceivedWorker(ILogger<LegendReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus, ILegendHandlerFactory legendFactory, IPlayerHandlerFactory playerFactory, ILegendsOperations legendsOperations, IBracketCheckpointStore checkpoints)
+        public LegendReceivedWorker(ILogger<LegendReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus, ILegendHandlerFactory legendFactory, IPlayerHandlerFactory playerFactory, ILegendsOperations legendsOperations, IBracketCheckpointStore checkpoints, OperationLogger operations)
         {
             _log = logger;
+            _operations = operations;
             _configuration = config;
             _client = serviceBus;
             _legendFactory = legendFactory;
@@ -86,13 +89,15 @@ namespace SengokuDispatcher.Library.Handlers
             return Task.CompletedTask;
         }
 
-        private async Task MessageHandler(ProcessMessageEventArgs args)
+        private Task MessageHandler(ProcessMessageEventArgs args) => MessageOperation.Run(_operations, "LegendReceived.Process", args, () => ProcessMessage(args));
+        private async Task ProcessMessage(ProcessMessageEventArgs args)
         {
             _log.LogWarning("Received Message...");
 
             var currentMessage = await ParseMessage(args.Message);
             if (currentMessage?.Command == null)
             {
+                OperationLog.Current?.Reject("InvalidCommand");
                 await args.DeadLetterMessageAsync(args.Message, "InvalidCommand", cancellationToken: args.CancellationToken);
                 return;
             }
@@ -123,9 +128,11 @@ namespace SengokuDispatcher.Library.Handlers
                         throw new NotSupportedException($"Unsupported legend command: {currentMessage.Command.Topic}");
                 }
                 await args.CompleteMessageAsync(args.Message);
+                OperationLog.Event("Message.Settled", ("Settlement", "Completed"));
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError("Command processing failed for message {MessageId} ({ErrorType})", args.Message.MessageId, ex.GetType().Name);
                 if (currentMessage.Command is OnboardLegendsByPlayerLinkCommand &&
                     ex is not ArgumentException && ex is not NotSupportedException)
@@ -199,6 +206,7 @@ namespace SengokuDispatcher.Library.Handlers
             }
             catch (JsonException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex.Message);
             }
             return null;

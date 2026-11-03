@@ -34,6 +34,10 @@ SengokuProvider.Worker/appsettings.Development.json
 /SengokuDispatcher.API/Properties
 /SengokuDispatcher.Library/bin/Debug/net8.0
 /SengokuDispatcher.Library/obj
+/Sengoku.Observability/bin/
+/Sengoku.Observability/obj/
+/tests/OperationLogging.Tests/bin/
+/tests/OperationLogging.Tests/obj/
 
 # Version the database contracts required by regression suites.
 !/database/
@@ -71,3 +75,4 @@ SengokuProvider.Worker/appsettings.Development.json
 # Dispatcher runtime configuration is supplied privately through Azure app settings.
 /SengokuDispatcher.API/appsettings.json
 /database
+/.azure/plan.md

@@ -92,6 +92,7 @@ namespace SengokuDispatcher.Library.Workflows.Players
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -117,6 +118,7 @@ namespace SengokuDispatcher.Library.Workflows.Players
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
@@ -139,6 +141,7 @@ namespace SengokuDispatcher.Library.Workflows.Players
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred during Player Intake: {ex.StackTrace}", ex);
             }
         }
@@ -397,6 +400,7 @@ namespace SengokuDispatcher.Library.Workflows.Players
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"BracketRunner error occurred: {ex.Message}");
                 throw;
             }
@@ -692,6 +696,7 @@ namespace SengokuDispatcher.Library.Workflows.Players
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     Console.WriteLine($"Error Occured populating Standing Data: {ex.Message}, {ex.StackTrace}");
                     continue;
                 }
@@ -770,6 +775,7 @@ namespace SengokuDispatcher.Library.Workflows.Players
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Unexpected Error Sending Onboarding Message {ex.Message} {ex.StackTrace}");
             }
         }
@@ -842,10 +848,12 @@ namespace SengokuDispatcher.Library.Workflows.Players
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;

@@ -61,6 +61,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "VerifyCustomerFromRoleMap failed for Guild: {GuildId}, User: {DiscordId}", guildId, discordId);
                 throw;
             }
@@ -101,6 +102,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "GetServerWhiteList failed for Guild: {GuildId}", guildId);
                 throw;
             }
@@ -129,6 +131,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError("Customer lookup failed (SQLSTATE {SqlState})", ex.SqlState);
                 throw;
             }
@@ -157,6 +160,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError("Customer lookup failed (SQLSTATE {SqlState})", ex.SqlState);
                 throw;
             }
@@ -200,10 +204,12 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
                 return Array.Empty<CustomerProfileData>();
             }

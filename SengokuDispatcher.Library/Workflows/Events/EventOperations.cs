@@ -70,6 +70,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -108,10 +109,12 @@ namespace SengokuDispatcher.Library.Workflows.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
                 return 0;
             }
@@ -127,6 +130,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -160,6 +164,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -196,233 +201,265 @@ namespace SengokuDispatcher.Library.Workflows.Events
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
         private async Task<bool> SendTournamentPlayerIntakeMessage(int tournamentLink)
         {
-            if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
+            return await Sengoku.Observability.OperationLog.RunAsync<bool>("EventOperations.SendTournamentPlayerIntakeMessage", async () =>
             {
-                Console.WriteLine("Service Bus Settings Cannot be empty or null");
-                return false;
-            }
-            try
-            {
-                var newCommand = new PlayerReceivedData
+                if (string.IsNullOrEmpty(_config["ServiceBusSettings:PlayerReceivedQueue"]) || _config == null)
                 {
-                    Command = new IntakePlayersByTournamentCommand
-                    {
-                        Topic = CommandRegistry.IntakePlayersByTournament,
-                        TournamentLink = tournamentLink,
-                    },
-                    MessagePriority = MessagePriority.SystemIntake
-                };
-                var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
-                var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:PlayerReceivedQueue"], messageJson);
-
-                if (!result)
-                {
-                    Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                    Console.WriteLine("Service Bus Settings Cannot be empty or null");
                     return false;
                 }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
-            }
+                try
+                {
+                    var newCommand = new PlayerReceivedData
+                    {
+                        Command = new IntakePlayersByTournamentCommand
+                        {
+                            Topic = CommandRegistry.IntakePlayersByTournament,
+                            TournamentLink = tournamentLink,
+                        },
+                        MessagePriority = MessagePriority.SystemIntake
+                    };
+                    var messageJson = JsonConvert.SerializeObject(newCommand, JsonSettings.DefaultSettings);
+                    var result = await _azureBusApiService.SendBatchAsync(_config["ServiceBusSettings:PlayerReceivedQueue"], messageJson);
+
+                    if (!result)
+                    {
+                        Console.WriteLine("Failed to Send Service Bus Message to Event Received Queue. Check Data");
+                        return false;
+                    }
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+                }
+            });
         }
         private async Task<int> ProcessTournamentData(EventGraphQLResult newEventData)
         {
-            var totalSuccess = 0;
-            try
+            return await Sengoku.Observability.OperationLog.RunAsync<int>("EventOperations.ProcessTournamentData", async () =>
             {
-                var currentBatch = BuildTournamentData(newEventData);
-                if (currentBatch == null || currentBatch.Count == 0) { return 0; }
-                totalSuccess = await _intakeService.InsertNewTournamentData(totalSuccess, currentBatch);
-
-                Console.WriteLine($"Sending Tournament Links for Player Intake");
-                foreach (var tournamentLink in currentBatch)
+                var totalSuccess = 0;
+                try
                 {
-                    await SendTournamentPlayerIntakeMessage(tournamentLink.Id);
+                    var currentBatch = BuildTournamentData(newEventData);
+                    if (currentBatch == null || currentBatch.Count == 0) { return 0; }
+                    totalSuccess = await _intakeService.InsertNewTournamentData(totalSuccess, currentBatch);
+
+                    Console.WriteLine($"Sending Tournament Links for Player Intake");
+                    foreach (var tournamentLink in currentBatch)
+                    {
+                        await SendTournamentPlayerIntakeMessage(tournamentLink.Id);
+                    }
+                    return totalSuccess;
+                }
+                catch (NpgsqlException ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+                }
+                catch (Exception ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
                 }
                 return totalSuccess;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-            }
-            return totalSuccess;
+            });
         }
         private List<TournamentData>? BuildTournamentData(EventGraphQLResult newEventData)
         {
-            if (newEventData == null) { return null; }
-            var tournamentBatch = new List<TournamentData>();
-
-            foreach (var currentEvent in newEventData.Events.Nodes)
+            return Sengoku.Observability.OperationLog.Run<List<TournamentData>?>("EventOperations.BuildTournamentData", () =>
             {
-                if (currentEvent.Tournaments == null) continue;
-                if (currentEvent.Tournaments.Count == 0) continue;
+                if (newEventData == null) { return null; }
+                var tournamentBatch = new List<TournamentData>();
 
-                foreach (var tournament in currentEvent.Tournaments)
+                foreach (var currentEvent in newEventData.Events.Nodes)
                 {
+                    if (currentEvent.Tournaments == null) continue;
+                    if (currentEvent.Tournaments.Count == 0) continue;
+
+                    foreach (var tournament in currentEvent.Tournaments)
+                    {
+                        TournamentData newTournamentData = new TournamentData
+                        {
+                            Id = tournament.Id,
+                            UrlSlug = tournament.UrlSlug ?? "",
+                            EventId = currentEvent.Id,
+                            GameId = tournament?.Videogame?.Id ?? 0,
+                            EntrantsNum = tournament?.NumEntrants ?? 0,
+                            LastUpdated = DateTime.UtcNow
+                        };
+                        tournamentBatch.Add(newTournamentData);
+                    }
+                }
+                Sengoku.Observability.OperationLog.Data(("ItemCount", tournamentBatch.Count));
+                return tournamentBatch;
+            });
+        }
+        private List<TournamentData> BuildTournamentData(List<TournamentLinkGraphQLResult?> newEventData)
+        {
+            return Sengoku.Observability.OperationLog.Run<List<TournamentData>>("EventOperations.BuildTournamentData", () =>
+            {
+                if (newEventData == null || newEventData.Count == 0) { throw new ArgumentNullException("Event Data cannot be Null"); }
+                var tournamentBatch = new List<TournamentData>();
+
+                foreach (var currentLink in newEventData)
+                {
+                    if (currentLink?.TournamentLink == null) continue;
                     TournamentData newTournamentData = new TournamentData
                     {
-                        Id = tournament.Id,
-                        UrlSlug = tournament.UrlSlug ?? "",
-                        EventId = currentEvent.Id,
-                        GameId = tournament?.Videogame?.Id ?? 0,
-                        EntrantsNum = tournament?.NumEntrants ?? 0,
+                        Id = currentLink.TournamentLink.Id,
+                        UrlSlug = currentLink.TournamentLink.UrlSlug ?? "",
+                        EventId = currentLink.TournamentLink?.EventLink?.Id ?? 0,
+                        GameId = currentLink.TournamentLink?.Videogame?.Id ?? 0,
+                        EntrantsNum = currentLink.TournamentLink?.NumEntrants ?? 0,
                         LastUpdated = DateTime.UtcNow
                     };
                     tournamentBatch.Add(newTournamentData);
                 }
-            }
-            return tournamentBatch;
-        }
-        private List<TournamentData> BuildTournamentData(List<TournamentLinkGraphQLResult?> newEventData)
-        {
-            if (newEventData == null || newEventData.Count == 0) { throw new ArgumentNullException("Event Data cannot be Null"); }
-            var tournamentBatch = new List<TournamentData>();
-
-            foreach (var currentLink in newEventData)
-            {
-                if (currentLink?.TournamentLink == null) continue;
-                TournamentData newTournamentData = new TournamentData
-                {
-                    Id = currentLink.TournamentLink.Id,
-                    UrlSlug = currentLink.TournamentLink.UrlSlug ?? "",
-                    EventId = currentLink.TournamentLink?.EventLink?.Id ?? 0,
-                    GameId = currentLink.TournamentLink?.Videogame?.Id ?? 0,
-                    EntrantsNum = currentLink.TournamentLink?.NumEntrants ?? 0,
-                    LastUpdated = DateTime.UtcNow
-                };
-                tournamentBatch.Add(newTournamentData);
-            }
-            return tournamentBatch;
+                Sengoku.Observability.OperationLog.Data(("ItemCount", tournamentBatch.Count));
+                return tournamentBatch;
+            });
         }
         private async Task<Tuple<int, int>> ProcessEventData(EventGraphQLResult queryData)
         {
-            var addressMap = new Dictionary<string, int>(); // Map to store address and its ID
-            var addresses = new List<AddressData>();
-            var events = new List<EventData>();
-
-            for (int i = 0; i < queryData.Events.Nodes.Count; i++)
+            return await Sengoku.Observability.OperationLog.RunAsync<Tuple<int, int>>("EventOperations.ProcessEventData", async () =>
             {
-                var newAddress = await HandleNewAddress(addressMap, queryData.Events.Nodes[i]);
-                addresses.Add(newAddress);
-                queryData.Events.Nodes[i].VenueAddress = newAddress.Address;
-            }
+                var addressMap = new Dictionary<string, int>(); // Map to store address and its ID
+                var addresses = new List<AddressData>();
+                var events = new List<EventData>();
 
-            // Insert all new addresses and cache the generated IDs
-            int addressSuccesses = await _intakeService.InsertNewAddressData(addresses);
-
-            // Update cache with new IDs
-            foreach (var address in addresses)
-            {
-                _addressCache[address.Address ?? string.Empty] = address.Id;
-                addressMap[address.Address ?? string.Empty] = address.Id;
-            }
-
-            // Process events after all addresses are handled
-            foreach (var node in queryData.Events.Nodes)
-            {
-                if (!await CheckDuplicateEvents(node.Id))
+                for (int i = 0; i < queryData.Events.Nodes.Count; i++)
                 {
-                    string regionId = await GetRegionId(node.City);
-                    int addressId = addressMap.TryGetValue(node.VenueAddress ?? string.Empty, out var id) ? id : 0; // Use the confirmed address ID from the map or give default if online event
-
-                    var newEventData = new EventData
-                    {
-                        LinkID = node.Id,
-                        EventName = node.Name,
-                        City = node.City,
-                        AddrState = node.AddrState,
-                        CountryCode = node.CountryCode,
-                        EventDescription = "Sample description",
-                        Region = regionId,
-                        AddressID = addressId,
-                        StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
-                        EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
-                        ClosingRegistration = node.RegistrationClosesAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime : null,
-                        IsRegistrationOpen = node.IsRegistrationOpen,
-                        IsOnline = node.IsOnline,
-                        LastUpdate = DateTime.UtcNow,
-                        UrlSlug = node.Slug
-                    };
-                    events.Add(newEventData);
+                    var newAddress = await HandleNewAddress(addressMap, queryData.Events.Nodes[i]);
+                    addresses.Add(newAddress);
+                    queryData.Events.Nodes[i].VenueAddress = newAddress.Address;
                 }
-                else
+
+                // Insert all new addresses and cache the generated IDs
+                int addressSuccesses = await _intakeService.InsertNewAddressData(addresses);
+
+                // Update cache with new IDs
+                foreach (var address in addresses)
                 {
-                    var updatedEventData = new EventData
-                    {
-                        LinkID = node.Id,
-                        EventName = node.Name,
-                        City = node.City,
-                        AddrState = node.AddrState,
-                        CountryCode = node.CountryCode,
-                        EventDescription = "Sample description",
-                        StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
-                        EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
-                        ClosingRegistration = node.RegistrationClosesAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime : null,
-                        IsRegistrationOpen = node.IsRegistrationOpen,
-                        IsOnline = node.IsOnline,
-                        LastUpdate = DateTime.UtcNow,
-                        UrlSlug = node.Slug
-                    };
-                    events.Add(updatedEventData);
+                    _addressCache[address.Address ?? string.Empty] = address.Id;
+                    addressMap[address.Address ?? string.Empty] = address.Id;
                 }
-            }
 
-            // Insert events data
-            int eventSuccesses = await _intakeService.InsertNewEventsData(events);
+                // Process events after all addresses are handled
+                foreach (var node in queryData.Events.Nodes)
+                {
+                    if (!await CheckDuplicateEvents(node.Id))
+                    {
+                        string regionId = await GetRegionId(node.City);
+                        int addressId = addressMap.TryGetValue(node.VenueAddress ?? string.Empty, out var id) ? id : 0; // Use the confirmed address ID from the map or give default if online event
 
-            return Tuple.Create(addressSuccesses, eventSuccesses);
+                        var newEventData = new EventData
+                        {
+                            LinkID = node.Id,
+                            EventName = node.Name,
+                            City = node.City,
+                            AddrState = node.AddrState,
+                            CountryCode = node.CountryCode,
+                            EventDescription = "Sample description",
+                            Region = regionId,
+                            AddressID = addressId,
+                            StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
+                            EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
+                            ClosingRegistration = node.RegistrationClosesAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime : null,
+                            IsRegistrationOpen = node.IsRegistrationOpen,
+                            IsOnline = node.IsOnline,
+                            LastUpdate = DateTime.UtcNow,
+                            UrlSlug = node.Slug
+                        };
+                        events.Add(newEventData);
+                    }
+                    else
+                    {
+                        var updatedEventData = new EventData
+                        {
+                            LinkID = node.Id,
+                            EventName = node.Name,
+                            City = node.City,
+                            AddrState = node.AddrState,
+                            CountryCode = node.CountryCode,
+                            EventDescription = "Sample description",
+                            StartTime = DateTimeOffset.FromUnixTimeSeconds(node.StartAt).DateTime,
+                            EndTime = DateTimeOffset.FromUnixTimeSeconds(node.EndAt).DateTime,
+                            ClosingRegistration = node.RegistrationClosesAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(node.RegistrationClosesAt).DateTime : null,
+                            IsRegistrationOpen = node.IsRegistrationOpen,
+                            IsOnline = node.IsOnline,
+                            LastUpdate = DateTime.UtcNow,
+                            UrlSlug = node.Slug
+                        };
+                        events.Add(updatedEventData);
+                    }
+                }
+
+                // Insert events data
+                int eventSuccesses = await _intakeService.InsertNewEventsData(events);
+
+                return Tuple.Create(addressSuccesses, eventSuccesses);
+            });
         }
         private async Task<AddressData> HandleNewAddress(Dictionary<string, int> addressMap, EventNode node)
         {
-            var addressData = new AddressData();
-            if (string.IsNullOrEmpty(node.VenueAddress))
+            return await Sengoku.Observability.OperationLog.RunAsync<AddressData>("EventOperations.HandleNewAddress", async () =>
             {
-                addressData.Address = "online";
-                addressData.Latitude = 0.0;
-                addressData.Longitude = 0.0;
-
-                addressMap["online"] = 0;
-                return addressData;
-            }
-            if (!_addressCache.TryGetValue(node.VenueAddress, out int addressId))
-            {
-                if (!addressMap.ContainsKey(node.VenueAddress))
+                var addressData = new AddressData();
+                if (string.IsNullOrEmpty(node.VenueAddress))
                 {
-                    addressId = await CheckDuplicateAddress(node.VenueAddress);
-                    if (addressId == 0)
-                    {
-                        addressData.Address = node.VenueAddress;
-                        addressData.Latitude = node.Lat;
-                        addressData.Longitude = node.Lng;
-                    }
-                    addressMap[node.VenueAddress] = addressId; // Cache or re-cache the id
+                    addressData.Address = "online";
+                    addressData.Latitude = 0.0;
+                    addressData.Longitude = 0.0;
+
+                    addressMap["online"] = 0;
+                    return addressData;
                 }
-            }
-            else
-            {
-                addressMap[node.VenueAddress] = addressId;
-            }
-            return addressData;
+                if (!_addressCache.TryGetValue(node.VenueAddress, out int addressId))
+                {
+                    if (!addressMap.ContainsKey(node.VenueAddress))
+                    {
+                        addressId = await CheckDuplicateAddress(node.VenueAddress);
+                        if (addressId == 0)
+                        {
+                            addressData.Address = node.VenueAddress;
+                            addressData.Latitude = node.Lat;
+                            addressData.Longitude = node.Lng;
+                        }
+                        addressMap[node.VenueAddress] = addressId; // Cache or re-cache the id
+                    }
+                }
+                else
+                {
+                    addressMap[node.VenueAddress] = addressId;
+                }
+                return addressData;
+            });
         }
         private async Task<string> GetRegionId(string? city)
         {
-            var queryResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city ?? string.Empty) });
-            return queryResult?.Id ?? "00000";
+            return await Sengoku.Observability.OperationLog.RunAsync<string>("EventOperations.GetRegionId", async () =>
+            {
+                var queryResult = await _queryService.QueryRegion(new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", city ?? string.Empty) });
+                Sengoku.Observability.OperationLog.Data(("RegionId", queryResult?.Id), ("Outcome", queryResult == null ? "RegionNotFound" : "ExistingRegion"));
+                return queryResult?.Id ?? "00000";
+            });
         }
         public async Task<string> IntakeNewRegion(AddressData addressData)
         {
-            if (string.IsNullOrEmpty(addressData.Address)) return "00000";
+            if (string.IsNullOrEmpty(addressData.Address))
+            {
+                Sengoku.Observability.OperationLog.Current?.Reject("RegionInputMissing");
+                return "00000";
+            }
 
             var addressSplit = addressData.Address.Split(",");
             if (addressSplit.Length < 3)
@@ -447,6 +484,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
 
             var cityQuery = new GetRegionCommand { QueryParameter = new Tuple<string, string>("name", tempCity) };
             var result = await VerifyRegion(cityQuery);
+            Sengoku.Observability.OperationLog.Event("Region.Lookup", ("HasResult", result != null), ("RegionId", result?.Id));
 
             if (result == null)
             {
@@ -465,11 +503,13 @@ namespace SengokuDispatcher.Library.Workflows.Events
 
                     if (insertResult > 0)
                     {
+                        Sengoku.Observability.OperationLog.Event("Region.Created", ("RegionId", tempZipCode), ("Created", true), ("RowsAffected", insertResult));
                         return tempZipCode;
                     }
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     Console.WriteLine($"Error While Inserting Region Data: {ex.Message} - {ex.StackTrace}");
                 }
             }
@@ -514,152 +554,19 @@ namespace SengokuDispatcher.Library.Workflows.Events
         #region Query Commands
         private async Task<EventGraphQLResult?> QueryStartggTournamentDataByEventLink(int eventLinkId)
         {
-            var tempQuery = @"query TournamentQuery($tournamentId: ID) {
+            return await Sengoku.Observability.OperationLog.RunAsync<EventGraphQLResult?>("EventOperations.QueryStartggTournamentDataByEventLink", async () =>
+            {
+                var tempQuery = @"query TournamentQuery($tournamentId: ID) {
                                 tournaments(query: {filter: {id: $tournamentId}}) {
                                     nodes { id, name, addrState,countryCode, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug,
                                         events { id, slug, numEntrants, videogame { id }}}}}";
 
-            var request = new GraphQLHttpRequest
-            {
-                Query = tempQuery,
-                Variables = new
-                {
-                    tournamentId = eventLinkId
-                }
-            };
-
-            bool success = false;
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const int delay = 1000;
-
-            while (!success && retryCount < maxRetries)
-            {
-                await _requestThrottler.WaitIfPaused();
-
-                try
-                {
-                    var response = await _client.SendQueryAsync<JObject>(request);
-                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
-
-                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
-
-                    success = true;
-                    return eventData;
-                }
-                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    var errorContent = ex.Content;
-                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                    retryCount++;
-                    if (retryCount >= maxRetries)
-                    {
-                        Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests(_client);
-                    }
-                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                    await Task.Delay(delay);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    throw;
-                }
-            }
-            return null;
-        }
-        private async Task<EventGraphQLResult?> QueryStartggEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
-        {
-            var tempQuery = @"query TournamentQuery($perPage: Int, $videogameIds: [ID], $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) {
-                          tournaments(query: {
-                            perPage: $perPage
-                            filter: {
-                              videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
-                            }}) {
-                            nodes { id name slug startAt endAt addrState countryCode city lat lng venueAddress registrationClosesAt isRegistrationOpen isOnline events { id, slug, numEntrants, videogame { id }}}}}";
-
-            var request = new GraphQLHttpRequest
-            {
-                Query = tempQuery,
-                Variables = new
-                {
-                    perPage = intakeCommand.Page,
-                    state = intakeCommand.StateCode,
-                    yearStart = intakeCommand.StartDate,
-                    yearEnd = intakeCommand.EndDate,
-                    videogameIds = intakeCommand.GameIDs
-                }
-            };
-
-            bool success = false;
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const int delay = 1000;
-
-            while (!success && retryCount < maxRetries)
-            {
-                await _requestThrottler.WaitIfPaused();
-
-                try
-                {
-                    var response = await _client.SendQueryAsync<JObject>(request);
-                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
-
-                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
-
-                    success = true;
-                    return eventData;
-                }
-                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    var errorContent = ex.Content;
-                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                    retryCount++;
-                    if (retryCount >= maxRetries)
-                    {
-                        Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests(_client);
-                    }
-                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                    await Task.Delay(delay);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    throw;
-                }
-            }
-            return null;
-        }
-        private async Task<EventGraphQLResult?> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
-        {
-            var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp)
-        { tournaments(query: {
-            perPage: $perPage, page: $pagenum
-            filter: {
-                addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
-                    }}) {
-                    nodes { id,name,addrState,countryCode,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
-                    pageInfo { total totalPages page perPage }}}";
-
-            var allNodes = new List<EventNode>();
-            int currentPage = 1;
-            int totalPages = int.MaxValue;
-
-            for (; currentPage <= totalPages; currentPage++)
-            {
                 var request = new GraphQLHttpRequest
                 {
                     Query = tempQuery,
                     Variables = new
                     {
-                        perPage = command.PerPage,
-                        pagenum = currentPage,
-                        state = command.StateCode,
-                        yearStart = command.StartDate,
-                        yearEnd = command.EndDate,
+                        tournamentId = eventLinkId
                     }
                 };
 
@@ -675,23 +582,17 @@ namespace SengokuDispatcher.Library.Workflows.Events
                     try
                     {
                         var response = await _client.SendQueryAsync<JObject>(request);
-                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. {response.Errors}");
+                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
 
                         var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
                         var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
 
-                        if (eventData?.Events?.Nodes != null)
-                        {
-                            allNodes.AddRange(eventData.Events.Nodes);
-                        }
-
-                        var pageInfo = eventData.Events.PageInfo;
-                        totalPages = pageInfo.TotalPages;
-                        Console.WriteLine($"On Location Events Page: {currentPage}");
                         success = true;
+                        return eventData;
                     }
                     catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
                     {
+                        Sengoku.Observability.OperationLog.Event("Dependency.Retry", ("Retryable", true));
                         var errorContent = ex.Content;
                         Console.WriteLine($"Rate limit exceeded: {errorContent}");
                         retryCount++;
@@ -705,71 +606,234 @@ namespace SengokuDispatcher.Library.Workflows.Events
                     }
                     catch (Exception ex)
                     {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                         Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                        return null;
+                        throw;
                     }
                 }
-            }
-            var eventResult = new EventGraphQLResult
+                Sengoku.Observability.OperationLog.Current?.Reject("DependencyRetriesExhausted");
+                return null;
+            });
+        }
+        private async Task<EventGraphQLResult?> QueryStartggEventsByGameId(IntakeEventsByGameIdCommand intakeCommand)
+        {
+            return await Sengoku.Observability.OperationLog.RunAsync<EventGraphQLResult?>("EventOperations.QueryStartggEventsByGameId", async () =>
             {
-                Events = new EventResult { Nodes = allNodes }
-            };
-            return eventResult;
+                var tempQuery = @"query TournamentQuery($perPage: Int, $videogameIds: [ID], $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp) {
+                          tournaments(query: {
+                            perPage: $perPage
+                            filter: {
+                              videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
+                            }}) {
+                            nodes { id name slug startAt endAt addrState countryCode city lat lng venueAddress registrationClosesAt isRegistrationOpen isOnline events { id, slug, numEntrants, videogame { id }}}}}";
+
+                var request = new GraphQLHttpRequest
+                {
+                    Query = tempQuery,
+                    Variables = new
+                    {
+                        perPage = intakeCommand.Page,
+                        state = intakeCommand.StateCode,
+                        yearStart = intakeCommand.StartDate,
+                        yearEnd = intakeCommand.EndDate,
+                        videogameIds = intakeCommand.GameIDs
+                    }
+                };
+
+                bool success = false;
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int delay = 1000;
+
+                while (!success && retryCount < maxRetries)
+                {
+                    await _requestThrottler.WaitIfPaused();
+
+                    try
+                    {
+                        var response = await _client.SendQueryAsync<JObject>(request);
+                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
+
+                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                        var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                        success = true;
+                        return eventData;
+                    }
+                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        Sengoku.Observability.OperationLog.Event("Dependency.Retry", ("Retryable", true));
+                        var errorContent = ex.Content;
+                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            Console.WriteLine("Max retries reached. Pausing further requests.");
+                            await _requestThrottler.PauseRequests(_client);
+                        }
+                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                        await Task.Delay(delay);
+                    }
+                    catch (Exception ex)
+                    {
+                        Sengoku.Observability.OperationLog.Failure(ex);
+                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                        throw;
+                    }
+                }
+                Sengoku.Observability.OperationLog.Current?.Reject("DependencyRetriesExhausted");
+                return null;
+            });
+        }
+        private async Task<EventGraphQLResult?> QueryStartggTournamentsByState(IntakeEventsByLocationCommand command)
+        {
+            return await Sengoku.Observability.OperationLog.RunAsync<EventGraphQLResult?>("EventOperations.QueryStartggTournamentsByState", async () =>
+            {
+                var tempQuery = @"query TournamentQuery($perPage: Int, $pagenum:Int, $state: String!, $yearStart: Timestamp, $yearEnd: Timestamp)
+        { tournaments(query: {
+            perPage: $perPage, page: $pagenum
+            filter: {
+                addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
+                    }}) {
+                    nodes { id,name,addrState,countryCode,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
+                    pageInfo { total totalPages page perPage }}}";
+
+                var allNodes = new List<EventNode>();
+                int currentPage = 1;
+                int totalPages = int.MaxValue;
+
+                for (; currentPage <= totalPages; currentPage++)
+                {
+                    var request = new GraphQLHttpRequest
+                    {
+                        Query = tempQuery,
+                        Variables = new
+                        {
+                            perPage = command.PerPage,
+                            pagenum = currentPage,
+                            state = command.StateCode,
+                            yearStart = command.StartDate,
+                            yearEnd = command.EndDate,
+                        }
+                    };
+
+                    bool success = false;
+                    int retryCount = 0;
+                    const int maxRetries = 3;
+                    const int delay = 1000;
+
+                    while (!success && retryCount < maxRetries)
+                    {
+                        await _requestThrottler.WaitIfPaused();
+
+                        try
+                        {
+                            var response = await _client.SendQueryAsync<JObject>(request);
+                            if (response.Data == null) throw new Exception($"Failed to retrieve tournament data. {response.Errors}");
+
+                            var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                            var eventData = JsonConvert.DeserializeObject<EventGraphQLResult>(tempJson);
+
+                            if (eventData?.Events?.Nodes != null)
+                            {
+                                allNodes.AddRange(eventData.Events.Nodes);
+                            }
+
+                            var pageInfo = eventData.Events.PageInfo;
+                            totalPages = pageInfo.TotalPages;
+                            Console.WriteLine($"On Location Events Page: {currentPage}");
+                            success = true;
+                        }
+                        catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                        {
+                            Sengoku.Observability.OperationLog.Event("Dependency.Retry", ("Retryable", true));
+                            var errorContent = ex.Content;
+                            Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                            retryCount++;
+                            if (retryCount >= maxRetries)
+                            {
+                                Console.WriteLine("Max retries reached. Pausing further requests.");
+                                await _requestThrottler.PauseRequests(_client);
+                            }
+                            Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                            await Task.Delay(delay);
+                        }
+                        catch (Exception ex)
+                        {
+                            Sengoku.Observability.OperationLog.Failure(ex);
+                            Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                            return null;
+                        }
+                    }
+                    if (!success) Sengoku.Observability.OperationLog.Current?.Reject("DependencyRetriesExhausted");
+                }
+                var eventResult = new EventGraphQLResult
+                {
+                    Events = new EventResult { Nodes = allNodes }
+                };
+                return eventResult;
+            });
         }
         private async Task<TournamentLinkGraphQLResult?> QueryStartggTournamentDataByLinkId(int tournamentLink)
         {
-            var tempQuery = @"query getEventById($id: ID) {
+            return await Sengoku.Observability.OperationLog.RunAsync<TournamentLinkGraphQLResult?>("EventOperations.QueryStartggTournamentDataByLinkId", async () =>
+            {
+                var tempQuery = @"query getEventById($id: ID) {
                                         event(id: $id) { id slug numEntrants videogame { id }
                                             tournament { id, name, addrState,countryCode, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug }}}";
-            var request = new GraphQLHttpRequest
-            {
-                Query = tempQuery,
-                Variables = new
+                var request = new GraphQLHttpRequest
                 {
-                    id = tournamentLink
-                }
-            };
-
-            bool success = false;
-            int retryCount = 0;
-            const int maxRetries = 3;
-            const int delay = 1000;
-
-            while (!success && retryCount < maxRetries)
-            {
-                await _requestThrottler.WaitIfPaused();
-
-                try
-                {
-                    var response = await _client.SendQueryAsync<JObject>(request);
-                    if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
-
-                    var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
-                    var eventData = JsonConvert.DeserializeObject<TournamentLinkGraphQLResult>(tempJson);
-
-                    success = true;
-                    return eventData;
-                }
-                catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    var errorContent = ex.Content;
-                    Console.WriteLine($"Rate limit exceeded: {errorContent}");
-                    retryCount++;
-                    if (retryCount >= maxRetries)
+                    Query = tempQuery,
+                    Variables = new
                     {
-                        Console.WriteLine("Max retries reached. Pausing further requests.");
-                        await _requestThrottler.PauseRequests(_client);
+                        id = tournamentLink
                     }
-                    Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
-                    await Task.Delay(delay);
-                }
-                catch (Exception ex)
+                };
+
+                bool success = false;
+                int retryCount = 0;
+                const int maxRetries = 3;
+                const int delay = 1000;
+
+                while (!success && retryCount < maxRetries)
                 {
-                    Console.WriteLine(ex.Message + ": " + ex.StackTrace);
-                    throw;
+                    await _requestThrottler.WaitIfPaused();
+
+                    try
+                    {
+                        var response = await _client.SendQueryAsync<JObject>(request);
+                        if (response.Data == null) throw new Exception($"Failed to retrieve tournament data.");
+
+                        var tempJson = JsonConvert.SerializeObject(response.Data, Formatting.Indented);
+                        var eventData = JsonConvert.DeserializeObject<TournamentLinkGraphQLResult>(tempJson);
+
+                        success = true;
+                        return eventData;
+                    }
+                    catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        Sengoku.Observability.OperationLog.Event("Dependency.Retry", ("Retryable", true));
+                        var errorContent = ex.Content;
+                        Console.WriteLine($"Rate limit exceeded: {errorContent}");
+                        retryCount++;
+                        if (retryCount >= maxRetries)
+                        {
+                            Console.WriteLine("Max retries reached. Pausing further requests.");
+                            await _requestThrottler.PauseRequests(_client);
+                        }
+                        Console.WriteLine($"Too many requests. Retrying in {delay}ms... Attempt {retryCount}/{maxRetries}");
+                        await Task.Delay(delay);
+                    }
+                    catch (Exception ex)
+                    {
+                        Sengoku.Observability.OperationLog.Failure(ex);
+                        Console.WriteLine(ex.Message + ": " + ex.StackTrace);
+                        throw;
+                    }
                 }
-            }
-            return null;
+                Sengoku.Observability.OperationLog.Current?.Reject("DependencyRetriesExhausted");
+                return null;
+            });
         }
         #endregion
 
@@ -781,83 +845,101 @@ namespace SengokuDispatcher.Library.Workflows.Events
 
         private async Task<RegionData?> VerifyRegion(GetRegionCommand regionQuery)
         {
-            return await _queryService.QueryRegion(regionQuery);
+            return await Sengoku.Observability.OperationLog.RunAsync<RegionData?>("EventOperations.VerifyRegion", async () =>
+            {
+                return await _queryService.QueryRegion(regionQuery);
+            });
         }
         private async Task<bool> VerifyTournamentLink(int tournamentLinkId)
         {
-            try
+            return await Sengoku.Observability.OperationLog.RunAsync<bool>("EventOperations.VerifyTournamentLink", async () =>
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                try
                 {
-                    await conn.OpenAsync();
+                    using (var conn = new NpgsqlConnection(_connectionString))
+                    {
+                        await conn.OpenAsync();
 
-                    var newQuery = @"SELECT link_id FROM events WHERE link_id = @Input;";
-                    var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = tournamentLinkId });
+                        var newQuery = @"SELECT link_id FROM events WHERE link_id = @Input;";
+                        var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = tournamentLinkId });
 
-                    if (result <= 0) return false;
+                        if (result <= 0) return false;
+                    }
+                    return true;
                 }
-                return true;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-            }
-            return false;
+                catch (NpgsqlException ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+                }
+                catch (Exception ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+                }
+                return false;
+            });
         }
         private async Task<int> CheckDuplicateAddress(string address)
         {
-            try
+            return await Sengoku.Observability.OperationLog.RunAsync<int>("EventOperations.CheckDuplicateAddress", async () =>
             {
-                if (_addressCache.TryGetValue(address, out int addressId) && addressId != 0) return addressId;
-                using (var conn = new NpgsqlConnection(_connectionString))
+                try
                 {
-                    await conn.OpenAsync();
+                    if (_addressCache.TryGetValue(address, out int addressId) && addressId != 0) return addressId;
+                    using (var conn = new NpgsqlConnection(_connectionString))
+                    {
+                        await conn.OpenAsync();
 
-                    var newQuery = @"SELECT id FROM addresses WHERE address = @Input";
-                    addressId = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = address });
+                        var newQuery = @"SELECT id FROM addresses WHERE address = @Input";
+                        addressId = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = address });
 
-                    if (addressId != 0) _addressCache.TryAdd(address, addressId);
+                        if (addressId != 0) _addressCache.TryAdd(address, addressId);
 
-                    return addressId;
+                        return addressId;
+                    }
                 }
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
-            }
-            return 0;
+                catch (NpgsqlException ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+                }
+                catch (Exception ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
+                }
+                return 0;
+            });
         }
         private async Task<bool> CheckDuplicateEvents(int linkId)
         {
-            try
+            return await Sengoku.Observability.OperationLog.RunAsync<bool>("EventOperations.CheckDuplicateEvents", async () =>
             {
-                using (var conn = new NpgsqlConnection(_connectionString))
+                try
                 {
-                    conn.Open();
+                    using (var conn = new NpgsqlConnection(_connectionString))
+                    {
+                        conn.Open();
 
-                    var newQuery = @"SELECT id FROM events WHERE link_id = @Input";
-                    var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = linkId });
+                        var newQuery = @"SELECT id FROM events WHERE link_id = @Input";
+                        var result = await conn.QueryFirstOrDefaultAsync<int>(newQuery, new { Input = linkId });
 
-                    if (result != 0) return true;
+                        if (result != 0) return true;
+                    }
+                    return false;
                 }
-                return false;
-            }
-            catch (NpgsqlException ex)
-            {
-                throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
-            }
-            catch (Exception ex)
-            {
-                throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
-            }
+                catch (NpgsqlException ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
+                }
+                catch (Exception ex)
+                {
+                    Sengoku.Observability.OperationLog.Failure(ex);
+                    throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
+                }
+            });
         }
         #endregion
     }

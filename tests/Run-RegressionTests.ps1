@@ -26,7 +26,7 @@ try {
         Write-Host 'Database checks require -DatabaseSettings; running the available non-database checks.'
     }
 
-    foreach ($suite in @('BracketWorkflow', 'BracketPathQuery', 'UserOnboarding', 'AccountAuthentication', 'EventFeeds')) {
+    foreach ($suite in @('BracketWorkflow', 'BracketPathQuery', 'UserOnboarding', 'AccountAuthentication', 'EventFeeds', 'OperationLogging')) {
         Write-Host "Running $suite regression checks"
         $arguments = @('run', '--project', "tests/$suite.Tests/$suite.Tests.csproj", '--configuration', $Configuration, '--no-build')
         if ($DatabaseSettings -and $suite -in @('AccountAuthentication', 'EventFeeds')) {
@@ -38,7 +38,7 @@ try {
     if ($failedSuites.Count -gt 0) {
         throw "Regression suites failed: $($failedSuites -join ', ')"
     }
-    Write-Host 'All five regression harnesses passed.'
+    Write-Host 'All six regression harnesses passed.'
 }
 finally {
     $env:BRACKET_TEST_POSTGRES = $previousBracketConnection

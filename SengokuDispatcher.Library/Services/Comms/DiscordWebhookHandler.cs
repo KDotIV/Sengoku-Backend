@@ -57,6 +57,7 @@ namespace SengokuDispatcher.Library.Services.Comms
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _logger.LogError("Discord webhook request failed ({ErrorType})", ex.GetType().Name);
             }
             return false;

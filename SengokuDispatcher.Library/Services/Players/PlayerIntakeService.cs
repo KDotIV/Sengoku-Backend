@@ -41,16 +41,19 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
             await using var transaction = await connection.BeginTransactionAsync();
             var result = await SaveVictoryPathData(processedData, connection, transaction);
             await transaction.CommitAsync();
+            Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
             return result;
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             var message = $"Database error while committing bracket path for tournament {processedData?.TournamentLinkID} (SQLSTATE {ex.SqlState}): {ex.Message}";
             Console.Error.WriteLine($"{message}{Environment.NewLine}{ex}");
             throw new ApplicationException(message, ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.Error.WriteLine($"Error while committing bracket path for tournament {processedData?.TournamentLinkID}: {ex}");
             throw;
         }
@@ -176,12 +179,14 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             var message = $"Database error while saving bracket path for tournament {data?.TournamentLinkID}, player {data?.PlayerTournamentCard?.PlayerID} (SQLSTATE {ex.SqlState}): {ex.Message}";
             Console.Error.WriteLine($"{message}{Environment.NewLine}{ex}");
             throw new ApplicationException(message, ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.Error.WriteLine($"Error while saving bracket path for tournament {data?.TournamentLinkID}, player {data?.PlayerTournamentCard?.PlayerID}: {ex}");
             throw;
         }
@@ -252,6 +257,7 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                     {
                         Console.WriteLine("No valid standing records found for this batch.");
                         await transaction.CommitAsync();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                         return totalSuccess;
                     }
 
@@ -270,15 +276,18 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                     }
 
                     await transaction.CommitAsync();
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
             }
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
         }
 
@@ -308,10 +317,12 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
         }
         return 0;
@@ -349,16 +360,19 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
                         }
                     }
                     await transaction.CommitAsync();
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
             }
             return totalSuccess;
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
         }
         return 0;
@@ -393,6 +407,7 @@ public sealed class PlayerIntakeService : IPlayerIntakeService
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
         }
     }

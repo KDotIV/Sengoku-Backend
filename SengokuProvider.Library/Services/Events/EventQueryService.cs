@@ -59,10 +59,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -98,10 +100,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -171,10 +175,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.Message}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return null;
@@ -217,10 +223,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -250,10 +258,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -288,10 +298,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -329,10 +341,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -431,10 +445,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -476,6 +492,7 @@ namespace SengokuProvider.Library.Services.Events
                 }
                 catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
                 {
+                    Sengoku.Observability.OperationLog.Event("Dependency.Retry", ("Retryable", true));
                     var errorContent = ex.Content;
                     Console.WriteLine($"Rate limit exceeded: {errorContent}");
                     retryCount++;
@@ -489,6 +506,7 @@ namespace SengokuProvider.Library.Services.Events
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     Console.WriteLine(ex.Message + ": " + ex.StackTrace);
                     throw;
                 }
@@ -541,6 +559,7 @@ namespace SengokuProvider.Library.Services.Events
                 }
                 catch (GraphQLHttpRequestException ex) when (ex.StatusCode == HttpStatusCode.TooManyRequests)
                 {
+                    Sengoku.Observability.OperationLog.Event("Dependency.Retry", ("Retryable", true));
                     var errorContent = ex.Content;
                     Console.WriteLine($"Rate limit exceeded: {errorContent}");
                     retryCount++;
@@ -554,6 +573,7 @@ namespace SengokuProvider.Library.Services.Events
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     Console.WriteLine(ex.Message + ": " + ex.StackTrace);
                     throw;
                 }
@@ -607,12 +627,14 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"NpgsqlException: {ex.Message}");
                 Console.WriteLine($"StackTrace: {ex.StackTrace}");
                 throw;
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Exception: {ex.Message}");
                 Console.WriteLine($"StackTrace: {ex.StackTrace}");
                 throw;
@@ -657,12 +679,14 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"NpgsqlException: {ex.Message}");
                 Console.WriteLine($"StackTrace: {ex.StackTrace}");
                 throw;
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Exception: {ex.Message}");
                 Console.WriteLine($"StackTrace: {ex.StackTrace}");
                 throw;
@@ -708,10 +732,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }
@@ -753,10 +779,12 @@ namespace SengokuProvider.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.InnerException}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Unexpected Error Occurred: {ex.StackTrace}", ex);
             }
         }

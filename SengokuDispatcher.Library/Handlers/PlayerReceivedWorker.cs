@@ -5,6 +5,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuDispatcher.Library.Factories;
+using Sengoku.Observability;
 
 namespace SengokuDispatcher.Library.Handlers
 {
@@ -13,14 +14,16 @@ namespace SengokuDispatcher.Library.Handlers
         private readonly ILogger<PlayerReceivedWorker> _log;
         private readonly IPlayerHandlerFactory _playerFactory;
         private readonly IConfiguration _configuration;
+        private readonly OperationLogger _operations;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor _processor;
 
         public PlayerReceivedWorker(ILogger<PlayerReceivedWorker> logger, IConfiguration config, ServiceBusClient serviceBus,
-            IPlayerHandlerFactory playerFactory)
+            IPlayerHandlerFactory playerFactory, OperationLogger operations)
         {
             _log = logger;
+            _operations = operations;
             _playerFactory = playerFactory;
             _configuration = config;
             _client = serviceBus;
@@ -70,17 +73,20 @@ namespace SengokuDispatcher.Library.Handlers
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     _log.LogError($"Error renewing message lock: {ex.Message}", ex);
                 }
             }
         }
-        private async Task MessageHandler(ProcessMessageEventArgs args)
+        private Task MessageHandler(ProcessMessageEventArgs args) => MessageOperation.Run(_operations, "PlayerReceived.Process", args, () => ProcessMessage(args));
+        private async Task ProcessMessage(ProcessMessageEventArgs args)
         {
             _log.LogWarning("Received Message...");
 
             var currentMessage = await ParseMessage(args.Message);
             if (currentMessage?.Command == null)
             {
+                OperationLog.Current?.Reject("InvalidCommand");
                 await args.DeadLetterMessageAsync(args.Message, "InvalidCommand", cancellationToken: args.CancellationToken);
                 return;
             }
@@ -113,10 +119,12 @@ namespace SengokuDispatcher.Library.Handlers
                         throw new NotSupportedException($"Unsupported player command: {currentMessage.Command.Topic}");
                 }
                 await args.CompleteMessageAsync(args.Message);
+                OperationLog.Event("Message.Settled", ("Settlement", "Completed"));
                 cts.Cancel();
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError("Command processing failed for message {MessageId} ({ErrorType})", args.Message.MessageId, ex.GetType().Name);
                 if (currentMessage.Command.Topic == CommandRegistry.ResumeBracketProcessing &&
                     ex is not ArgumentException && ex is not NotSupportedException)
@@ -188,6 +196,7 @@ namespace SengokuDispatcher.Library.Handlers
             }
             catch (JsonException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex.Message);
             }
             return null;

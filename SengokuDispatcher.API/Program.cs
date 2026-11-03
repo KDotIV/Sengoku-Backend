@@ -5,8 +5,10 @@ using SengokuDispatcher.Library.Handlers;
 using SengokuDispatcher.Library.Services.Scheduling;
 using Microsoft.AspNetCore.DataProtection;
 using SengokuDispatcher.Library.Services.Remote;
+using Sengoku.Observability;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddOperationLogging();
 builder.Logging.AddSimpleConsole(options => options.TimestampFormat = "yyyy-MM-dd HH:mm:ss ");
 var connectionString = builder.Configuration.GetConnectionString("AlexandriaConnectionString")
     ?? throw new InvalidOperationException("Alexandria database connection is required.");
@@ -36,7 +38,11 @@ if (builder.Configuration.GetValue<bool>("Dispatcher:DiscordEnabled"))
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.InstrumentOperations(typeof(SengokuProvider.Library.Services.Users.IUserService).Assembly,
+    typeof(SengokuDispatcher.Library.Workflows.Events.IEventOperations).Assembly);
 var app = builder.Build();
+app.UseRouting();
+app.UseMiddleware<OperationMiddleware>();
 app.UseMiddleware<DispatcherAccessMiddleware>();
 app.MapControllers();
 app.MapGet("/health/live", () => Results.Ok(new { service = "SengokuDispatcher" }));

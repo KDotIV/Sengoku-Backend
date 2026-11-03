@@ -3,6 +3,7 @@ using Discord.WebSocket;
 using SengokuDispatcher.Library.DiscordModels;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Sengoku.Observability;
 
 namespace SengokuDispatcher.Library.DiscordServices
 {
@@ -12,6 +13,7 @@ namespace SengokuDispatcher.Library.DiscordServices
         private readonly string _token;
         private readonly ILogger<DiscordSocketEngine> _log;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly OperationLogger _operations;
 
 
         private int _started;
@@ -22,21 +24,22 @@ namespace SengokuDispatcher.Library.DiscordServices
         private volatile bool _backfillStarted;   // avoid re-running on reconnect
         private volatile bool _backfillCompleted; // keeps initial guild state
 
-        public DiscordSocketEngine(string botToken, string connStr, ILogger<DiscordSocketEngine> log, IServiceScopeFactory scopeFactory)
+        public DiscordSocketEngine(string botToken, string connStr, ILogger<DiscordSocketEngine> log, IServiceScopeFactory scopeFactory, OperationLogger operations)
         {
             _token = botToken!;
             _log = log;
             _client = CreateClient();
             _scopeFactory = scopeFactory;
+            _operations = operations;
             WireEventHandlers();
         }
 
         private void WireEventHandlers()
         {
             _client.Log += OnLogAsync;
-            _client.Ready += OnReadyAsync;
-            _client.GuildMemberUpdated += OnGuildMemberUpdateAsync;
-            _client.UserJoined += OnUserJoinedAsync;
+            _client.Ready += () => _operations.RunAsync("Discord.Ready", OnReadyAsync, forceNew: true);
+            _client.GuildMemberUpdated += (before, after) => _operations.RunAsync("Discord.MemberUpdated", () => OnGuildMemberUpdateAsync(before, after), OperationFields.Of(("GuildId", after.Guild.Id)), forceNew: true);
+            _client.UserJoined += user => _operations.RunAsync("Discord.UserJoined", () => OnUserJoinedAsync(user), OperationFields.Of(("GuildId", user.Guild.Id)), forceNew: true);
         }
 
         private DiscordSocketClient CreateClient()
@@ -86,6 +89,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "WaitForInitialBackfillAsync failed.");
                 return false;
             }
@@ -183,6 +187,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "Initial member backfill failed.");
                 _initialBackfillTcs.TrySetException(ex);
             }
@@ -294,6 +299,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "OnGuildMemberUpdateAsync failed for User: {User} ({Id})", after.Username, after.Id);
             }
             await Task.CompletedTask;
@@ -318,6 +324,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "OnUserJoinedAsync failed for User: {User} ({Id})", user.Username, user.Id);
             }
             await Task.CompletedTask;
@@ -344,6 +351,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "OnUserJoinedAsync failed for User: {User} ({Id})", after.Username, after.Id);
             }
         }

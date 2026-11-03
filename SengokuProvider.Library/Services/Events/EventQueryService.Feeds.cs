@@ -30,8 +30,10 @@ public partial class EventQueryService : IEventFeedQueryService
             }
             return new(rows.Take(filter.MaxEvents).ToArray(), rows.Count > filter.MaxEvents, nowUtc);
         }
-        catch (PostgresException ex) when (ex.SqlState == "P4000") { throw new ArgumentException(ex.MessageText); }
-        catch (NpgsqlException ex) { throw new ApplicationException("Unable to query upcoming feed events.", ex); }
+        catch (PostgresException ex) when (ex.SqlState == "P4000") {
+            Sengoku.Observability.OperationLog.Failure(ex); throw new ArgumentException(ex.MessageText); }
+        catch (NpgsqlException ex) {
+            Sengoku.Observability.OperationLog.Failure(ex); throw new ApplicationException("Unable to query upcoming feed events.", ex); }
     }
 }
 

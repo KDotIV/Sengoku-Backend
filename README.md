@@ -66,6 +66,9 @@ For resumable bracket processing, apply
 before deploying the API and worker. See [the workflow guide](docs/bracket-processing.md)
 for queue configuration, pending responses, recovery, and regression checks.
 ## GraphQL Setup
+
+For grouped Application Insights operation tracking, App Service settings, privacy rules,
+and Kusto queries, see [operation logging](docs/operation-logging.md).
 To use the GraphQL functionality, you need to create a developer account on start.gg and obtain an API key.
 
 Sign up or log in to start.gg.

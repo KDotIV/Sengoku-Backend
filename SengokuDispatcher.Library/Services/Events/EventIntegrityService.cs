@@ -50,10 +50,12 @@ namespace SengokuDispatcher.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
 
@@ -103,10 +105,12 @@ namespace SengokuDispatcher.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return null;
@@ -226,10 +230,12 @@ namespace SengokuDispatcher.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return false;
@@ -257,10 +263,12 @@ namespace SengokuDispatcher.Library.Services.Events
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return linksToProcess;

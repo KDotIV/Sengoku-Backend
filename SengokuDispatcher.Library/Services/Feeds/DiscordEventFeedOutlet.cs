@@ -90,6 +90,7 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
         }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             // Do not leak webhook tokens through transport exception messages.
             return new("Unknown");
         }

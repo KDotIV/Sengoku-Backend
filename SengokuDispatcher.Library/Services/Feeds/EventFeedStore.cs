@@ -39,12 +39,16 @@ public sealed partial class EventFeedStore(string connectionString, IDataProtect
         // Only our explicit business-conflict SQLSTATE is translated to an API conflict.
         catch (PostgresException ex) when (ex.SqlState == "P4090")
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new FeedConflictException("The feed or subscription changed, or a delivery is in progress. Reload before retrying.");
         }
-        catch (PostgresException ex) when (ex.SqlState == "42501") { throw new UnauthorizedAccessException("Administrator permission required."); }
-        catch (PostgresException ex) when (ex.SqlState == "P4000") { throw new ArgumentException(ex.MessageText); }
+        catch (PostgresException ex) when (ex.SqlState == "42501") {
+            Sengoku.Observability.OperationLog.Failure(ex); throw new UnauthorizedAccessException("Administrator permission required."); }
+        catch (PostgresException ex) when (ex.SqlState == "P4000") {
+            Sengoku.Observability.OperationLog.Failure(ex); throw new ArgumentException(ex.MessageText); }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             // SQL and parameter values may contain destination secrets. Log only safe diagnostics.
             logger?.LogError("Event feed PostgreSQL operation failed (SQLSTATE {SqlState}, {ErrorType})", ex.SqlState, ex.GetType().Name);
             throw new ApplicationException("Event feed database operation failed.", ex);
@@ -83,6 +87,7 @@ public sealed partial class EventFeedStore(string connectionString, IDataProtect
             if (id == null) return null;
             var row = await conn.QuerySingleAsync<FeedRow>(new CommandDefinition($"SELECT {Columns} FROM event_feed_delivery_targets WHERE id=@id", new { id }, tx, cancellationToken: ct));
             await tx.CommitAsync(ct);
+            Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
             return View(row);
         }, ct);
     }

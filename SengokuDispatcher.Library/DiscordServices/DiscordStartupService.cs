@@ -19,6 +19,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "Error during Discord socket initialization.");
                 throw;
             }

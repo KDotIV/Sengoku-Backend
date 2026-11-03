@@ -70,10 +70,13 @@ namespace SengokuDispatcher.Library.DiscordServices
                     }
 
                     await tx.CommitAsync(ct);
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     await tx.RollbackAsync(ct);
+                    Sengoku.Observability.OperationLog.Event("Database.RolledBack", ("Committed", false));
                     _log.LogError(ex, "ApplyRoleDiff failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
                     throw;
                 }
@@ -145,16 +148,20 @@ namespace SengokuDispatcher.Library.DiscordServices
                         await conn2.ExecuteAsync(deleteSql, new { cid, iid }, tx);
 
                     await tx.CommitAsync(ct);
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     await tx.RollbackAsync(ct);
+                    Sengoku.Observability.OperationLog.Event("Database.RolledBack", ("Committed", false));
                     _log.LogError(ex, "SyncCustomerInterestsFromRoles failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
                     throw;
                 }
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "SyncCustomerInterestsFromRoles failed for guild {GuildId}, user {DiscordId}", guildId, discordId);
                 throw;
             }
@@ -213,11 +220,13 @@ namespace SengokuDispatcher.Library.DiscordServices
 
                 _log.LogInformation("Successful Upserted Customer: CustomerId: {CustomerId}, DiscordId: {DiscordId}", model.CustomerId, model.DiscordId);
                 await tx.CommitAsync(ct);
+                Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 return true;
             }
             catch
             {
                 await tx.RollbackAsync(ct);
+                Sengoku.Observability.OperationLog.Event("Database.RolledBack", ("Committed", false));
                 _log.LogError("UpsertCustomer failed for CustomerId {CustomerId}, DiscordId {DiscordId}", model.CustomerId, model.DiscordId);
                 return false;
             }
@@ -261,11 +270,13 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "Error occured while saving Discord Account: NpgsqlException for DiscordId: {DiscordId}, CustomerId: {CustomerId}", discordId, customerId);
                 throw;
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "Error occured while saving Discord Account: Exception for DiscordId: {DiscordId}, CustomerId: {CustomerId}", discordId, customerId);
                 throw;
             }
@@ -296,11 +307,13 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "Error occured while saving Discord Membership: NpgsqlException for DiscordId: {DiscordId}, GuildID: {GuildId}", discordId, guildId);
                 throw;
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "Error occured while saving Discord Membership: Exception for DiscordId: {DiscordId}, GuildID: {GuildId}", discordId, guildId);
                 throw;
             }
@@ -340,6 +353,7 @@ namespace SengokuDispatcher.Library.DiscordServices
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex, "UpsertSolePlayFromRoles failed for GuildId {GuildId}, DiscordId {DiscordId}", guildId, discordId);
                 throw;
             }
@@ -454,14 +468,17 @@ namespace SengokuDispatcher.Library.DiscordServices
                     var affected = await conn.ExecuteAsync(upsertProfiles, transaction: tx);
 
                     await tx.CommitAsync(ct);
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                     return affected;
                 }
                 catch (NpgsqlException ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
                 }
                 return 0;
@@ -515,14 +532,17 @@ namespace SengokuDispatcher.Library.DiscordServices
                     }
 
                     await transaction.CommitAsync();
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return;

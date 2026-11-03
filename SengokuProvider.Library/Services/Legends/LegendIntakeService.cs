@@ -78,18 +78,21 @@ namespace SengokuProvider.Library.Services.Legends
                         }
                         catch (NpgsqlException ex)
                         {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                             newOnboardResult.Response = ex.Message;
                             newOnboardResult.Failures.Add(tournamentId);
                             continue;
                         }
                         catch (Exception ex)
                         {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                             newOnboardResult.Response = ex.Message;
                             newOnboardResult.Failures.Add(tournamentId);
                             continue;
                         }
                     }
                     await transaction.CommitAsync();
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
                 await conn.CloseAsync();
             }
@@ -148,14 +151,17 @@ namespace SengokuProvider.Library.Services.Legends
                         }
 
                         await transaction.CommitAsync();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                     }
                     catch (NpgsqlException ex)
                     {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                         newOnboardResult.Response = ex.Message;
                         throw new ApplicationException("Database error occurred: ", ex);
                     }
                     catch (Exception ex)
                     {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                         newOnboardResult.Response = ex.Message;
                         throw new ApplicationException("Unexpected Error Occurred: ", ex);
                     }
@@ -199,6 +205,7 @@ namespace SengokuProvider.Library.Services.Legends
                             await conn.ExecuteAsync("UPDATE legends SET player_link_id = @PlayerLinkId WHERE id = @existingId",
                                 new { newLegend.PlayerLinkId, existingId }, transaction);
                         await transaction.CommitAsync();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                         return existingId;
                     }
                     await conn.ExecuteAsync("SELECT pg_advisory_xact_lock(728349103)", transaction: transaction);
@@ -222,18 +229,21 @@ namespace SengokuProvider.Library.Services.Legends
 
                         var result = await cmd.ExecuteScalarAsync();
                         await transaction.CommitAsync();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                         return result != null ? Convert.ToInt32(result) : 0;
                     }
                 }
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 var message = $"Database error while saving legend for player {newLegend.PlayerId} (SQLSTATE {ex.SqlState}): {ex.Message}";
                 Console.Error.WriteLine($"{message}{Environment.NewLine}{ex}");
                 throw new ApplicationException(message, ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.Error.WriteLine($"Error while saving legend for player {newLegend.PlayerId}: {ex}");
                 throw;
             }
@@ -301,10 +311,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -380,18 +392,21 @@ namespace SengokuProvider.Library.Services.Legends
                         }
                         catch (NpgsqlException ex)
                         {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                             Console.WriteLine(new ApplicationException("Database error occurred: ", ex));
                             updatedResponse.FailedPlayers.Add(updatedRecord.PlayerId);
                             continue;
                         }
                         catch (Exception ex)
                         {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                             Console.WriteLine(new ApplicationException("Unexpected Error Occurred: ", ex));
                             updatedResponse.FailedPlayers.Add(updatedRecord.PlayerId);
                             continue;
                         }
                     }
                     await transaction.CommitAsync();
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
                 await conn.CloseAsync();
             }
@@ -438,10 +453,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -460,10 +477,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;
@@ -505,10 +524,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -572,10 +593,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }

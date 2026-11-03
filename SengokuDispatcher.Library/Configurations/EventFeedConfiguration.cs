@@ -27,7 +27,7 @@ public static class EventFeedConfiguration
             builder.Services.AddScoped<IDiscordFeedConnection, SengokuDispatcher.Library.Services.Remote.RemoteDiscordFeedConnection>();
             builder.Services.AddScoped<IDiscordWebhookConnection, SengokuDispatcher.Library.Services.Remote.RemoteDiscordWebhookConnection>();
         }
-        builder.Services.AddScoped<IEventFeedQueryService>(sp => (IEventFeedQueryService)sp.GetRequiredService<IEventQueryService>());
+        builder.Services.AddScoped<IEventFeedQueryService>(sp => sp.GetRequiredService<EventQueryService>());
         if (backgroundHost)
         {
             builder.Services.AddHttpClient("DiscordFeedOAuth", client => client.Timeout = TimeSpan.FromSeconds(20))

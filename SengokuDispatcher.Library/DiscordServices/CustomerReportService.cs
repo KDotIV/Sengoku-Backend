@@ -97,6 +97,7 @@ namespace SengokuDispatcher.Library.DiscordServices
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     _log.LogError(ex, "Failed to save report locally.");
                 }
             }

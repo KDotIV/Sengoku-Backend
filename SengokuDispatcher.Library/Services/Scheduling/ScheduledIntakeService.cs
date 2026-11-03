@@ -96,6 +96,7 @@ namespace SengokuDispatcher.Library.Services.Scheduling
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     currentResult.Errors.Add(circuit.LeagueId, ex.Message);
                 }
             }
@@ -144,6 +145,7 @@ namespace SengokuDispatcher.Library.Services.Scheduling
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     currentResult.Errors.Add(state, $"Error Intaking State: {ex.Message} - {ex.InnerException}");
                     continue;
                 }

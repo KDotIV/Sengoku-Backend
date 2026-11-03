@@ -20,12 +20,14 @@ public sealed class BracketCheckpointStore(string connectionString) : IBracketCh
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             var errorMessage = $"Database error while reading bracket checkpoint {operationId} (SQLSTATE {ex.SqlState}): {ex.Message}";
             Console.Error.WriteLine($"{errorMessage}{Environment.NewLine}{ex}");
             throw new ApplicationException(errorMessage, ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.Error.WriteLine($"Error while reading bracket checkpoint {operationId}: {ex}");
             throw;
         }
@@ -68,16 +70,19 @@ public sealed class BracketCheckpointStore(string connectionString) : IBracketCh
                     new { checkpoint.OperationId }, transaction);
 
             await transaction.CommitAsync();
+            Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
             return checkpoint;
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             var errorMessage = $"Database error while saving bracket checkpoint {requestKey} (SQLSTATE {ex.SqlState}): {ex.Message}";
             Console.Error.WriteLine($"{errorMessage}{Environment.NewLine}{ex}");
             throw new ApplicationException(errorMessage, ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.Error.WriteLine($"Error while processing bracket checkpoint {requestKey}: {ex}");
             throw;
         }
@@ -96,12 +101,14 @@ public sealed class BracketCheckpointStore(string connectionString) : IBracketCh
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             var errorMessage = $"Database error while enqueuing bracket operation {operationId} for queue {queue} (SQLSTATE {ex.SqlState}): {ex.Message}";
             Console.Error.WriteLine($"{errorMessage}{Environment.NewLine}{ex}");
             throw new ApplicationException(errorMessage, ex);
         }
         catch (Exception ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             Console.Error.WriteLine($"Error while enqueuing bracket operation {operationId} for queue {queue}: {ex}");
             throw;
         }

@@ -59,15 +59,18 @@ public sealed class EventIntakeService : IEventIntakeService
                             }
                         }
                         await transaction.CommitAsync();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                     }
                 }
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return totalSuccess;
@@ -108,15 +111,18 @@ public sealed class EventIntakeService : IEventIntakeService
                             }
                         }
                         transaction.Commit();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                     }
                 }
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return totalSuccess;
@@ -165,15 +171,18 @@ public sealed class EventIntakeService : IEventIntakeService
                             }
                         }
                         await transaction.CommitAsync();
+                        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                     }
                 }
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return totalSuccess;
@@ -196,16 +205,19 @@ public sealed class EventIntakeService : IEventIntakeService
                         cmd.Parameters.AddWithValue("@ProvInput", newData.Province);
 
                         var result = await cmd.ExecuteNonQueryAsync();
+                        Sengoku.Observability.OperationLog.Data(("RegionId", newData.Id), ("RowsAffected", result), ("Created", result > 0));
                         return result;
                     }
                 }
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
             return 0;
@@ -279,10 +291,12 @@ public sealed class EventIntakeService : IEventIntakeService
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.Message}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
 
@@ -321,10 +335,12 @@ public sealed class EventIntakeService : IEventIntakeService
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException($"Database error occurred: {ex.StackTrace}", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error While Processing: {ex.Message} - {ex.StackTrace}");
             }
         }

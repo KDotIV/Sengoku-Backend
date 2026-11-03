@@ -28,12 +28,15 @@ using Microsoft.AspNetCore.Builder;
 using SengokuDispatcher.Library.Factories;
 using SengokuDispatcher.Library.Services.Scheduling;
 using SengokuDispatcher.Library.Services.Events;
+using Sengoku.Observability;
 namespace SengokuDispatcher.Library.Configurations;
 
 public static class DispatcherConfiguration
 {
     public static void AddDispatcher(this WebApplicationBuilder builder, bool backgroundHost = true)
     {
+        builder.Services.AddOperationLogging();
+        builder.Services.AddSingleton<OperationResultPolicy>(_ => OperationResultConfiguration.Create());
         //constant config variables
         var connectionString = builder.Configuration.GetConnectionString("AlexandriaConnectionString")
             ?? throw new InvalidOperationException("Alexandria database connection is required.");
@@ -84,7 +87,7 @@ public static class DispatcherConfiguration
             {
                 var log = sp.GetRequiredService<ILogger<DiscordSocketEngine>>();
                 var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
-                return new DiscordSocketEngine(exclusiveInsightsBotToken!, customerPoolConnection!, log, scopeFactory);
+                return new DiscordSocketEngine(exclusiveInsightsBotToken!, customerPoolConnection!, log, scopeFactory, sp.GetRequiredService<OperationLogger>());
             });
             builder.Services.AddSingleton<IEmailSender>(sp =>
                 new SendGridEmailSender(
@@ -190,7 +193,7 @@ public static class DispatcherConfiguration
             var bracketCheckpointStore = provider.GetRequiredService<IBracketCheckpointStore>();
             return new PlayerOperations(connectionString, configuration, commonServices, playerQueryService, legendQueryService, eventQueryService, serviceBus, playerIntakeService, bracketCheckpointStore, provider.GetRequiredService<IBracketTournamentBootstrap>());
         });
-        builder.Services.AddScoped<IEventQueryService, EventQueryService>(provider =>
+        builder.Services.AddScoped<EventQueryService>(provider =>
         {
             var intakeValidator = provider.GetRequiredService<IntakeValidator>();
             var graphQlClient = provider.GetRequiredService<GraphQLHttpClient>();
@@ -198,6 +201,7 @@ public static class DispatcherConfiguration
             var commonServices = provider.GetRequiredService<ICommonDatabaseService>();
             return new EventQueryService(connectionString, graphQlClient, intakeValidator, throttler, commonServices);
         });
+        builder.Services.AddScoped<IEventQueryService>(provider => provider.GetRequiredService<EventQueryService>());
         builder.Services.AddScoped<ILegendIntakeService, LegendIntakeService>(provider =>
         {
             var queryService = provider.GetRequiredService<ILegendQueryService>();

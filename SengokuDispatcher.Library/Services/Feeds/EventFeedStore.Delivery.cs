@@ -40,10 +40,12 @@ public sealed partial class EventFeedStore
             }
         }
         // An administrator can retire a selected catalogue entry. Pause this feed without blocking other owners.
-        catch (ArgumentException) { status = "Failed"; outcome = "InvalidFiltersOrEventData"; }
+        catch (ArgumentException) { status = "Failed"; outcome = "InvalidFiltersOrEventData"; Sengoku.Observability.OperationLog.Current?.Reject(outcome); }
+        Sengoku.Observability.OperationLog.Data(("FeedId", feed.Id), ("Outcome", outcome));
         await conn.ExecuteAsync(Cmd("SELECT event_feed_enqueue_v2(@deliveryId,@id,@scheduled,@status,CAST(@payload AS jsonb),@outcome,CAST(@insertedIds AS integer[]))",
             new { deliveryId = Guid.NewGuid(), id = feed.Id, scheduled = feed.NextRunAtUtc, status, payload, outcome, insertedIds }));
         await tx.CommitAsync(ct);
+        Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
         return true;
     }, ct);
 
@@ -53,6 +55,7 @@ public sealed partial class EventFeedStore
         var job = await Database(conn => conn.QueryFirstOrDefaultAsync<DispatchRow>(new CommandDefinition(
             "SELECT * FROM event_feed_claim()", cancellationToken: ct)), ct);
         if (job == null) return false;
+        Sengoku.Observability.OperationLog.Data(("MessageId", job.Id));
         DeliveryResult result;
         try
         {
@@ -64,6 +67,9 @@ public sealed partial class EventFeedStore
         catch (ArgumentException) { result = new("Rejected"); }
         catch (JsonException) { result = new("Rejected"); }
         catch (Exception) { result = new("Unknown"); }
+        Sengoku.Observability.OperationLog.Data(("Outcome", result.Status));
+        if (result.Status == "Retry") Sengoku.Observability.OperationLog.Current?.Pending();
+        else if (result.Status != "Sent") Sengoku.Observability.OperationLog.Current?.Reject("DeliveryNotConfirmed");
 
         // Finalize ambiguous cancellation even when shutdown cancelled the caller token.
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));

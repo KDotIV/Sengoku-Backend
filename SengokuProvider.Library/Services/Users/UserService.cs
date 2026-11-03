@@ -2,6 +2,7 @@ using Dapper;
 using Npgsql;
 using SengokuProvider.Library.Models.User;
 using SengokuProvider.Library.Services.Common;
+using Sengoku.Observability;
 
 namespace SengokuProvider.Library.Services.Users
 {
@@ -27,7 +28,10 @@ namespace SengokuProvider.Library.Services.Users
             // Serialize registration for the same normalized email, including legacy mixed-case rows.
             await conn.ExecuteAsync("SELECT pg_advisory_xact_lock(hashtext(@email))", new { email }, tx);
             if (await conn.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT 1 FROM users WHERE lower(email) = @email)", new { email }, tx))
+            {
+                OperationLog.Current?.Reject("AccountAlreadyExists");
                 return 0;
+            }
             if (playerId == 0)
             {
                 // NULL external IDs permit multiple unlinked local players under the existing unique constraint.
@@ -56,6 +60,9 @@ namespace SengokuProvider.Library.Services.Users
                     new { userId, username, email, passwordHash, playerId }, tx);
                 if (inserted == 0) continue;
                 await tx.CommitAsync();
+                Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
+                OperationLog.Identity(("UserId", userId), ("Username", username), ("PlayerId", playerId));
+                OperationLog.Event("Registration.Committed", ("Committed", true), ("UserId", userId), ("PlayerId", playerId));
                 return userId;
             }
             throw new InvalidOperationException("Unable to allocate a local user ID.");
@@ -74,6 +81,7 @@ namespace SengokuProvider.Library.Services.Users
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Failed to retrieve the user from PostgreSQL.", ex);
             }
         }
@@ -90,6 +98,7 @@ namespace SengokuProvider.Library.Services.Users
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Failed to check the user in PostgreSQL.", ex);
             }
         }

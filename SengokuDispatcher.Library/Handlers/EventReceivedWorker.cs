@@ -5,6 +5,7 @@ using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
 using SengokuProvider.Library.Services.Common;
 using SengokuDispatcher.Library.Factories;
+using Sengoku.Observability;
 
 namespace SengokuDispatcher.Library.Handlers
 {
@@ -13,13 +14,15 @@ namespace SengokuDispatcher.Library.Handlers
         private readonly ILogger<EventReceivedWorker> _log;
         private readonly IEventHandlerFactory _eventFactory;
         private readonly IConfiguration _configuration;
+        private readonly OperationLogger _operations;
 
         private ServiceBusClient _client;
         private ServiceBusProcessor? _processor;
 
-        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, ServiceBusClient client, IEventHandlerFactory eventFactory)
+        public EventReceivedWorker(ILogger<EventReceivedWorker> logger, IConfiguration config, ServiceBusClient client, IEventHandlerFactory eventFactory, OperationLogger operations)
         {
             _log = logger;
+            _operations = operations;
             _configuration = config;
             _client = client;
             _eventFactory = eventFactory;
@@ -67,6 +70,7 @@ namespace SengokuDispatcher.Library.Handlers
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     Console.WriteLine($"Error while Processing EventData Integrity {ex.Message} - {ex.StackTrace}");
                 }
             }
@@ -96,17 +100,20 @@ namespace SengokuDispatcher.Library.Handlers
                 }
                 catch (Exception ex)
                 {
+                    Sengoku.Observability.OperationLog.Failure(ex);
                     _log.LogError($"Error renewing message lock: {ex.Message}", ex);
                 }
             }
         }
-        private async Task MessageHandler(ProcessMessageEventArgs args)
+        private Task MessageHandler(ProcessMessageEventArgs args) => MessageOperation.Run(_operations, "EventReceived.Process", args, () => ProcessMessage(args));
+        private async Task ProcessMessage(ProcessMessageEventArgs args)
         {
             _log.LogWarning("Received Message...");
 
             var currentMessage = await ParseMessage(args.Message);
             if (currentMessage?.Command == null)
             {
+                OperationLog.Current?.Reject("InvalidCommand");
                 await args.DeadLetterMessageAsync(args.Message, "InvalidCommand", cancellationToken: args.CancellationToken);
                 return;
             }
@@ -134,10 +141,12 @@ namespace SengokuDispatcher.Library.Handlers
                         throw new NotSupportedException("Unsupported event command.");
                 }
                 await args.CompleteMessageAsync(args.Message);
+                OperationLog.Event("Message.Settled", ("Settlement", "Completed"));
                 cts.Cancel();
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError("Command processing failed for message {MessageId} ({ErrorType})", args.Message.MessageId, ex.GetType().Name);
                 await args.DeadLetterMessageAsync(args.Message, ex.Message, ex.StackTrace?.ToString());
                 cts.Cancel();
@@ -206,6 +215,7 @@ namespace SengokuDispatcher.Library.Handlers
             }
             catch (JsonException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 _log.LogError(ex.Message);
             }
             return null;

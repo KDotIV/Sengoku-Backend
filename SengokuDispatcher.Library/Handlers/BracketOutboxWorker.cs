@@ -4,13 +4,14 @@ using Dapper;
 using Npgsql;
 using SengokuDispatcher.Library.Workflows.Players;
 using SengokuProvider.Library.Services.Players;
+using Sengoku.Observability;
 
 namespace SengokuDispatcher.Library.Handlers;
 
 /// <summary>Publishes committed workflow commands. A crash after send may replay a
 /// message; consumers must remain idempotent even if broker deduplication is enabled.</summary>
 public sealed class BracketOutboxWorker(IConfiguration configuration, ServiceBusClient bus,
-    IPlayerOperations players, IBracketCheckpointStore checkpoints, ILogger<BracketOutboxWorker> log) : BackgroundService
+    IPlayerOperations players, IBracketCheckpointStore checkpoints, ILogger<BracketOutboxWorker> log, OperationLogger operations) : BackgroundService
 {
     private readonly string _connectionString = configuration.GetConnectionString("AlexandriaConnectionString")
         ?? throw new InvalidOperationException("Database connection is not configured.");
@@ -19,6 +20,7 @@ public sealed class BracketOutboxWorker(IConfiguration configuration, ServiceBus
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var operation = operations.Begin("BracketOutbox.Cycle");
             try
             {
                 await using var connection = new NpgsqlConnection(_connectionString);
@@ -55,12 +57,16 @@ public sealed class BracketOutboxWorker(IConfiguration configuration, ServiceBus
                     try
                     {
                         await using var sender = bus.CreateSender(message.QueueName);
-                        await sender.SendMessageAsync(new ServiceBusMessage(message.Payload)
+                        var outgoing = new ServiceBusMessage(message.Payload)
                         {
                             MessageId = message.Id.ToString(),
                             CorrelationId = message.OperationId.ToString(),
                             ContentType = "application/json"
-                        }, stoppingToken);
+                        };
+                        if (System.Diagnostics.Activity.Current?.Id is { } traceParent)
+                            outgoing.ApplicationProperties["traceparent"] = traceParent;
+                        OperationLog.Event("BracketOutbox.Publish", ("MessageId", message.Id), ("WorkflowId", message.OperationId), ("Attempt", message.Attempts + 1));
+                        await sender.SendMessageAsync(outgoing, stoppingToken);
                         await connection.ExecuteAsync("UPDATE bracket_processing_outbox SET sent_at = now(), last_error = NULL WHERE id = @Id",
                             new { message.Id }, transaction);
                     }
@@ -71,6 +77,7 @@ public sealed class BracketOutboxWorker(IConfiguration configuration, ServiceBus
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
+                        Sengoku.Observability.OperationLog.Failure(ex);
                         log.LogWarning(ex, "Could not publish bracket message {MessageId}; retrying", message.Id);
                         await connection.ExecuteAsync("""
                             UPDATE bracket_processing_outbox SET attempts = attempts + 1,
@@ -84,6 +91,7 @@ public sealed class BracketOutboxWorker(IConfiguration configuration, ServiceBus
                         }, transaction);
                     }
                     await transaction.CommitAsync(stoppingToken);
+                    Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
                 }
                 await connection.ExecuteAsync("""
                     DELETE FROM bracket_processing_outbox WHERE sent_at < now() - interval '7 days';
@@ -91,13 +99,19 @@ public sealed class BracketOutboxWorker(IConfiguration configuration, ServiceBus
                         WHERE o.operation_id = c.operation_id AND c.expires_at < now() - interval '7 days';
                     DELETE FROM bracket_processing_checkpoints WHERE expires_at < now() - interval '7 days';
                     """);
+                operation.Complete();
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { operation.Cancel(); break; }
             catch (NpgsqlException ex)
             {
+                operation.Fail(ex);
+                Sengoku.Observability.OperationLog.Failure(ex);
                 log.LogError(ex, "Database error in bracket outbox cycle (SQLSTATE {SqlState})", ex.SqlState);
             }
-            catch (Exception ex) { log.LogError(ex, "Bracket outbox cycle failed"); }
+            catch (Exception ex) {
+                operation.Fail(ex);
+                Sengoku.Observability.OperationLog.Failure(ex); log.LogError(ex, "Bracket outbox cycle failed"); }
+            operation.Dispose();
             try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }

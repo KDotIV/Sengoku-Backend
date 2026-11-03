@@ -43,6 +43,7 @@ public sealed class BracketTournamentBootstrap(string connectionString, GraphQLH
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             logger?.LogError("Tournament bootstrap failed for event {EventId} (SQLSTATE {SqlState})", id, ex.SqlState);
             throw new ApplicationException("Unable to prepare the bracket tournament.", ex);
         }

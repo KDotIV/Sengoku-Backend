@@ -1,10 +1,11 @@
 using SengokuDispatcher.Library.Services.Feeds;
 using Microsoft.AspNetCore.DataProtection;
 using SengokuProvider.Library.Services.Events;
+using Sengoku.Observability;
 
 namespace SengokuDispatcher.Library.Handlers;
 
-public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration config, ILogger<EventFeedWorker> log) : BackgroundService
+public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration config, ILogger<EventFeedWorker> log, OperationLogger operations) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -12,6 +13,7 @@ public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration 
         if (!config.GetValue<bool>("EventFeeds:DeliveryEnabled")) return;
         while (!stoppingToken.IsCancellationRequested)
         {
+            using var operation = operations.Begin("EventFeeds.Cycle");
             try
             {
                 using var scope = scopes.CreateScope();
@@ -28,13 +30,17 @@ public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration 
                 {
                     if (!await store.DispatchNext(outlet, stoppingToken)) break;
                 }
+                operation.Complete();
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { operation.Cancel(); return; }
             catch (Exception ex)
             {
+                operation.Fail(ex);
+                Sengoku.Observability.OperationLog.Failure(ex);
                 // Never log transport exceptions that might contain a webhook token or SQL parameters.
                 log.LogError("Event feed processing failed ({ErrorType}). It will be checked again next poll.", ex.GetType().Name);
             }
+            operation.Dispose();
             try { await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken); }
             catch (OperationCanceledException) { return; }
         }

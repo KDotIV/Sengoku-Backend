@@ -23,6 +23,8 @@ public sealed class DispatcherClient(HttpClient client, IConfiguration configura
             throw new ArgumentException("Only internal Dispatcher routes are supported.");
 
         using var request = new HttpRequestMessage(method, new Uri(address!.TrimEnd('/') + "/" + path));
+        if (System.Diagnostics.Activity.Current?.Id is { } traceParent)
+            request.Headers.TryAddWithoutValidation("traceparent", traceParent);
         request.Headers.Add("X-Dispatcher-Key", key);
         request.Headers.Accept.ParseAdd("application/json");
         if (body != null) request.Content = JsonContent.Create(body);

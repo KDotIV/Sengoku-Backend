@@ -218,6 +218,7 @@ namespace SengokuProvider.Library.Models.Common
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error initializing GeoConstants: {ex.Message} - {ex.StackTrace}");
                 throw;
             }
