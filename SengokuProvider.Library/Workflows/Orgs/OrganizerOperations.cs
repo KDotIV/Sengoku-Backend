@@ -77,10 +77,12 @@ namespace SengokuProvider.Library.Workflows.Orgs
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
@@ -116,10 +118,12 @@ namespace SengokuProvider.Library.Workflows.Orgs
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }

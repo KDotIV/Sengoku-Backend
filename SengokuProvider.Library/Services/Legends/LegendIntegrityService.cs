@@ -1,4 +1,4 @@
-﻿using Npgsql;
+using Npgsql;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Legends;
 
@@ -54,10 +54,12 @@ namespace SengokuProvider.Library.Services.Legends
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
             return playersResult;

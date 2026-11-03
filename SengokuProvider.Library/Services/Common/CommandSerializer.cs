@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SengokuProvider.Library.Models.Common;
 using SengokuProvider.Library.Models.Events;
@@ -102,6 +102,7 @@ namespace SengokuProvider.Library.Services.Common
             }
             catch (JsonSerializationException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 Console.WriteLine($"Error during command deserialization: {ex.Message}");
                 return null;
             }

@@ -55,18 +55,22 @@ public partial class UserService
                 UPDATE users SET player_id = @playerId, user_link = @StartggUserId,
                     startgg_profile = CAST(@json AS jsonb) WHERE id = @userId;", parameters));
             await transaction.CommitAsync(cancellationToken);
+            Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
             return link;
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new InvalidOperationException("The start.gg identity or local player is already linked elsewhere.", ex);
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.SerializationFailure || ex.SqlState == PostgresErrorCodes.DeadlockDetected)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new InvalidOperationException("A concurrent link changed these identities. Retry the operation.", ex);
         }
         catch (NpgsqlException ex)
         {
+            Sengoku.Observability.OperationLog.Failure(ex);
             throw new ApplicationException("Failed to link the start.gg profile in PostgreSQL.", ex);
         }
         // Uncommitted transactions are rolled back by disposal, including on cancellation.

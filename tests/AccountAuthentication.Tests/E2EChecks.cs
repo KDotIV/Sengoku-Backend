@@ -1,20 +1,21 @@
+using SengokuDispatcher.Library.Services.Players;
 using GraphQL.Client.Http;
 using GraphQL.Client.Serializer.Newtonsoft;
-using SengokuProvider.Library.Workflows.Events;
+using SengokuDispatcher.Library.Workflows.Events;
 using SengokuProvider.Library.Models.Events;
 using Dapper;
 using SengokuProvider.Library.Services.Legends;
-using SengokuProvider.Library.Workflows.Legends;
+using SengokuDispatcher.Library.Workflows.Legends;
 using Npgsql;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
-using SengokuProvider.API.Authentication;
+using SengokuProvider.Library.Configurations;
+using SengokuProvider.Library.Services.Users;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
-using SengokuProvider.Library.Services.Users;
 
 static class E2EChecks
 {

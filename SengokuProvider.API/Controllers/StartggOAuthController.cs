@@ -2,7 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Npgsql;
-using SengokuProvider.API.Authentication;
+using SengokuProvider.Library.Configurations;
+using SengokuProvider.Library.Services.Users;
 using System.Security.Claims;
 namespace SengokuProvider.API.Controllers;
 

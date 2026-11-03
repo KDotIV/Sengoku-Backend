@@ -12,6 +12,18 @@ namespace SengokuProvider.Library.Services.Common
 
         public RequestThrottler(IConfiguration config)
         {
+            // Test clients may supply their own pool. Runtime credentials come from configuration.
+            if (config == null) return;
+            var tokens = config.GetSection("GraphQLSettings:Bearer").GetChildren()
+                .Select(section => section.Value).Where(value => !string.IsNullOrWhiteSpace(value)).ToList();
+            if (tokens.Count == 0 && !string.IsNullOrWhiteSpace(config["GraphQLSettings:Bearer"]))
+                tokens.Add(config["GraphQLSettings:Bearer"]);
+            lock (BearerConstants.TokenQueue)
+            {
+                BearerConstants.TokenQueue.Clear();
+                foreach (var token in tokens.Distinct(StringComparer.Ordinal))
+                    BearerConstants.TokenQueue.Enqueue(token!);
+            }
         }
 
         public async Task WaitIfPaused()

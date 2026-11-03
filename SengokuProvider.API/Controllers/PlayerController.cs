@@ -1,3 +1,4 @@
+using SengokuDispatcher.Library.Services.Players;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
@@ -5,7 +6,7 @@ using Newtonsoft.Json;
 using SengokuProvider.Library.Models.Players;
 using SengokuProvider.Library.Services.Common;
 using SengokuProvider.Library.Services.Players;
-using SengokuProvider.Library.Workflows.Players;
+using SengokuDispatcher.Library.Workflows.Players;
 
 namespace SengokuProvider.API.Controllers
 {
@@ -149,7 +150,7 @@ namespace SengokuProvider.API.Controllers
         }
         [Authorize, ValidateAntiForgeryToken]
         [HttpPost("BracketProcessing/{operationId:guid}/Retry")]
-        public async Task<IActionResult> RetryBracketProcessing(Guid operationId, [FromServices] IBracketCheckpointStore checkpoints, [FromServices] SengokuProvider.API.Authentication.StartggOAuthService oauth, CancellationToken cancellationToken)
+        public async Task<IActionResult> RetryBracketProcessing(Guid operationId, [FromServices] IBracketCheckpointStore checkpoints, [FromServices] SengokuProvider.Library.Services.Users.StartggOAuthService oauth, CancellationToken cancellationToken)
         {
             var checkpoint = await checkpoints.GetAsync(operationId);
             if (checkpoint == null || checkpoint.Data.PlayerTournamentCard.PlayerID.ToString() != User.FindFirstValue("player_id")) return NotFound();
@@ -162,7 +163,7 @@ namespace SengokuProvider.API.Controllers
         [Authorize]
         [ValidateAntiForgeryToken]
         [HttpPost("OnboardBracketPathByBracketSlug")]
-        public async Task<IActionResult> OnboardBracketPathByBracketSlug([FromBody] OnboardBracketPathByBracketSlug command, [FromServices] SengokuProvider.API.Authentication.StartggOAuthService oauth, CancellationToken cancellationToken)
+        public async Task<IActionResult> OnboardBracketPathByBracketSlug([FromBody] OnboardBracketPathByBracketSlug command, [FromServices] SengokuProvider.Library.Services.Users.StartggOAuthService oauth, CancellationToken cancellationToken)
         {
             if (command == null || command.PlayerId.ToString() != User.FindFirstValue("player_id")) return Forbid();
             if (await oauth.GetLink(int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), cancellationToken) == null)

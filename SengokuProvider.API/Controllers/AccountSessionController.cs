@@ -2,7 +2,8 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using SengokuProvider.API.Authentication;
+using SengokuProvider.Library.Configurations;
+using SengokuProvider.Library.Services.Users;
 using System.Security.Claims;
 
 namespace SengokuProvider.API.Controllers;
@@ -32,7 +33,7 @@ public sealed class AccountSessionController(AccountSessionStore sessions, IConf
     [HttpGet("Session")]
     [Authorize]
     public IActionResult Session() => Ok(new AccountIdentity(
-        int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), int.Parse(User.FindFirstValue("player_id")!), User.Identity!.Name!));
+        int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), int.Parse(User.FindFirstValue("player_id")!), User.Identity!.Name!, User.IsInRole("Admin")));
 
     [HttpPost("Logout")]
     [ValidateAntiForgeryToken]

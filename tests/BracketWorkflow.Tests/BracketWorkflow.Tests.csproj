@@ -8,6 +8,6 @@
   <ItemGroup>
     <None Update="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="GraphQL.Client.Serializer.Newtonsoft" Version="6.1.0" />
-    <ProjectReference Include="../../SengokuProvider.Library/SengokuProvider.Library.csproj" />
+    <ProjectReference Include="../../SengokuDispatcher.Library/SengokuDispatcher.Library.csproj" />
   </ItemGroup>
 </Project>

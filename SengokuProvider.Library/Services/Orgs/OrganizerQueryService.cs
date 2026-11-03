@@ -1,4 +1,4 @@
-﻿using Dapper;
+using Dapper;
 using GraphQL.Client.Http;
 using Npgsql;
 using SengokuProvider.Library.Models.Events;
@@ -69,10 +69,12 @@ namespace SengokuProvider.Library.Services.Orgs
             }
             catch (NpgsqlException ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Database error occurred: ", ex);
             }
             catch (Exception ex)
             {
+                Sengoku.Observability.OperationLog.Failure(ex);
                 throw new ApplicationException("Unexpected Error Occurred: ", ex);
             }
         }
