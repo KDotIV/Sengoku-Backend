@@ -30,6 +30,16 @@ public static class EventFeedConfiguration
         builder.Services.AddScoped<IEventFeedQueryService>(sp => sp.GetRequiredService<EventQueryService>());
         if (backgroundHost)
         {
+            var commsEnabled = builder.Configuration.GetValue<bool>("EventFeeds:CommsDeliverablesEnabled");
+            if (builder.Configuration.GetValue<bool>("EventFeeds:DeliveryEnabled") && !commsEnabled)
+                throw new InvalidOperationException("Feed delivery requires EventFeeds:CommsDeliverablesEnabled.");
+            if (commsEnabled)
+            {
+                if (!builder.Configuration.GetValue<bool>("Dispatcher:ServiceBusEnabled"))
+                    throw new InvalidOperationException("Calendar refresh requires Dispatcher:ServiceBusEnabled.");
+                builder.Services.AddHostedService<SengokuDispatcher.Library.Handlers.CommsDeliverablesWorker>();
+                builder.Services.AddHostedService<SengokuDispatcher.Library.Handlers.MajorCalendarRefreshWorker>();
+            }
             builder.Services.AddHttpClient("DiscordFeedOAuth", client => client.Timeout = TimeSpan.FromSeconds(20))
                 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 

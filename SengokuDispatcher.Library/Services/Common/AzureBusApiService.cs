@@ -24,13 +24,13 @@ public sealed class AzureBusApiService(ServiceBusClient client, ILogger<AzureBus
                 throw new InvalidOperationException("Command exceeds the Service Bus message size limit.");
             }
             await sender.SendMessagesAsync(batch);
-            logger.LogInformation("Published command {MessageId} to {Queue}", message.MessageId, queueName);
+            logger.LogInformation($"Published command {message.MessageId} to {queueName}");
             return true;
         }
         catch (ServiceBusException ex)
         {
             Sengoku.Observability.OperationLog.Failure(ex);
-            logger.LogError("Publishing to {Queue} failed ({Reason}, transient: {Transient})", queueName, ex.Reason, ex.IsTransient);
+            logger.LogError($"Publishing to {queueName} failed ({ex.Reason}, transient: {ex.IsTransient})");
             throw;
         }
     }

@@ -32,6 +32,7 @@ static class HttpChecks
         builder.AddAccountAuthentication(connection);
         builder.Services.AddSingleton(protection);
         var store = new EventFeedStore(connection,protection);
+        builder.Services.AddSingleton(store);
         builder.Services.AddSingleton<IEventFeedStore>(store);
         builder.Services.AddSingleton<IDiscordFeedConnectionStore>(store);
         builder.Services.AddSingleton<IDiscordFeedConnection,DiscordFeedConnection>();
@@ -53,8 +54,10 @@ static class HttpChecks
             client.DefaultRequestHeaders.Add("X-Test-User","2");
             Check((await client.GetAsync($"/api/event-feeds/{feedId}")).StatusCode==HttpStatusCode.OK,"shared feed visible to subscribers");
             Check((await client.PostAsJsonAsync("/api/event-feeds/create",new {})).StatusCode==HttpStatusCode.Forbidden,"ordinary users cannot create feeds");
+            Check((await client.GetAsync("/api/event-feeds/major-calendar")).StatusCode==HttpStatusCode.Forbidden,"calendar requires admin");
             client.DefaultRequestHeaders.Remove("X-Test-User"); client.DefaultRequestHeaders.Add("X-Test-User","1");
             Check((await client.GetAsync($"/api/event-feeds/{feedId}")).IsSuccessStatusCode,"owner reads feed");
+            Check((await client.GetAsync("/api/event-feeds/major-calendar")).IsSuccessStatusCode,"admin can read calendar");
             using var options = await client.GetAsync("/api/event-feeds/options");
             using var catalogue = JsonDocument.Parse(await options.Content.ReadAsStringAsync());
             Check(catalogue.RootElement.GetProperty("games").EnumerateArray().Any(g=>g.GetProperty("id").GetInt32()==1),"HTTP options uses live game catalogue");

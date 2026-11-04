@@ -47,6 +47,8 @@ static class ScheduleAndConnectionChecks
                 INSERT INTO event_feed_deliveries(id,feed_id,scheduled_for,status) VALUES(@legacyDelivery,@legacy,CURRENT_TIMESTAMP,'Sent');
                 """,new{legacy,legacyDelivery});
             await conn.ExecuteAsync((await File.ReadAllTextAsync("database/migrations/20261020_shared_event_feeds.sql")).Replace("public.",schema+"."));
+            await conn.ExecuteAsync("CREATE TABLE players(id int primary key); CREATE TABLE leagues(id int primary key); CREATE TABLE legends(id int primary key);");
+            await conn.ExecuteAsync(await File.ReadAllTextAsync("database/migrations/20261104_major_calendar_deliverables.sql"));
             Check(await conn.ExecuteScalarAsync<string>("SELECT destination_protected FROM event_feed_subscriptions WHERE id=@legacy",new{legacy})=="encrypted-value","migration preserves encrypted destination");
             Check(await conn.ExecuteScalarAsync<Guid>("SELECT subscription_id FROM event_feed_deliveries WHERE id=@legacyDelivery",new{legacyDelivery})==legacy,"migration preserves history");
             Check(await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM information_schema.columns WHERE table_schema=@schema AND table_name='event_feeds' AND column_name IN ('destination_protected','discord_guild_id','discord_channel_id','next_run_at')",new{schema})==0,"shared definition contains no destination or dispatch state");
@@ -113,21 +115,29 @@ static class ScheduleAndConnectionChecks
             a=(await store.GetSubscription(2,a.Id,default))!; b=(await store.GetSubscription(3,b.Id,default))!;
             await store.ConnectDiscord(2,a.Id,a.Version,webhook,"guild","a",default);
             await store.ConnectDiscord(3,b.Id,b.Version,webhook,"guild","b",default);
-            Check(!await store.PrepareNext(query,default),"idle OnInsert does not enqueue empty jobs");
-            await conn.ExecuteAsync("INSERT INTO events(id,link_id,event_name,start_time,online_tournament,country_code,addr_state) VALUES(101,101,'New',CURRENT_TIMESTAMP AT TIME ZONE 'UTC',false,'US','GA'); INSERT INTO tournament_links(id,event_link,game_id,url_slug) VALUES(101,101,1,'tournament/test'); SELECT event_feed_capture_tournament(101);");
-            Check(await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM event_feed_notifications")==2,"insert fans out to each subscriber");
-            Check(await store.PrepareNext(query,default) && await store.PrepareNext(query,default),"insert notifications prepare independently");
+            var editionQuery = new EventQueryService(connection,null!,null!,null!,null!);
+            Check(await store.PrepareNext(editionQuery, default) && await store.PrepareNext(editionQuery, default), "one reconnect snapshot per subscriber");
+            await conn.ExecuteAsync("""
+                INSERT INTO events(id,link_id,event_name,start_time,online_tournament,country_code,addr_state,registration_open)
+                VALUES(101,101,'New',timezone('UTC',now())+interval '3 days',false,'US','GA',true);
+                INSERT INTO tournament_links(id,event_link,game_id,url_slug) VALUES(101,101,1,'tournament/test');
+                SELECT event_feed_accept_change(edition_id,occurred_at) FROM comms_change_outbox;
+                """);
+            Check(await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM event_feed_edition_work")==2,"change fans out once per subscriber");
+            Check(await store.PrepareNext(editionQuery,default) && await store.PrepareNext(editionQuery,default),"change notifications prepare independently");
             outlet.Result="Sent"; await store.DispatchNext(outlet,default); await store.DispatchNext(outlet,default);
-            Check(!await store.PrepareNext(query,default),"insert notifications consumed once");
+            Check(!await store.PrepareNext(editionQuery,default),"change notifications consumed once");
             await HttpChecks.Run(connection,protection,query,feed.Id);
             Check(await store.Unsubscribe(2,a.Id,default) && await store.Get(3,feed.Id,default)!=null,"unsubscribe preserves shared feed");
             Check(await store.Delete(1,feed.Id,default) && await store.GetSubscription(3,b.Id,default)==null,"admin delete cascades subscriptions");
+            await CalendarDeliveryChecks.Run(connection);
             Console.WriteLine("PASS schema migration, admin permissions, subscriptions, encryption, fan-out, failure isolation, OAuth and insert delivery");
         }
         finally { await admin.ExecuteAsync($"DROP SCHEMA {schema} CASCADE"); }
     }
     sealed class Query:IEventFeedQueryService
     {
+        public Task<EventFeedPreview> GetEditionFeedEvents(EventFeedFilter filter, DateTime nowUtc, int[]? editionIds, Guid subscriptionId, CancellationToken ct) => GetUpcomingFeedEvents(filter, nowUtc, ct);
         public Task<EventFeedPreview> GetUpcomingFeedEvents(EventFeedFilter filter,DateTime nowUtc,CancellationToken ct=default,int[]? tournamentIds=null) => Task.FromResult(new EventFeedPreview([new UpcomingFeedEvent {Name="Test",UrlSlug="tournament/test",StartTimeUtc=DateTime.UtcNow.AddDays(1)}],false,DateTime.UtcNow));
     }
     sealed class Outlet:IEventFeedOutlet

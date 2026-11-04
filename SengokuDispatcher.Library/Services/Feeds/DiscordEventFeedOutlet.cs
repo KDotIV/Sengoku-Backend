@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace SengokuDispatcher.Library.Services.Feeds;
@@ -36,19 +37,24 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
         return "https://start.gg/" + path;
     }
     private static string Text(string value, int max) => new(value.Where(c => !char.IsControl(c)).Take(max).ToArray());
+    private sealed record Embed(
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("description")] string Description,
+        [property: JsonPropertyName("url"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url);
     public static object Payload(EventDigest digest)
     {
         if (digest.Events.Count is < 1 or > 10) throw new ArgumentException("A digest must contain 1–10 events.");
-        var embeds = digest.Events.Select(e => new
+        var embeds = digest.Events.Select(e =>
         {
-            title = Text(e.Name, 180),
-            url = SignupUrl(e.SignupSlug),
-            description = $"{Text(e.Location, 100)}" +
-            $"\n<t:{new DateTimeOffset(DateTime.SpecifyKind(e.StartUtc, DateTimeKind.Utc)).ToUnixTimeSeconds()}:F>" +
-            $"\nEntrants: {(e.Entrants?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unknown")}\n[View / register on start.gg]({SignupUrl(e.SignupSlug)})"
+            var url = string.IsNullOrEmpty(e.SignupSlug) ? null : SignupUrl(e.SignupSlug);
+            var entrants = e.Entrants?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unknown";
+            var starts = new DateTimeOffset(DateTime.SpecifyKind(e.StartUtc, DateTimeKind.Utc)).ToUnixTimeSeconds();
+            var description = $"{Text(e.Location, 100)}\n<t:{starts}:F>\nEntrants: {entrants}";
+            if (url != null) description += $"\n[View / register on start.gg]({url})";
+            return new Embed(Text(e.Name, 180), description, url);
         }).ToArray();
 
-        if (embeds.Any(e => e.url.Length > 2048 || e.description.Length > 4096) || embeds.Sum(e => e.title.Length + e.description.Length) > 6000)
+        if (embeds.Any(e => e.Url?.Length > 2048 || e.Description.Length > 4096) || embeds.Sum(e => e.Title.Length + e.Description.Length) > 6000)
             throw new ArgumentException("Event data exceeds Discord's embed limits.");
 
         return new

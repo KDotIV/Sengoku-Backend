@@ -72,7 +72,38 @@ For OAuth, subscribe first, then use the returned subscription `id` in `/subscri
 
 `EventFeeds:DeliveryEnabled=true` enables the worker at startup; it polls every 30 seconds. Each eligible subscriber gets its own job and encrypted destination snapshot. Concurrent workers lock definitions before subscriptions and claim jobs with `SKIP LOCKED`. Shared feed edits serialize with delivery preparation and reject changes while a send is in progress.
 
-Interval/daily subscriptions send current matching events. OnInsert captures newly usable tournaments for subscribers connected at capture time; it does not replay the existing catalogue or generate empty jobs while idle. Matching rules, limits and message formatting are unchanged. Empty results record `Skipped/NoMatches`. Retryable rate limits are capped at five attempts; ambiguous sends are not automatically replayed. Failure or recovery pauses only the affected subscription, never all subscribers or the shared definition. Reconnect a paused subscription to resume it.
+Interval and Daily send current matching parent editions on their existing UTC schedules. New or edited Interval schedules accept 1–168 hours. OnInsert sends a matching edition once per subscription. Each digest counts distinct parent editions toward `MaxEvents`. A failed or ambiguous send pauses only its subscription. Ambiguous sends keep their edition reservations across reconnects.
+
+### Major and circuit calendar
+
+Admin sessions can use `GET /api/event-feeds/major-calendar`, `POST /api/event-feeds/major-calendar`, and `PUT /api/event-feeds/major-calendar/{id}`. Writes use the existing CSRF header. PUT takes the current version from GET. Set `active` to false to withdraw the major designation. Partner permissions are reserved for future work.
+
+A calendar entry represents one edition. Supply its name, optional circuit, announced game IDs, UTC start/end, registration opening/closing times, attendance and location. For example:
+
+```json
+{
+  "name": "Example Southeast Championship 2027",
+  "circuit": "Example Circuit",
+  "gameIds": [33945, 48548],
+  "startsAt": "2027-05-22T14:00:00Z",
+  "endsAt": "2027-05-24T01:00:00Z",
+  "registrationOpensAt": "2027-02-08T15:00:00Z",
+  "city": "Savannah", "state": "GA", "country": "US", "online": false
+}
+```
+
+The calendar entry can qualify before a bracket or start.gg page exists. Later, set `startggId` to the parent tournament ID on the same entry. That association is permanent. Dispatcher schedules an intake refresh on linking and every six hours through the edition. Calendar edits and intake changes use the same change queue. Live data supplies observed registration, dates and location, with calendar fallback for missing fields. The announced games can match before bracket intake. A positive entrant threshold still requires a qualifying bracket with a known count.
+
+Active calendar majors bypass only the upper look-ahead limit. Other filters and the lower bound of the current time still apply. Ordinary editions wake when their start enters the look-ahead window. An unlinked major can wake when its calendar registration opens. For a Southeast-wide feed, select `regionIds: ["southeast"]`, `states: []`, and `city: null`. Exact-city feeds can specify Atlanta. Metro boundaries require a separate geographic definition.
+
+### Queue and cutover
+
+1. Stop the old Dispatcher feed worker and pause writes during migration. Apply `database/migrations/20261104_major_calendar_deliverables.sql` once against the shared-feed schema. It refuses cutover during a send, replaces the old capture triggers transactionally, translates recent pending bracket notifications into parent editions and replaces unsent legacy OnInsert snapshots with one current digest.
+2. Configure `ServiceBusSettings:CommsDeliverablesConnection` privately on Dispatcher with a rotated, queue-scoped Send/Listen connection for `commsdeliverablesqueue`. Set `EventFeeds:CommsDeliverablesEnabled=true`, `Dispatcher:ServiceBusEnabled=true` and `EventFeeds:DeliveryEnabled=true`. Keep the existing intake-queue settings and persistent Data Protection key ring. Deploy both services before resuming intake.
+3. For QA feed `d69773e7-b545-489f-bf70-6f35046b609b`, an admin can GET the current definition and PUT it through the existing feed update endpoint with its current version as `expectedVersion`, clearing `filter.city` and `filter.states` while retaining `southeast`. Resolve the subscription's `SecretUnavailable` failure before reconnecting.
+4. Reconnect discards the old OnInsert backlog and prepares one current, capped digest of eligible editions absent from that subscription's announcement history. Changes observed after reconnect remain eligible. The new ledger keeps edition IDs after successful and ambiguous sends. Older completed delivery records with cleared payloads cannot identify their editions. If such editions are still upcoming at cutover, reconcile them from Discord history before reconnecting when duplicate suppression is required.
+
+Database inserts and updates to events, bracket links, players, leagues, legends, and calendar definitions commit an outbox record with the source write. Dispatcher publishes that record using its stable UUID as the broker message ID and deletes it after broker acknowledgement. Its consumer records event and calendar work before completing the message. Other entity types are acknowledged for this first event-feed release. Duplicate event messages can trigger reevaluation but the per-subscription edition ledger prevents repeat announcements. Pending change work and delivery retries expire after seven days. Edition announcement history persists beyond the expiry window.
 
 ## Migration and rollout
 

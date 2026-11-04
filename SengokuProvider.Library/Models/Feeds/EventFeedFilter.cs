@@ -42,6 +42,7 @@ public sealed class UpcomingFeedEvent
     [System.Text.Json.Serialization.JsonIgnore]
     public string[]? StreamUrls { get; set; }
     public IReadOnlyList<BroadcastLink> Broadcasts => (StreamUrls ?? []).Select(BroadcastLink.Parse).OfType<BroadcastLink>().Distinct().Take(5).ToArray();
+    public int EditionId { get; set; }
     public int TournamentId { get; set; }
     public int GameId { get; set; }
     public string Name { get; set; } = "";

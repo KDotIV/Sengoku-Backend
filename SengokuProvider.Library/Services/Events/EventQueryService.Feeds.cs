@@ -6,7 +6,13 @@ namespace SengokuProvider.Library.Services.Events;
 
 public partial class EventQueryService : IEventFeedQueryService
 {
-    public async Task<EventFeedPreview> GetUpcomingFeedEvents(EventFeedFilter filter, DateTime nowUtc, CancellationToken ct = default, int[]? tournamentIds = null)
+    public Task<EventFeedPreview> GetUpcomingFeedEvents(EventFeedFilter filter, DateTime nowUtc, CancellationToken ct = default, int[]? tournamentIds = null)
+        => QueryEditions(filter, nowUtc, tournamentIds, null, null, ct);
+
+    public Task<EventFeedPreview> GetEditionFeedEvents(EventFeedFilter filter, DateTime nowUtc, int[]? editionIds, Guid subscriptionId, CancellationToken ct)
+        => QueryEditions(filter, nowUtc, null, editionIds, subscriptionId, ct);
+
+    private async Task<EventFeedPreview> QueryEditions(EventFeedFilter filter, DateTime nowUtc, int[]? tournamentIds, int[]? editionIds, Guid? subscriptionId, CancellationToken ct)
     {
         filter = filter.Normalize();
         if (nowUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("An explicit UTC time is required.", nameof(nowUtc));
@@ -14,13 +20,16 @@ public partial class EventQueryService : IEventFeedQueryService
         {
             await using var conn = new NpgsqlConnection(_connectionString);
             // Existing intake stores UTC clock values in timestamp-without-time-zone columns.
-            var rows = (await conn.QueryAsync<UpcomingFeedEvent>(new CommandDefinition("SELECT * FROM event_feed_upcoming_v2(@games,@start,@finish,@minimum,@openOnly,@attendance,@regions,@states,CAST(@city AS text),@limit,CAST(@tournamentIds AS integer[]))", new {
-                    games = filter.GameIds, regions = filter.RegionIds, tournamentIds, 
-                    start = DateTime.SpecifyKind(nowUtc, DateTimeKind.Unspecified),
-                    finish = DateTime.SpecifyKind(nowUtc.AddDays(filter.LookAheadDays), DateTimeKind.Unspecified),
-                    minimum = filter.MinimumEntrants, openOnly = filter.RegistrationOpenOnly,
-                    attendance = filter.Attendance, states = filter.States, city = filter.City, limit = filter.MaxEvents + 1
-                }, cancellationToken: ct))).ToList();
+            const string sql = """
+                SELECT * FROM event_feed_matching_editions(CAST(@definition AS jsonb),@start,
+                    CASE WHEN CAST(@tournamentIds AS integer[]) IS NULL THEN CAST(@editionIds AS integer[])
+                         ELSE ARRAY(SELECT event_link FROM tournament_links WHERE id=ANY(@tournamentIds)) END,
+                    CAST(@subscriptionId AS uuid),@limit,CAST(@tournamentIds AS integer[]))
+                """;
+            var rows = (await conn.QueryAsync<UpcomingFeedEvent>(new CommandDefinition(sql, new {
+                definition = System.Text.Json.JsonSerializer.Serialize(filter), tournamentIds, editionIds, subscriptionId,
+                start = DateTime.SpecifyKind(nowUtc, DateTimeKind.Unspecified), limit = filter.MaxEvents + 1
+            }, cancellationToken: ct))).ToList();
 
             foreach (var row in rows)
             {

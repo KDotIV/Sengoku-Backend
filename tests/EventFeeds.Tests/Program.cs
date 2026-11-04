@@ -27,6 +27,9 @@ await Throws<ArgumentException>(() => Task.FromResult(DiscordEventFeedOutlet.Pay
     Events = digest.Events.Select(e => e with { SignupSlug = "tournament/" + new string('x', 700) }).ToArray()
 })));
 await Throws<ArgumentException>(() => Task.FromResult(DiscordEventFeedOutlet.SignupUrl("https://evil.test")));
+using var unlinked = JsonDocument.Parse(JsonSerializer.Serialize(DiscordEventFeedOutlet.Payload(new EventDigest("Major",
+    [new DigestEvent("Calendar edition", "", DateTime.UtcNow, "Savannah, GA", null)], false))));
+Check(!unlinked.RootElement.GetProperty("embeds")[0].TryGetProperty("url",out _), "calendar-only major omits unavailable signup link");
 var transport = new FakeHttp();
 using var http = new HttpClient(transport);
 var discord = new DiscordEventFeedOutlet(http);

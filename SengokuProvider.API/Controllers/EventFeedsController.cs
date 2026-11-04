@@ -17,6 +17,18 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
 {
     private int UserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!, System.Globalization.CultureInfo.InvariantCulture);
 
+    [Authorize(Roles = "Admin"), HttpGet("major-calendar")]
+    public Task<IActionResult> MajorCalendar([FromServices] EventFeedStore calendar, CancellationToken ct) =>
+        Handle(async () => Ok(await calendar.MajorCalendar(ct)));
+
+    [Authorize(Roles = "Admin"), HttpPost("major-calendar"), ValidateAntiForgeryToken]
+    public Task<IActionResult> CreateMajor([FromServices] EventFeedStore calendar, MajorCalendarEdition edition, CancellationToken ct) =>
+        Handle(async () => Ok(new { id = await calendar.SaveMajor(UserId, null, edition, ct) }));
+
+    [Authorize(Roles = "Admin"), HttpPut("major-calendar/{id:int}"), ValidateAntiForgeryToken]
+    public Task<IActionResult> EditMajor(int id, [FromServices] EventFeedStore calendar, MajorCalendarEdition edition, CancellationToken ct) =>
+        Handle(async () => Ok(new { id = await calendar.SaveMajor(UserId, id, edition, ct) }));
+
     [HttpGet("options")]
     public Task<IActionResult> Options(CancellationToken ct) => Handle(async () => {
         var catalogue = await store.Options(ct);
@@ -27,6 +39,7 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
             discordWebhookConnectionAvailable = true,
             deliveryEnabled = config.GetValue<bool>("EventFeeds:DeliveryEnabled") });
     });
+
     [HttpPost("subscriptions/{id:guid}/discord/connect"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> ConnectDiscord(Guid id, CancellationToken ct) => Handle(async () => {
         if (!discord.Enabled) return Problem("Discord connection is not configured.", statusCode: 503);
@@ -36,6 +49,7 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
 
         return Ok(new { authorizationUrl = await discord.Begin(UserId, id, session, ct) });
     });
+
     [HttpPost("discord/webhook"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> ConnectWebhook(ConnectDiscordWebhookRequest request, CancellationToken ct) => Handle(async () => {
         var feed = await webhookConnection.Connect(UserId, request, ct);
@@ -52,18 +66,22 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
 
         return Ok(await discord.Complete(UserId, session, state, code, error, ct));
     });
+
     [HttpGet]
     public Task<IActionResult> List(CancellationToken ct) => Handle(async () => Ok(await store.List(UserId, ct)));
+
     [HttpGet("{id:guid}")]
     public Task<IActionResult> Get(Guid id, CancellationToken ct) => Handle(async () => {
         var feed = await store.Get(UserId, id, ct); return feed == null ? NotFound() : Ok(feed);
     });
+
     [HttpGet("subscriptions/{id:guid}/deliveries")]
     public Task<IActionResult> History(Guid id, CancellationToken ct) => Handle(async () => 
     {
         if (await store.GetSubscription(UserId, id, ct) == null) return NotFound();
         return Ok(await store.History(UserId, id, ct));
     });
+
     [HttpPost("preview"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> Preview(EventFeedFilter filter, CancellationToken ct) => Handle(async () =>
         Ok(await events.GetUpcomingFeedEvents(filter, DateTime.UtcNow, ct)));
@@ -75,30 +93,37 @@ public sealed class EventFeedsController(IEventFeedStore store, IEventFeedQueryS
         var feed = await store.Save(UserId, null, request, ct);
         return CreatedAtAction(nameof(Get), new { id = feed!.Id }, feed);
     });
+
     [Authorize(Roles = "Admin")]
     [HttpPut("{id:guid}"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> Update(Guid id, SaveEventFeedRequest request, CancellationToken ct) => Handle(async () => {
         var feed = await store.Save(UserId, id, request, ct); return feed == null ? NotFound() : Ok(feed);
     });
+
     [Authorize(Roles = "Admin")]
     [HttpDelete("{id:guid}"), ValidateAntiForgeryToken]
     public Task<IActionResult> Delete(Guid id, CancellationToken ct) => Handle(async () =>
         await store.Delete(UserId, id, ct) ? NoContent() : NotFound());
+
     [HttpPost("{id:guid}/subscriptions"), ValidateAntiForgeryToken, EnableRateLimiting("account-entry")]
     public Task<IActionResult> Subscribe(Guid id, SubscribeEventFeedRequest request, CancellationToken ct) => Handle(async () => {
         var subscription = await store.Subscribe(UserId, id, request.Provider, ct);
         return subscription == null ? NotFound() : Ok(subscription);
     });
+
     [HttpGet("subscriptions")]
     public Task<IActionResult> Subscriptions(CancellationToken ct) => Handle(async () => Ok(await store.Subscriptions(UserId, ct)));
+
     [HttpGet("subscriptions/{id:guid}")]
     public Task<IActionResult> Subscription(Guid id, CancellationToken ct) => Handle(async () => {
         var subscription = await store.GetSubscription(UserId,id,ct);
         return subscription == null ? NotFound() : Ok(subscription);
     });
+
     [HttpDelete("subscriptions/{id:guid}"), ValidateAntiForgeryToken]
     public Task<IActionResult> Unsubscribe(Guid id, CancellationToken ct) => Handle(async () =>
         await store.Unsubscribe(UserId,id,ct) ? NoContent() : NotFound());
+
     private async Task<IActionResult> Handle(Func<Task<IActionResult>> action)
     {
         try { return await action(); }

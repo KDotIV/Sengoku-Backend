@@ -76,3 +76,8 @@ SengokuProvider.Worker/appsettings.Development.json
 /SengokuDispatcher.API/appsettings.json
 /database
 /.azure/plan.md
+
+!/database/
+/database/migrations/*
+!/database/migrations/20261104_major_calendar_deliverables.sql
+/database/migrations

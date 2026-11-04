@@ -10,11 +10,11 @@ public sealed record FeedSchedule
     public string? UtcTime { get; init; }
     public TimeSpan? Validate()
     {
-        if (Mode == "Interval" && IntervalHours is >= 1 and <= 8760 && UtcTime == null) return null;
+        if (Mode == "Interval" && IntervalHours is >= 1 and <= 168 && UtcTime == null) return null;
         if (Mode == "OnInsert" && IntervalHours == null && UtcTime == null) return null;
         if (Mode == "Daily" && IntervalHours == null && TimeOnly.TryParseExact(UtcTime, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
             return time.ToTimeSpan();
-        throw new ArgumentException("Use Interval with intervalHours, Daily with utcTime (HH:mm), or OnInsert without time fields.");
+        throw new ArgumentException("Use Interval with 1–168 intervalHours, Daily with utcTime (HH:mm), or OnInsert without time fields.");
     }
 }
 public sealed record SaveEventFeedRequest
@@ -74,3 +74,22 @@ internal sealed class DispatchRow
     public int Attempts { get; set; }
 }
 
+
+public sealed record MajorCalendarEdition
+{
+    public int Id { get; init; }
+    public int Version { get; init; }
+    public bool Active { get; init; } = true;
+    public string Name { get; init; } = "";
+    public string? Circuit { get; init; }
+    public int? StartggId { get; init; }
+    public int[] GameIds { get; init; } = [];
+    public DateTimeOffset StartsAt { get; init; }
+    public DateTimeOffset? EndsAt { get; init; }
+    public DateTimeOffset? RegistrationOpensAt { get; init; }
+    public DateTimeOffset? RegistrationClosesAt { get; init; }
+    public string? City { get; init; }
+    public string? State { get; init; }
+    public string? Country { get; init; }
+    public bool Online { get; init; }
+}
