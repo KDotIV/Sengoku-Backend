@@ -77,11 +77,42 @@ public sealed partial class EventFeedStore
 
     private sealed record EditionWork(int EditionId, DateTime CreatedAt);
 
+    private Task<DispatchRow?> ClaimNext(CancellationToken ct) => Database(async conn =>
+    {
+        while (true)
+        {
+            await using var tx = await conn.BeginTransactionAsync(ct);
+            // The existing claim locks the subscription and handles expiry. Undo the entire claim
+            // before deferring so attempts, sending_at and the encrypted snapshot stay intact.
+            await tx.SaveAsync("before_claim", ct);
+            var job = await conn.QueryFirstOrDefaultAsync<DispatchRow>(new CommandDefinition(
+                "SELECT * FROM event_feed_claim_current()", transaction: tx, cancellationToken: ct));
+            if (job != null)
+            {
+                var due = await conn.ExecuteScalarAsync<DateTime?>(new CommandDefinition("""
+                    SELECT max(completed_at) + interval '1 hour' FROM event_feed_deliveries
+                    WHERE subscription_id=@subscriptionId AND status='Sent'
+                      AND completed_at > clock_timestamp() - interval '1 hour'
+                    """, new { subscriptionId = job.FeedId }, tx, cancellationToken: ct));
+                if (due.HasValue)
+                {
+                    await tx.RollbackAsync("before_claim", ct);
+                    await conn.ExecuteAsync(new CommandDefinition("""
+                        UPDATE event_feed_deliveries SET next_attempt_at=greatest(next_attempt_at,@due)
+                        WHERE id=@id AND status='Pending'
+                        """, new { job.Id, due }, tx, cancellationToken: ct));
+                    await tx.CommitAsync(ct);
+                    continue; // Another subscription can be ready in the same worker cycle.
+                }
+            }
+            await tx.CommitAsync(ct);
+            return job;
+        }
+    }, ct);
+
     public async Task<bool> DispatchNext(IEventFeedOutlet outlet, CancellationToken ct)
     {
-        // The function atomically claims and commits before any external HTTP request.
-        var job = await Database(conn => conn.QueryFirstOrDefaultAsync<DispatchRow>(new CommandDefinition(
-            "SELECT * FROM event_feed_claim_current()", cancellationToken: ct)), ct);
+        var job = await ClaimNext(ct);
         if (job == null) return false;
         Sengoku.Observability.OperationLog.Data(("MessageId", job.Id));
         DeliveryResult result;
