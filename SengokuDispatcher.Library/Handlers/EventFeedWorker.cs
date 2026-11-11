@@ -2,14 +2,15 @@ using SengokuDispatcher.Library.Services.Feeds;
 using Microsoft.AspNetCore.DataProtection;
 using SengokuProvider.Library.Services.Events;
 using Sengoku.Observability;
+using SengokuDispatcher.Library.Services.Diagnostics;
 
 namespace SengokuDispatcher.Library.Handlers;
 
-public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration config, ILogger<EventFeedWorker> log, OperationLogger operations) : BackgroundService
+public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration config, ILogger<EventFeedWorker> log, OperationLogger operations, WorkerActivity activity) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Opt-in until the additive migration and shared persistent data-protection keys are deployed.
+        // Only Dispatcher owns delivery; local integration tests use an isolated database.
         if (!config.GetValue<bool>("EventFeeds:DeliveryEnabled")) return;
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -22,19 +23,23 @@ public sealed class EventFeedWorker(IServiceScopeFactory scopes, IConfiguration 
                 var outlet = scope.ServiceProvider.GetRequiredService<IEventFeedOutlet>();
                 await store.DiscoverNewTournaments(stoppingToken);
                 await store.RecoverInterrupted(stoppingToken);
+                activity.Success("feeds");
                 for (var i = 0; i < 20 && !stoppingToken.IsCancellationRequested; i++)
                 {
                     if (!await store.PrepareNext(query, stoppingToken)) break;
+                    activity.Success("feeds");
                 }
                 for (var i = 0; i < 20 && !stoppingToken.IsCancellationRequested; i++)
                 {
                     if (!await store.DispatchNext(outlet, stoppingToken)) break;
+                    activity.Success("feeds");
                 }
                 operation.Complete();
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { operation.Cancel(); return; }
             catch (Exception ex)
             {
+                activity.Failure("feeds");
                 operation.Fail(ex);
                 Sengoku.Observability.OperationLog.Failure(ex);
                 // Never log transport exceptions that might contain a webhook token or SQL parameters.

@@ -3,11 +3,13 @@ using Azure.Messaging.ServiceBus;
 using Dapper;
 using Npgsql;
 using SengokuDispatcher.Library.Workflows.Events;
+using SengokuDispatcher.Library.Services.Diagnostics;
 
 namespace SengokuDispatcher.Library.Handlers;
 
 public sealed class CommsDeliverablesWorker(IConfiguration config,
-    ILogger<CommsDeliverablesWorker> log) : BackgroundService
+    ILogger<CommsDeliverablesWorker> log, [FromKeyedServices("comms")] ServiceBusClient client,
+    WorkerActivity activity) : BackgroundService
 {
     private sealed record Change(Guid Id, string Entity, int EntityId, int? EditionId, string Operation, DateTime OccurredAt)
     {
@@ -20,9 +22,6 @@ public sealed class CommsDeliverablesWorker(IConfiguration config,
     protected override async Task ExecuteAsync(CancellationToken ct)
     {
         const string queue = "commsdeliverablesqueue";
-        var connection = config["ServiceBusSettings:CommsDeliverablesConnection"]
-            ?? throw new InvalidOperationException("Configure the commsdeliverablesqueue connection in Dispatcher.");
-        await using var client = new ServiceBusClient(connection);
         await using var sender = client.CreateSender(queue);
         await using var processor = client.CreateProcessor(queue, new ServiceBusProcessorOptions { AutoCompleteMessages = false });
         processor.ProcessMessageAsync += Consume;
@@ -38,10 +37,12 @@ public sealed class CommsDeliverablesWorker(IConfiguration config,
             {
                 try
                 {
-                    if (await PublishBatch(sender, ct)) continue;
+                    var published = await PublishBatch(sender, ct);
+                    activity.Success("comms");
+                    if (published) continue;
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested)
-                { log.LogError("Comms outbox publish failed ({ErrorType}).", ex.GetType().Name); }
+                { activity.Failure("comms"); log.LogError("Comms outbox publish failed ({ErrorType}).", ex.GetType().Name); }
                 await Task.Delay(TimeSpan.FromSeconds(2), ct);
             }
         }

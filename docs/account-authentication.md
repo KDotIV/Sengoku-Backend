@@ -17,6 +17,8 @@ Implemented in the backend. See [registration and bracket runner handoff](regist
 }
 ```
 
+`Authentication:DataProtectionKeyPath` is optional when the host provides persistent key storage; retain the keys and Data Protection itself. See [deployment guidance](../.github/DEPLOYMENT.md). SQL migrations are provided privately as described in [local testing](local-testing.md).
+
 `Authentication__AllowedOrigins__0` is the corresponding environment variable. Origins must be exact HTTPS origins without trailing slashes. Empty configuration permits same-origin access only. This replaces wildcard CORS for the API. Use HTTPS locally as well. If frontend and API are on different *sites*, set `CookieSameSite` to `None`; cookies remain Secure. Third-party cookie restrictions can still block that topology; same-site hosting is preferred. Persist and protect the ASP.NET Data Protection key ring and share it between instances to preserve antiforgery tokens. Configure trusted reverse-proxy forwarded headers at deployment if TLS terminates upstream; never trust arbitrary client-supplied forwarding headers.
 
 3. Existing plaintext or differently hashed passwords deliberately cannot log in. Before rollout, implement a verified password-reset flow or perform a controlled migration for accounts whose existing format is known. Do not enable plaintext login as a fallback. Password reset/change must revoke all rows in `user_sessions` for that user. No reset endpoint is implemented in this change.

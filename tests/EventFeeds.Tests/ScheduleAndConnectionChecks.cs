@@ -48,7 +48,9 @@ static class ScheduleAndConnectionChecks
                 """,new{legacy,legacyDelivery});
             await conn.ExecuteAsync((await File.ReadAllTextAsync("database/migrations/20261020_shared_event_feeds.sql")).Replace("public.",schema+"."));
             await conn.ExecuteAsync("CREATE TABLE players(id int primary key); CREATE TABLE leagues(id int primary key); CREATE TABLE legends(id int primary key);");
-            await conn.ExecuteAsync(await File.ReadAllTextAsync("database/migrations/20261104_major_calendar_deliverables.sql"));
+            // The original calendar migration was never committed. Exercise its recovered current
+            // contract locally without presenting that snapshot as a safe production migration.
+            await conn.ExecuteAsync((await File.ReadAllTextAsync("database/schema/event-feed-calendar-current.sql")).Replace("public.",schema+"."));
             Check(await conn.ExecuteScalarAsync<string>("SELECT destination_protected FROM event_feed_subscriptions WHERE id=@legacy",new{legacy})=="encrypted-value","migration preserves encrypted destination");
             Check(await conn.ExecuteScalarAsync<Guid>("SELECT subscription_id FROM event_feed_deliveries WHERE id=@legacyDelivery",new{legacyDelivery})==legacy,"migration preserves history");
             Check(await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM information_schema.columns WHERE table_schema=@schema AND table_name='event_feeds' AND column_name IN ('destination_protected','discord_guild_id','discord_channel_id','next_run_at')",new{schema})==0,"shared definition contains no destination or dispatch state");

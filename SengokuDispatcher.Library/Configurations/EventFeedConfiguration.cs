@@ -37,9 +37,15 @@ public static class EventFeedConfiguration
             {
                 if (!builder.Configuration.GetValue<bool>("Dispatcher:ServiceBusEnabled"))
                     throw new InvalidOperationException("Calendar refresh requires Dispatcher:ServiceBusEnabled.");
+                var commsConnection = builder.Configuration["ServiceBusSettings:CommsDeliverablesConnection"];
+                if (string.IsNullOrWhiteSpace(commsConnection))
+                    throw new InvalidOperationException("Configure ServiceBusSettings:CommsDeliverablesConnection.");
+                builder.Services.AddKeyedSingleton<Azure.Messaging.ServiceBus.ServiceBusClient>("comms",
+                    (sp, key) => new Azure.Messaging.ServiceBus.ServiceBusClient(commsConnection));
                 builder.Services.AddHostedService<SengokuDispatcher.Library.Handlers.CommsDeliverablesWorker>();
                 builder.Services.AddHostedService<SengokuDispatcher.Library.Handlers.MajorCalendarRefreshWorker>();
             }
+            builder.Services.AddScoped<SengokuDispatcher.Library.Services.Diagnostics.DispatcherReadiness>();
             builder.Services.AddHttpClient("DiscordFeedOAuth", client => client.Timeout = TimeSpan.FromSeconds(20))
                 .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false }).RemoveAllLoggers();
 

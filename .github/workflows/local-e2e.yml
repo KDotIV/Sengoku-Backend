@@ -1,0 +1,41 @@
+name: Private local workflow checks
+on:
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      PRIVATE_DATABASE_FIXTURES_B64:
+        required: true
+permissions:
+  contents: read
+jobs:
+  local-e2e:
+    # Private database definitions are never provided to pull-request/fork code.
+    if: github.repository == 'KDotIV/Sengoku-Backend' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: sengoku_local
+          POSTGRES_PASSWORD: local-ci-only
+          POSTGRES_DB: sengoku_local
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sengoku_local -d sengoku_local"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Import private fixtures
+        shell: pwsh
+        env:
+          PRIVATE_DATABASE_FIXTURES_B64: ${{ secrets.PRIVATE_DATABASE_FIXTURES_B64 }}
+        run: ./scripts/Import-PrivateDatabaseFixtures.ps1 -FromEnvironment
+      - name: Run regression and local HTTP workflows
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .local-e2e -Force | Out-Null
+          @{ConnectionStrings=@{AlexandriaConnectionString='Host=127.0.0.1;Port=5432;Database=sengoku_local;Username=sengoku_local;Password=local-ci-only'}} | ConvertTo-Json | Set-Content .local-e2e/settings.json
+          ./tests/Run-LocalTests.ps1 -DatabaseSettings .local-e2e/settings.json -Configuration Release
