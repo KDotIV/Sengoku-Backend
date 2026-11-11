@@ -81,3 +81,9 @@ SengokuProvider.Worker/appsettings.Development.json
 /database/migrations/*
 !/database/migrations/20261104_major_calendar_deliverables.sql
 /database/migrations
+
+# Disposable databases, certificates, logs and local-only settings.
+/.local-e2e/
+/local-settings/
+!/database/schema/*
+/database/schema
