@@ -165,7 +165,7 @@ try
         "Bracket start times were lost between GraphQL intake and notification");
     Check(await db.ExecuteScalarAsync<int>("SELECT count(*) FROM event_feed_edition_history WHERE subscription_id=@subscriptionId", new { subscriptionId }) == 1,
         "Multi-game tournament consumed more than one edition");
-    foreach (var art in new[] { "33945.jpg", "1386.jpg", "43868.jpg", "49783.png", "48548.jpg", "610.jpg", "36963.jpg", "5582.jpg", "48599.jpg", "287.jpg", "1.jpg" })
+    foreach (var art in new[] { "33945.jpg", "1386.jpg", "43868.jpg", "49783.png", "17.jpg", "4985.png", "48548.jpg", "610.jpg", "36963.jpg", "5582.jpg", "48599.jpg", "287.jpg", "1.jpg" })
         Check((await client.GetAsync("/assets/game-headers/" + art)).IsSuccessStatusCode, "Public game artwork unavailable: " + art);
     Check(bus.Published > 0 && bus.Completed > 0 && bus.DeadLetters.IsEmpty, "Change outbox/broker settlement failed");
     await WaitFor(async () => (await client.GetAsync("/health/ready")).IsSuccessStatusCode, "Readiness did not become healthy");

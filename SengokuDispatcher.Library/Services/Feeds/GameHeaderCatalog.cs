@@ -8,6 +8,7 @@ public static class GameHeaderCatalog
         {
             [33945] = ("GGST", "33945.jpg"), [1386] = ("SSBU", "1386.jpg"),
             [43868] = ("SF6", "43868.jpg"), [49783] = ("TEKKEN 8", "49783.png"),
+            [17] = ("TEKKEN 7", "17.jpg"), [4985] = ("TTT2", "4985.png"),
             [48548] = ("GBVSR", "48548.jpg"), [610] = ("3rd Strike", "610.jpg"),
             [36963] = ("KOF XV", "36963.jpg"), [5582] = ("SCII", "5582.jpg"),
             [48599] = ("MK1", "48599.jpg"), [287] = ("DBFZ", "287.jpg"), [1] = ("Melee", "1.jpg")

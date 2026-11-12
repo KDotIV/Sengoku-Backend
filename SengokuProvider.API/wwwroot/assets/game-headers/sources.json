@@ -47,5 +47,19 @@
     "name": "Super Smash Bros. Melee",
     "gameId": 1,
     "file": "1.jpg"
+  },
+  {
+    "source": "https://store.steampowered.com/app/389730/",
+    "imageUrl": "https://shared.fastly.steamstatic.com/store_item_assets/steam/apps/389730/header.jpg?t=1765812753",
+    "name": "TEKKEN 7",
+    "gameId": 17,
+    "file": "17.jpg"
+  },
+  {
+    "source": "https://www.tekken-official.jp/game/",
+    "imageUrl": "https://www.tekken-official.jp/images/renewal/titles/logo_tt2.png",
+    "name": "Tekken Tag Tournament 2",
+    "gameId": 4985,
+    "file": "4985.png"
   }
 ]

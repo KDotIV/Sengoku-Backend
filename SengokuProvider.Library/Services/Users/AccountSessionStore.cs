@@ -16,7 +16,7 @@ public sealed class AccountSessionStore(string connectionString)
     private static readonly string DummyPassword = AccountPassword.Hash("invalid-account-password-placeholder");
     public async Task<AccountIdentity?> Authenticate(string email, string password, CancellationToken ct)
     {
-        return await Sengoku.Observability.OperationLog.RunAsync<AccountIdentity?>("AccountSessionStore.Authenticate", async () =>
+        return await OperationLog.RunAsync<AccountIdentity?>("AccountSessionStore.Authenticate", async () =>
         {
             if (string.IsNullOrWhiteSpace(email) || email.Length > 254 || string.IsNullOrEmpty(password) || password.Length > 1024) return null;
             await using var conn = new NpgsqlConnection(connectionString);
@@ -34,7 +34,7 @@ public sealed class AccountSessionStore(string connectionString)
     }
     public async Task<string> Create(int userId, string? previousToken, CancellationToken ct)
     {
-        return await Sengoku.Observability.OperationLog.RunAsync<string>("AccountSessionStore.Create", async () =>
+        return await OperationLog.RunAsync<string>("AccountSessionStore.Create", async () =>
         {
             try
             {
@@ -66,7 +66,7 @@ public sealed class AccountSessionStore(string connectionString)
     }
     public async Task<AccountIdentity?> Find(string? token, CancellationToken ct)
     {
-        return await Sengoku.Observability.OperationLog.RunAsync<AccountIdentity?>("AccountSessionStore.Find", async () =>
+        return await OperationLog.RunAsync<AccountIdentity?>("AccountSessionStore.Find", async () =>
         {
             if (!ValidToken(token)) return null;
             await using var conn = new NpgsqlConnection(connectionString);
@@ -80,7 +80,7 @@ public sealed class AccountSessionStore(string connectionString)
     }
     public async Task Revoke(string? token, CancellationToken ct)
     {
-        await Sengoku.Observability.OperationLog.RunAsync("AccountSessionStore.Revoke", async () =>
+        await OperationLog.RunAsync("AccountSessionStore.Revoke", async () =>
         {
             if (!ValidToken(token)) return;
             try

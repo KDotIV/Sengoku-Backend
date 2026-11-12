@@ -45,7 +45,7 @@ internal static class TimelineChecks
         Check(take is > 0 and < 10, "oversized timelines select whole parent tournaments");
         using var fitted = JsonDocument.Parse(JsonSerializer.Serialize(DiscordEventFeedOutlet.Payload(many with { Events = many.Events.Take(take).ToArray(), HasMore = true })));
         Check(Texts(fitted.RootElement).Sum(t => t.Length) <= DiscordTimelineTemplate.TextLimit, "aggregate text budget enforced");
-        var catalog = new[] {33945,1386,43868,49783,48548,610,36963,5582,48599,287,1,100,101,102,103,104,105,106,107,108};
+        var catalog = new[] {33945,1386,43868,49783,17,4985,48548,610,36963,5582,48599,287,1,102,103,104,105,106,107,108};
         var crowded = first with { Brackets = catalog.Select((id, i) => Bracket(id, i + 1, i)).ToArray() };
         using var allGames = JsonDocument.Parse(JsonSerializer.Serialize(DiscordEventFeedOutlet.Payload(digest with { Events = [crowded] }, "https://feeds.example.test")));
         Check(CountComponents(allGames.RootElement) <= 40 && Texts(allGames.RootElement).Sum(t => t.Length) <= 4000, "20-game compact fallback fits one message");
