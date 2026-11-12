@@ -14,7 +14,7 @@ A dense single tournament uses a shared heading and registration link. Very larg
 
 ## Artwork and rollout
 
-Set `EventFeeds__AssetsBaseUrl` on Dispatcher to the public HTTPS origin of Provider. Provider serves bundled images under `/assets/game-headers/`; QA deployment configures its existing Provider origin automatically. The four supplied headers and seven additional game images are mapped by start.gg game ID. Source provenance is included alongside the assets. Missing configuration produces text-only headings. Discord controls image height and responsive sizing; images occupy their own media blocks above the text, with their original aspect ratios.
+Set `EventFeeds__AssetsBaseUrl` on Dispatcher to the public HTTPS origin of Provider before deploying. Provider serves bundled images under `/assets/game-headers/`; QA deployment verifies its existing Provider origin and all 11 images without changing app settings. Configuration changes can restart App Service and interrupt package extraction, so provision them separately and let the service recover before deploying code. The four supplied headers and seven additional game images are mapped by start.gg game ID. Source provenance is included alongside the assets. Missing configuration produces text-only headings. Discord controls image height and responsive sizing; images occupy their own media blocks above the text, with their original aspect ratios.
 
 Deploy Provider's public artwork before the new Dispatcher. Existing rows acquire bracket times on the next normal intake refresh. No bot permissions, session authentication changes, CSRF changes, database migration or Data Protection changes are required.
 

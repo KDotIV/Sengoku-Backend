@@ -77,7 +77,7 @@ jobs:
     - name: Configuration preflight
       shell: pwsh
       run: ./.github/scripts/Test-DeploymentReadiness.ps1 -AppName ${{ env.AZURE_WEBAPP_NAME }} -Service Dispatcher -ConfigurationOnly
-    - name: Wait for Provider artwork and configure its public host
+    - name: Verify Provider artwork and configured public host
       shell: pwsh
       run: |
         $ready = $false
@@ -92,8 +92,11 @@ jobs:
           } catch { Start-Sleep -Seconds 10 }
         }
         if (!$ready) { throw 'Provider game artwork is unavailable. Deploy Provider before Dispatcher.' }
-        az webapp config appsettings set --resource-group Alexandria --name '${{ env.AZURE_WEBAPP_NAME }}' --settings EventFeeds__AssetsBaseUrl=https://sengoku-alexandria-qa.azurewebsites.net --output none
-        if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the QA artwork host.' }
+        # App-setting writes can recycle Kudu while the following ZIP deployment is extracting.
+        # Provision configuration separately; deployment preflight must remain read-only.
+        $assetsBaseUrl = az webapp config appsettings list --resource-group Alexandria --name '${{ env.AZURE_WEBAPP_NAME }}' --query "[?name=='EventFeeds__AssetsBaseUrl'].value | [0]" --output tsv
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to verify the QA artwork host.' }
+        if ($assetsBaseUrl -ne 'https://sengoku-alexandria-qa.azurewebsites.net') { throw 'Configure EventFeeds__AssetsBaseUrl with the QA Provider host before deploying Dispatcher.' }
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
