@@ -23,7 +23,7 @@ public sealed class EventIntakeService : IEventIntakeService
                     await conn.OpenAsync();
                     using (var transaction = await conn.BeginTransactionAsync())
                     {
-                        var insertQuery = new StringBuilder(@"INSERT INTO tournament_links (id, url_slug, game_id, event_link, entrants_num, last_updated) VALUES ");
+                        var insertQuery = new StringBuilder(@"INSERT INTO tournament_links (id, url_slug, game_id, event_link, entrants_num, last_updated, start_time) VALUES ");
                         var queryParams = new List<NpgsqlParameter>();
                         var valueCount = 0;
                         foreach (var tournament in currentBatch)
@@ -33,7 +33,7 @@ public sealed class EventIntakeService : IEventIntakeService
                                 insertQuery.Append(", ");
                             }
 
-                            insertQuery.Append($"(@Input{valueCount}, @UrlSlug{valueCount}, @Game{valueCount}, @EventId{valueCount}, @EntrantsNum{valueCount}, @LastUpdated{valueCount})");
+                            insertQuery.Append($"(@Input{valueCount}, @UrlSlug{valueCount}, @Game{valueCount}, @EventId{valueCount}, @EntrantsNum{valueCount}, @LastUpdated{valueCount}, @StartTime{valueCount})");
 
                             queryParams.Add(new NpgsqlParameter($"@Input{valueCount}", tournament.Id));
                             queryParams.Add(new NpgsqlParameter($"@UrlSlug{valueCount}", tournament.UrlSlug));
@@ -41,12 +41,14 @@ public sealed class EventIntakeService : IEventIntakeService
                             queryParams.Add(new NpgsqlParameter($"@EventId{valueCount}", tournament.EventId));
                             queryParams.Add(new NpgsqlParameter($"@EntrantsNum{valueCount}", tournament.EntrantsNum));
                             queryParams.Add(new NpgsqlParameter($"@LastUpdated{valueCount}", tournament.LastUpdated));
+                            queryParams.Add(new NpgsqlParameter($"@StartTime{valueCount}", NpgsqlTypes.NpgsqlDbType.TimestampTz)
+                                { Value = (object?)tournament.StartTimeUtc ?? DBNull.Value });
 
                             Console.WriteLine($"Event: {tournament.EventId} - Tournament: {tournament.Id} Added");
 
                             valueCount++;
                         }
-                        insertQuery.Append(" ON CONFLICT (id) DO UPDATE SET url_slug = EXCLUDED.url_slug,game_id = EXCLUDED.game_id,event_link = EXCLUDED.event_link,last_updated = EXCLUDED.last_updated,entrants_num = EXCLUDED.entrants_num;");
+                        insertQuery.Append(" ON CONFLICT (id) DO UPDATE SET url_slug = EXCLUDED.url_slug,game_id = EXCLUDED.game_id,event_link = EXCLUDED.event_link,last_updated = EXCLUDED.last_updated,entrants_num = EXCLUDED.entrants_num,start_time = EXCLUDED.start_time;");
 
                         using (var cmd = new NpgsqlCommand(insertQuery.ToString(), conn))
                         {

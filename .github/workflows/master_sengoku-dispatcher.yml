@@ -77,6 +77,23 @@ jobs:
     - name: Configuration preflight
       shell: pwsh
       run: ./.github/scripts/Test-DeploymentReadiness.ps1 -AppName ${{ env.AZURE_WEBAPP_NAME }} -Service Dispatcher -ConfigurationOnly
+    - name: Wait for Provider artwork and configure its public host
+      shell: pwsh
+      run: |
+        $ready = $false
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
+          try {
+            foreach ($image in @('33945.jpg','1386.jpg','43868.jpg','49783.png','48548.jpg','610.jpg','36963.jpg','5582.jpg','48599.jpg','287.jpg','1.jpg')) {
+              $response = Invoke-WebRequest -Method Head -Uri "https://sengoku-alexandria-qa.azurewebsites.net/assets/game-headers/$image" -TimeoutSec 10 -ErrorAction Stop
+              if ($response.StatusCode -ne 200 -or "$($response.Headers['Content-Type'])" -notmatch '^image/') { throw 'Artwork response is not an image.' }
+            }
+            $ready = $true
+            break
+          } catch { Start-Sleep -Seconds 10 }
+        }
+        if (!$ready) { throw 'Provider game artwork is unavailable. Deploy Provider before Dispatcher.' }
+        az webapp config appsettings set --resource-group Alexandria --name '${{ env.AZURE_WEBAPP_NAME }}' --settings EventFeeds__AssetsBaseUrl=https://sengoku-alexandria-qa.azurewebsites.net --output none
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to configure the QA artwork host.' }
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:

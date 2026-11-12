@@ -26,6 +26,7 @@ public static class ProviderApplication
             typeof(SengokuDispatcher.Library.Workflows.Events.IEventOperations).Assembly);
         customize?.Invoke(builder.Services);
         var app = builder.Build();
+        app.UseStaticFiles(); // Public, bundled game artwork for Discord thumbnails.
         app.UseRouting();
         app.UseMiddleware<OperationMiddleware>();
         app.UseSwagger();

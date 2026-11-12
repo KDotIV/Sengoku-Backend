@@ -1,13 +1,20 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
 
 namespace SengokuDispatcher.Library.Services.Feeds;
 
-public sealed record DigestEvent(string Name, string SignupSlug, DateTime StartUtc, string Location, int? Entrants);
-public sealed record EventDigest(string Name, IReadOnlyList<DigestEvent> Events, bool HasMore);
+public sealed record DigestBracket(int GameId, string GameName, int BracketId, string SignupSlug, DateTime? StartUtc, int? Entrants);
+public sealed record DigestEvent(string Name, string SignupSlug, DateTime StartUtc, string Location, int? Entrants,
+    IReadOnlyList<DigestBracket>? Brackets = null, DateTime? EndUtc = null);
+public sealed record EventDigest(string Name, IReadOnlyList<DigestEvent> Events, bool HasMore,
+    int[]? DeferredEditionIds = null, int[]? GameOrder = null, int SubscriptionVersion = 0);
+public sealed class DiscordFeedPresentationOptions
+{
+    public string? AssetsBaseUrl { get; set; }
+}
 public sealed record DeliveryResult(string Status, string? MessageId = null, int RetryAfterSeconds = 0);
 public interface IEventFeedOutlet
 {
@@ -15,7 +22,7 @@ public interface IEventFeedOutlet
     Task<DeliveryResult> Send(string destination, EventDigest digest, CancellationToken ct);
 }
 
-public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
+public sealed class DiscordEventFeedOutlet(HttpClient client, IOptions<DiscordFeedPresentationOptions>? presentation = null) : IEventFeedOutlet
 {
     public string Provider => "Discord";
     public static string ValidateWebhook(string url)
@@ -36,41 +43,14 @@ public sealed class DiscordEventFeedOutlet(HttpClient client) : IEventFeedOutlet
 
         return "https://start.gg/" + path;
     }
-    private static string Text(string value, int max) => new(value.Where(c => !char.IsControl(c)).Take(max).ToArray());
-    private sealed record Embed(
-        [property: JsonPropertyName("title")] string Title,
-        [property: JsonPropertyName("description")] string Description,
-        [property: JsonPropertyName("url"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Url);
-    public static object Payload(EventDigest digest)
-    {
-        if (digest.Events.Count is < 1 or > 10) throw new ArgumentException("A digest must contain 1–10 events.");
-        var embeds = digest.Events.Select(e =>
-        {
-            var url = string.IsNullOrEmpty(e.SignupSlug) ? null : SignupUrl(e.SignupSlug);
-            var entrants = e.Entrants?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "Unknown";
-            var starts = new DateTimeOffset(DateTime.SpecifyKind(e.StartUtc, DateTimeKind.Utc)).ToUnixTimeSeconds();
-            var description = $"{Text(e.Location, 100)}\n<t:{starts}:F>\nEntrants: {entrants}";
-            if (url != null) description += $"\n[View / register on start.gg]({url})";
-            return new Embed(Text(e.Name, 180), description, url);
-        }).ToArray();
-
-        if (embeds.Any(e => e.Url?.Length > 2048 || e.Description.Length > 4096) || embeds.Sum(e => e.Title.Length + e.Description.Length) > 6000)
-            throw new ArgumentException("Event data exceeds Discord's embed limits.");
-
-        return new
-        {
-            content = Text(digest.Name, 100) + (digest.HasMore ? " — first matches; more events match your filters." : " — upcoming tournaments"),
-            allowed_mentions = new { parse = Array.Empty<string>() },
-            embeds
-        };
-    }
+    public static object Payload(EventDigest digest, string? assetsBaseUrl = null) => DiscordTimelineTemplate.Build(digest, assetsBaseUrl);
     public async Task<DeliveryResult> Send(string destination, EventDigest digest, CancellationToken ct)
     {
         var url = ValidateWebhook(destination);
-        var payload = Payload(digest);
+        var payload = Payload(digest, presentation?.Value.AssetsBaseUrl);
         try
         {
-            using var response = await client.PostAsJsonAsync(url + "?wait=true", payload, ct);
+            using var response = await client.PostAsJsonAsync(url + "?wait=true&with_components=true", payload, ct);
             if (response.StatusCode == HttpStatusCode.TooManyRequests)
             {
                 var seconds = response.Headers.RetryAfter?.Delta?.TotalSeconds

@@ -36,6 +36,10 @@ await db.OpenAsync();
 if (!await db.ExecuteScalarAsync<bool>("SELECT to_regclass('public.user_sessions') IS NOT NULL"))
     await db.ExecuteAsync(await File.ReadAllTextAsync("database/schema/local-baseline.sql"), commandTimeout: 60);
 await db.ExecuteAsync(await File.ReadAllTextAsync("database/schema/local-seed.sql"), new { password = AccountPassword.Hash("LocalOnly-12345!") });
+await db.ExecuteAsync("""
+    INSERT INTO games(id,game_name) VALUES(33945,'Guilty Gear Strive'),(48548,'Granblue Fantasy Versus Rising'),(43868,'Street Fighter 6')
+    ON CONFLICT DO NOTHING;
+    """);
 
 using var rsa = RSA.Create(2048);
 var certificateRequest = new CertificateRequest("CN=localhost", rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
@@ -50,10 +54,12 @@ using var certificate = new X509Certificate2(generatedCertificate.Export(X509Con
 var external = new ExternalServices();
 var bus = new MemoryBus();
 const string serviceKey = "local-only-dispatcher-key-12345678901234567890";
+string? artworkHost = null;
 
 WebApplicationBuilder Builder(bool dispatcher, int port)
 {
-    var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", Args = [] });
+    var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development", Args = [],
+        WebRootPath = dispatcher ? null : Path.Combine(root.FullName, "SengokuProvider.API", "wwwroot") });
     // Do not inherit the developer's appsettings, environment credentials or user secrets.
     builder.Configuration.Sources.Clear();
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> {
@@ -61,6 +67,7 @@ WebApplicationBuilder Builder(bool dispatcher, int port)
         ["Dispatcher:ApiKey"] = serviceKey,
         ["Dispatcher:ServiceBusEnabled"] = "true", ["Dispatcher:SchedulingEnabled"] = "false", ["Dispatcher:DiscordEnabled"] = "false",
         ["EventFeeds:DeliveryEnabled"] = "true", ["EventFeeds:CommsDeliverablesEnabled"] = "true",
+        ["EventFeeds:AssetsBaseUrl"] = artworkHost,
         ["Authentication:DataProtectionKeyPath"] = Path.Combine(runtime, "keys", dispatcher ? "dispatcher" : "provider"),
         ["GraphQLSettings:Endpoint"] = "https://startgg.local.test/graphql", ["GraphQLSettings:EventBearer"] = "local-only",
         ["ServiceBusSettings:AzureWebJobsServiceBus"] = "Endpoint=sb://unused/;SharedAccessKeyName=unused;SharedAccessKey=dGVzdA==",
@@ -92,6 +99,8 @@ providerBuilder.Configuration["Dispatcher:BaseUrl"] = dispatcherUrl;
 await using var provider = ProviderApplication.Build(providerBuilder, ExternalOverrides);
 provider.MapGet("/_local/messages", () => Results.Ok(external.Digests.ToArray()));
 await provider.StartAsync();
+artworkHost = Address(provider);
+dispatcher.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<DiscordFeedPresentationOptions>>().Value.AssetsBaseUrl = artworkHost;
 // This route and all mock transports exist only in the test executable, never in either deployment.
 Console.WriteLine($"Local Provider: {Address(provider)}; Dispatcher: {dispatcherUrl}");
 Console.WriteLine("Synthetic login: admin@local.test / LocalOnly-12345!; external Discord and start.gg calls are captured locally.");
@@ -132,7 +141,7 @@ try
     await Csrf(); // Antiforgery token changes when the anonymous client becomes authenticated.
     using var created = await client.PostAsJsonAsync("/api/event-feeds/create", new {
         name = "Local E2E Feed", enabled = true, providers = new[] { "Discord" }, schedule = new { mode = "OnInsert" },
-        filter = new { gameIds = new[] { 1 }, regionIds = new[] { "southeast" }, maxEvents = 5 }
+        filter = new { gameIds = new[] { 33945, 48548 }, regionIds = new[] { "southeast" }, maxEvents = 5 }
     });
     created.EnsureSuccessStatusCode();
     using var definition = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
@@ -146,6 +155,18 @@ try
     intake.EnsureSuccessStatusCode();
     await WaitFor(async () => await db.ExecuteScalarAsync<bool>("SELECT EXISTS(SELECT FROM event_feed_deliveries WHERE subscription_id=@subscriptionId AND status='Sent')", new { subscriptionId }), "No confirmed local delivery");
     Check(external.GraphQlCalls > 0 && external.Digests.Count == 1, "Real intake-to-digest workflow did not reach the mock external services exactly once");
+    var message = external.Digests.Single();
+    var timeline = message.ToString();
+    Check(message.GetProperty("flags").GetInt32() == 32768 && timeline.Contains("Guilty Gear Strive") && timeline.Contains("Granblue Fantasy Versus Rising")
+        && !timeline.Contains("Street Fighter 6"), "Timeline did not respect selected games");
+    Check(message.GetProperty("components")[0].GetProperty("components")[1].GetProperty("items")[0].GetProperty("media")
+        .GetProperty("url").GetString() == artworkHost + "/assets/game-headers/33945.jpg", "Local delivery did not use the actual artwork host");
+    Check(timeline.Contains(external.BracketStart.ToUnixTimeSeconds().ToString()) && timeline.Contains(external.BracketStart.AddHours(2).ToUnixTimeSeconds().ToString()),
+        "Bracket start times were lost between GraphQL intake and notification");
+    Check(await db.ExecuteScalarAsync<int>("SELECT count(*) FROM event_feed_edition_history WHERE subscription_id=@subscriptionId", new { subscriptionId }) == 1,
+        "Multi-game tournament consumed more than one edition");
+    foreach (var art in new[] { "33945.jpg", "1386.jpg", "43868.jpg", "49783.png", "48548.jpg", "610.jpg", "36963.jpg", "5582.jpg", "48599.jpg", "287.jpg", "1.jpg" })
+        Check((await client.GetAsync("/assets/game-headers/" + art)).IsSuccessStatusCode, "Public game artwork unavailable: " + art);
     Check(bus.Published > 0 && bus.Completed > 0 && bus.DeadLetters.IsEmpty, "Change outbox/broker settlement failed");
     await WaitFor(async () => (await client.GetAsync("/health/ready")).IsSuccessStatusCode, "Readiness did not become healthy");
     using var internalClient = new HttpClient { BaseAddress = new Uri(dispatcherUrl) };

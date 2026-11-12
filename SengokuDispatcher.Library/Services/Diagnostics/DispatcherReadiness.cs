@@ -47,6 +47,7 @@ public sealed class DispatcherReadiness(IConfiguration config, IDataProtectionPr
                 SELECT expires_at FROM event_feed_deliveries WHERE false;
                 SELECT edition_id,created_at FROM event_feed_edition_work WHERE false;
                 SELECT entity,edition_id,occurred_at FROM comms_change_outbox WHERE false;
+                SELECT start_time FROM tournament_links WHERE false;
                 """, cancellationToken: ct));
             var destinations = await db.QueryAsync<string>(new CommandDefinition("""
                 SELECT destination_protected FROM event_feed_subscriptions WHERE destination_protected IS NOT NULL

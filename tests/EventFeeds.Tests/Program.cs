@@ -9,6 +9,12 @@ using SengokuDispatcher.Library.Services.Feeds;
 using SengokuProvider.Library.Models.Feeds;
 using SengokuProvider.Library.Services.Events;
 
+if (args.FirstOrDefault() == "--render-timeline")
+{
+    TimelinePreview.Write(args[1], args[2]);
+    return;
+}
+
 const string webhook = "https://discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz0123456789";
 Check(DiscordEventFeedOutlet.ValidateWebhook(webhook) == webhook, "valid webhook");
 foreach (var bad in new[] { "http://discord.com/api/webhooks/123/token", "https://localhost/", webhook.Replace("discord.com", "discord.com.evil.test"), webhook + "?thread_id=1", webhook.Replace("discord.com", "discord.com:444"), "https://user@discord.com/api/webhooks/123456789012345678/abcdefghijklmnopqrstuvwxyz0123456789" })
@@ -22,14 +28,15 @@ await Throws<ArgumentException>(() => Task.FromResult((filter with { LookAheadDa
 var digest = new EventDigest("@everyone Test", Enumerable.Range(0,10).Select(i => new DigestEvent(new string('a',300), "tournament/test/event/sf6", DateTime.UtcNow, "Atlanta, GA", 25)).ToArray(), true);
 using var payload = JsonDocument.Parse(JsonSerializer.Serialize(DiscordEventFeedOutlet.Payload(digest)));
 Check(payload.RootElement.GetProperty("allowed_mentions").GetProperty("parse").GetArrayLength() == 0, "mentions suppressed");
-Check(payload.RootElement.GetProperty("embeds").EnumerateArray().Sum(e => e.GetProperty("title").GetString()!.Length + e.GetProperty("description").GetString()!.Length) < 6000, "Discord aggregate embed budget");
+Check(payload.RootElement.GetProperty("flags").GetInt32() == 32768 && !payload.RootElement.TryGetProperty("embeds", out _), "one Components V2 message");
 await Throws<ArgumentException>(() => Task.FromResult(DiscordEventFeedOutlet.Payload(digest with {
     Events = digest.Events.Select(e => e with { SignupSlug = "tournament/" + new string('x', 700) }).ToArray()
 })));
 await Throws<ArgumentException>(() => Task.FromResult(DiscordEventFeedOutlet.SignupUrl("https://evil.test")));
 using var unlinked = JsonDocument.Parse(JsonSerializer.Serialize(DiscordEventFeedOutlet.Payload(new EventDigest("Major",
     [new DigestEvent("Calendar edition", "", DateTime.UtcNow, "Savannah, GA", null)], false))));
-Check(!unlinked.RootElement.GetProperty("embeds")[0].TryGetProperty("url",out _), "calendar-only major omits unavailable signup link");
+Check(!unlinked.RootElement.ToString().Contains("https://start.gg/"), "calendar-only major omits unavailable signup link");
+TimelineChecks.Run();
 var transport = new FakeHttp();
 using var http = new HttpClient(transport);
 var discord = new DiscordEventFeedOutlet(http);

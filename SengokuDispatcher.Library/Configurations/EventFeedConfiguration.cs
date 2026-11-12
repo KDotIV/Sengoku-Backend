@@ -19,6 +19,7 @@ public static class EventFeedConfiguration
         builder.Services.AddScoped<IDiscordFeedConnectionStore>(sp => sp.GetRequiredService<EventFeedStore>());
         if (backgroundHost)
         {
+            builder.Services.Configure<DiscordFeedPresentationOptions>(builder.Configuration.GetSection("EventFeeds"));
             builder.Services.AddScoped<IDiscordFeedConnection, DiscordFeedConnection>();
             builder.Services.AddScoped<IDiscordWebhookConnection, DiscordWebhookConnection>();
         }

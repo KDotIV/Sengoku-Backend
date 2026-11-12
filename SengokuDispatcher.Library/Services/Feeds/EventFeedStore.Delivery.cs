@@ -34,19 +34,44 @@ public sealed partial class EventFeedStore
         if (reconnect) work = work.Where(w => w.EditionId == 0).ToArray();
         var processed = work.Select(w => w.EditionId).ToArray();
         int[] announced = [];
+        bool retainWork = false;
         string? payload = null;
         var status = "Skipped";
         var outcome = "NoMatches";
         try
         {
+            // Scheduled digests drain a previous oversized snapshot before starting a new one.
+            // Completed deliveries retain only the non-secret overflow cursor, never the message or destination.
+            int[] deferred = [];
+            if (feed.ScheduleMode != "OnInsert")
+            {
+                var previous = await conn.QueryFirstOrDefaultAsync<string?>(Cmd("""
+                    SELECT CASE WHEN status='Sent' AND (payload->>'SubscriptionVersion')::integer=@version
+                        THEN (payload->'DeferredEditionIds')::text END FROM event_feed_deliveries
+                    WHERE subscription_id=@id ORDER BY scheduled_for DESC LIMIT 1
+                    """, new { id = feed.Id, version = feed.Version }));
+                if (previous != null) deferred = JsonSerializer.Deserialize<int[]>(previous) ?? [];
+            }
             var preview = feed.ScheduleMode == "OnInsert"
                 ? await events.GetEditionFeedEvents(filter, DateTime.UtcNow, reconnect ? null : processed, feed.Id, ct)
-                : await events.GetUpcomingFeedEvents(filter, DateTime.UtcNow, ct);
-            announced = preview.Events.Select(e => e.EditionId).Distinct().ToArray();
+                : deferred.Length > 0
+                    ? await events.GetEditionFeedEvents(filter, DateTime.UtcNow, deferred, Guid.Empty, ct)
+                    : await events.GetUpcomingFeedEvents(filter, DateTime.UtcNow, ct);
             var digest = new EventDigest(feed.Name, preview.Events.Select(e => new DigestEvent(e.Name, e.UrlSlug, e.StartTimeUtc,
-                e.IsOnline ? "Online" : string.Join(", ", new[] { e.City, e.State }.Where(s => !string.IsNullOrWhiteSpace(s))), e.Entrants)).ToArray(), preview.HasMore);
+                e.IsOnline ? "Online" : string.Join(", ", new[] { e.City, e.State }.Where(s => !string.IsNullOrWhiteSpace(s))), e.Entrants,
+                e.Brackets.Select(b => new DigestBracket(b.GameId, b.GameName, b.TournamentId, b.UrlSlug, b.StartTimeUtc, b.Entrants)).ToArray(), e.EndTimeUtc)).ToArray(),
+                preview.HasMore, GameOrder: filter.GameIds, SubscriptionVersion: feed.Version);
             if (digest.Events.Count > 0)
             {
+                var take = DiscordTimelineTemplate.FittingEventCount(digest);
+                announced = preview.Events.Take(take).Select(e => e.EditionId).Distinct().ToArray();
+                var remaining = preview.Events.Skip(take).Select(e => e.EditionId).ToArray();
+                // A changed MaxEvents must not discard the tail of an existing scheduled cursor.
+                if (deferred.Length > 0 && preview.HasMore)
+                    remaining = remaining.Concat(deferred.Except(preview.Events.Select(e => e.EditionId))).Distinct().ToArray();
+                digest = digest with { Events = digest.Events.Take(take).ToArray(), HasMore = preview.HasMore || remaining.Length > 0,
+                    DeferredEditionIds = remaining };
+                retainWork = digest.HasMore;
                 _ = DiscordEventFeedOutlet.Payload(digest);
                 payload = JsonSerializer.Serialize(digest); status = "Pending"; outcome = "Queued";
             }
@@ -68,7 +93,9 @@ public sealed partial class EventFeedStore
                     SELECT @id,edition,@deliveryId FROM unnest(@announced) edition
                     """, new { id = feed.Id, deliveryId, announced }));
         }
-        if (processed.Length > 0)
+        // Retain the wake-up (including reconnect's edition 0) until every complete parent
+        // fits. History excludes only announced editions, so the next page makes progress.
+        if (processed.Length > 0 && !retainWork)
             await conn.ExecuteAsync(Cmd("DELETE FROM event_feed_edition_work WHERE subscription_id=@id AND edition_id=ANY(@processed)", new { id = feed.Id, processed }));
         await tx.CommitAsync(ct);
         Sengoku.Observability.OperationLog.Event("Database.Committed", ("Committed", true));
@@ -133,9 +160,22 @@ public sealed partial class EventFeedStore
         // Finalize ambiguous cancellation even when shutdown cancelled the caller token.
         using var cleanup = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
-        await Database(conn => conn.ExecuteScalarAsync<bool>(new CommandDefinition(
-            "SELECT event_feed_complete(@id,@outcome,@messageId,@delay)",
-            new { id = job.Id, outcome = result.Status, messageId = result.MessageId, delay = Math.Max(1, result.RetryAfterSeconds) }, cancellationToken: cleanup.Token)), cleanup.Token);
+        var sent = result.Status == "Sent" ? JsonSerializer.Deserialize<EventDigest>(job.Payload) : null;
+        var remainder = sent?.DeferredEditionIds;
+        await Database(async conn =>
+        {
+            await using var tx = await conn.BeginTransactionAsync(cleanup.Token);
+            var completed = await conn.ExecuteScalarAsync<bool>(new CommandDefinition(
+                "SELECT event_feed_complete(@id,@outcome,@messageId,@delay)",
+                new { id = job.Id, outcome = result.Status, messageId = result.MessageId, delay = Math.Max(1, result.RetryAfterSeconds) }, tx, cancellationToken: cleanup.Token));
+            // Completion clears the sensitive snapshot. Save the ID-only cursor atomically with
+            // its acknowledgement so Daily/Interval overflow survives worker restarts and long cadences.
+            if (completed && remainder is { Length: > 0 })
+                await conn.ExecuteAsync(new CommandDefinition("UPDATE event_feed_deliveries SET payload=CAST(@cursor AS jsonb) WHERE id=@id AND status='Sent'",
+                    new { id = job.Id, cursor = JsonSerializer.Serialize(new { DeferredEditionIds = remainder, sent!.SubscriptionVersion }) }, tx, cancellationToken: cleanup.Token));
+            await tx.CommitAsync(cleanup.Token);
+            return completed;
+        }, cleanup.Token);
         return true;
     }
 

@@ -10,6 +10,7 @@ public sealed class ExternalServices
     public ConcurrentQueue<JsonElement> Digests { get; } = new();
     public int Acknowledgements;
     public int GraphQlCalls;
+    public DateTimeOffset BracketStart { get; } = DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.AddDays(3).AddHours(1).ToUnixTimeSeconds());
     public HttpMessageHandler Handler() => new Transport(this);
 
     private sealed class Transport(ExternalServices state) : HttpMessageHandler
@@ -45,7 +46,11 @@ public sealed class ExternalServices
                         lat = 33.75, lng = -84.39, venueAddress = "1 Test Street, Atlanta, GA 30301", isOnline = false,
                         startAt = now.AddDays(3).ToUnixTimeSeconds(), endAt = now.AddDays(3).AddHours(6).ToUnixTimeSeconds(),
                         registrationClosesAt = now.AddDays(2).ToUnixTimeSeconds(), isRegistrationOpen = true, slug = "tournament/local-anime",
-                        events = new[] { new { id = 900002, slug = "tournament/local-anime/event/strive", numEntrants = 12, videogame = new { id = 1 } } } }
+                        events = new[] {
+                            new { id = 900002, slug = "tournament/local-anime/event/strive", startAt = state.BracketStart.ToUnixTimeSeconds(), numEntrants = 12, videogame = new { id = 33945 } },
+                            new { id = 900003, slug = "tournament/local-anime/event/granblue", startAt = state.BracketStart.AddHours(2).ToUnixTimeSeconds(), numEntrants = 8, videogame = new { id = 48548 } },
+                            new { id = 900004, slug = "tournament/local-anime/event/sf6", startAt = state.BracketStart.AddHours(3).ToUnixTimeSeconds(), numEntrants = 24, videogame = new { id = 43868 } }
+                        } }
                 } } } };
             }
             else throw new InvalidOperationException("Local external-service stub rejected an unexpected destination.");

@@ -39,6 +39,8 @@ public sealed record EventFeedFilter
 
 public sealed class UpcomingFeedEvent
 {
+    // One parent edition, all matching brackets. MaxEvents still counts parent tournaments.
+    public IReadOnlyList<FeedBracket> Brackets { get; set; } = [];
     [System.Text.Json.Serialization.JsonIgnore]
     public string[]? StreamUrls { get; set; }
     public IReadOnlyList<BroadcastLink> Broadcasts => (StreamUrls ?? []).Select(BroadcastLink.Parse).OfType<BroadcastLink>().Distinct().Take(5).ToArray();
@@ -54,5 +56,15 @@ public sealed class UpcomingFeedEvent
     public bool IsOnline { get; set; }
     public int? Entrants { get; set; }
     public DateTime? LastUpdatedUtc { get; set; }
+}
+public sealed class FeedBracket
+{
+    public int EditionId { get; set; }
+    public int TournamentId { get; set; }
+    public int GameId { get; set; }
+    public string GameName { get; set; } = "";
+    public string UrlSlug { get; set; } = "";
+    public DateTime? StartTimeUtc { get; set; }
+    public int? Entrants { get; set; }
 }
 public sealed record EventFeedPreview(IReadOnlyList<UpcomingFeedEvent> Events, bool HasMore, DateTime GeneratedAtUtc);

@@ -59,6 +59,8 @@ namespace SengokuProvider.Library.Models.Events
     }
     public class TournamentDetails
     {
+        [JsonProperty("startAt")]
+        public long? StartAt { get; set; }
         [JsonProperty("id")]
         public int Id { get; set; }
         [JsonProperty("videogame")]
