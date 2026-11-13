@@ -55,14 +55,14 @@ internal static class CalendarDeliveryChecks
         await store.DiscoverNewTournaments(default);
         Check(await store.PrepareNext(query,default), "window transition wakes a local without a broker message");
         await db.ExecuteAsync("""
-            UPDATE event_feed_deliveries SET completed_at=now()-interval '37 minutes'
+            UPDATE event_feed_deliveries SET completed_at=now()-interval '4 hours 37 minutes'
             WHERE subscription_id=@id AND status='Sent'
             """, new { id=sub.Id });
         var dispatches = await Task.WhenAll(store.DispatchNext(outlet, default), store.DispatchNext(outlet, default));
         Check(dispatches.All(sent => !sent) && outlet.Digests.Count == 1, "concurrent workers respect the subscription cooldown");
         Check(await db.ExecuteScalarAsync<bool>("""
             SELECT attempts=0 AND sending_at IS NULL AND next_attempt_at=(
-                SELECT max(completed_at)+interval '1 hour' FROM event_feed_deliveries WHERE subscription_id=@id AND status='Sent')
+                SELECT max(completed_at)+interval '5 hours' FROM event_feed_deliveries WHERE subscription_id=@id AND status='Sent')
             FROM event_feed_deliveries WHERE subscription_id=@id AND status='Pending'
             """, new { id=sub.Id }), "deferred for the remaining 23 minutes without consuming an attempt");
 
@@ -77,7 +77,7 @@ internal static class CalendarDeliveryChecks
             UPDATE event_feed_deliveries SET next_attempt_at=next_attempt_at-interval '23 minutes' WHERE subscription_id=@id AND status='Pending';
             """, new { id=sub.Id });
         Check(await store.DispatchNext(outlet,default) && outlet.Digests.Last().Events.Single().Name == "Distant local",
-            "deferred digest is sent once the hour has elapsed");
+            "deferred digest is sent once five hours have elapsed");
         await db.ExecuteAsync("SELECT event_feed_accept_change(602,now()-interval '8 days')");
         Check(!await store.PrepareNext(query,default), "expired change never creates a notification");
         sub = (await store.GetSubscription(2,sub.Id,default))!;
@@ -104,14 +104,14 @@ internal static class CalendarDeliveryChecks
             {
                 Check(!await store.DispatchNext(outlet,default), "daily digest respects the previous confirmed send");
                 await db.ExecuteAsync("""
-                    UPDATE event_feed_deliveries SET completed_at=completed_at-interval '1 hour' WHERE subscription_id=@id AND status='Sent';
-                    UPDATE event_feed_deliveries SET next_attempt_at=next_attempt_at-interval '1 hour' WHERE subscription_id=@id AND status='Pending';
+                    UPDATE event_feed_deliveries SET completed_at=completed_at-interval '5 hours' WHERE subscription_id=@id AND status='Sent';
+                    UPDATE event_feed_deliveries SET next_attempt_at=next_attempt_at-interval '5 hours' WHERE subscription_id=@id AND status='Pending';
                     """, new { id=sub.Id });
                 Check(await store.DispatchNext(outlet,default) && outlet.Digests.Last().Events.Any(e=>e.Name=="Linked major"), "daily snapshot includes major");
             }
         }
         await store.Delete(1,feed.Id,default);
-        Console.WriteLine("PASS calendar authorization, pre-bracket matching, reconnect, edition deduplication, rolling horizon, hourly delivery throttling and expiry");
+        Console.WriteLine("PASS calendar authorization, pre-bracket matching, reconnect, edition deduplication, rolling horizon, five-hour delivery throttling and expiry");
     }
 
     private static void Check(bool ok, string message) { if (!ok) throw new Exception(message); }

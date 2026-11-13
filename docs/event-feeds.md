@@ -74,7 +74,7 @@ For OAuth, subscribe first, then use the returned subscription `id` in `/subscri
 
 Interval and Daily send current matching parent editions on their existing UTC schedules. New or edited Interval schedules accept 1–168 hours. OnInsert sends a matching edition once per subscription. Each digest counts distinct parent editions toward `MaxEvents`. A failed or ambiguous send pauses only its subscription. Ambiguous sends keep their edition reservations across reconnects.
 
-Dispatcher spaces confirmed Discord digest sends at least one hour apart per subscription across all three cadences. The connection acknowledgement does not start the timer. A new subscription can receive its first digest immediately. If the last digest was sent 37 minutes ago, Dispatcher keeps the next digest pending for the remaining 23 minutes and sends it on an eligible worker poll. Reconnecting preserves that subscription’s delivery history. Other subscriptions, including those in the same Discord channel, can continue sending independently.
+Dispatcher spaces confirmed Discord digest sends at least five hours apart per subscription across all three cadences. The connection acknowledgement does not start the timer. A new subscription can receive its first digest immediately. If the last digest was sent four hours and 37 minutes ago, Dispatcher keeps the next digest pending for the remaining 23 minutes and sends it on an eligible worker poll. Reconnecting preserves that subscription’s delivery history. Other subscriptions, including those in the same Discord channel, can continue sending independently.
 
 ### Major and circuit calendar
 

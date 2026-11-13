@@ -90,9 +90,9 @@ public sealed partial class EventFeedStore
             if (job != null)
             {
                 var due = await conn.ExecuteScalarAsync<DateTime?>(new CommandDefinition("""
-                    SELECT max(completed_at) + interval '1 hour' FROM event_feed_deliveries
+                    SELECT max(completed_at) + interval '5 hours' FROM event_feed_deliveries
                     WHERE subscription_id=@subscriptionId AND status='Sent'
-                      AND completed_at > clock_timestamp() - interval '1 hour'
+                      AND completed_at > clock_timestamp() - interval '5 hours'
                     """, new { subscriptionId = job.FeedId }, tx, cancellationToken: ct));
                 if (due.HasValue)
                 {
