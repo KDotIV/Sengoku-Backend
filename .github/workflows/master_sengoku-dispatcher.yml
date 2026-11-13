@@ -32,7 +32,7 @@ jobs:
     - name: Restore
       run: dotnet restore "${{ env.WORKING_DIRECTORY }}"
     - name: Build
-      run: dotnet build "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-restore
+      run: dotnet build "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-restore -p:SourceRevisionId=${{ github.sha }}
     - name: Test
       run: dotnet test "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-build
     - name: Run regression checks
@@ -47,6 +47,12 @@ jobs:
         path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
         if-no-files-found: error
 
+  integration:
+    if: github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/local-e2e.yml
+    secrets:
+      PRIVATE_DATABASE_FIXTURES_B64: ${{ secrets.PRIVATE_DATABASE_FIXTURES_B64 }}
+
   deploy:
     # Match QA: other branches build and test; only master deploys.
     if: github.ref == 'refs/heads/master'
@@ -54,8 +60,9 @@ jobs:
       group: deploy-sengoku-dispatcher
       cancel-in-progress: false
     runs-on: windows-latest
-    needs: build
+    needs: [build, integration]
     steps:
+    - uses: actions/checkout@v4
     - name: Download artifact from build job
       uses: actions/download-artifact@v4
       with:
@@ -67,9 +74,35 @@ jobs:
         client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_FC459755C9D54C87907DEB1A2686CDD7 }}
         tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_F2779150072645388F272A9AE6D4CC97 }}
         subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_789DE045DFED43268E6E1E641EBE7441 }}
+    - name: Configuration preflight
+      shell: pwsh
+      run: ./.github/scripts/Test-DeploymentReadiness.ps1 -AppName ${{ env.AZURE_WEBAPP_NAME }} -Service Dispatcher -ConfigurationOnly
+    - name: Verify Provider artwork and configured public host
+      shell: pwsh
+      run: |
+        $ready = $false
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
+          try {
+            foreach ($image in @('33945.jpg','1386.jpg','43868.jpg','49783.png','17.jpg','4985.png','48548.jpg','610.jpg','36963.jpg','5582.jpg','48599.jpg','287.jpg','1.jpg')) {
+              $response = Invoke-WebRequest -Method Head -Uri "https://sengoku-alexandria-qa.azurewebsites.net/assets/game-headers/$image" -TimeoutSec 10 -ErrorAction Stop
+              if ($response.StatusCode -ne 200 -or "$($response.Headers['Content-Type'])" -notmatch '^image/') { throw 'Artwork response is not an image.' }
+            }
+            $ready = $true
+            break
+          } catch { Start-Sleep -Seconds 10 }
+        }
+        if (!$ready) { throw 'Provider game artwork is unavailable. Deploy Provider before Dispatcher.' }
+        # App-setting writes can recycle Kudu while the following ZIP deployment is extracting.
+        # Provision configuration separately; deployment preflight must remain read-only.
+        $assetsBaseUrl = az webapp config appsettings list --resource-group Alexandria --name '${{ env.AZURE_WEBAPP_NAME }}' --query "[?name=='EventFeeds__AssetsBaseUrl'].value | [0]" --output tsv
+        if ($LASTEXITCODE -ne 0) { throw 'Unable to verify the QA artwork host.' }
+        if ($assetsBaseUrl -ne 'https://sengoku-alexandria-qa.azurewebsites.net') { throw 'Configure EventFeeds__AssetsBaseUrl with the QA Provider host before deploying Dispatcher.' }
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         slot-name: Production
         package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+    - name: Verify deployed revision and delivery readiness
+      shell: pwsh
+      run: ./.github/scripts/Test-DeploymentReadiness.ps1 -AppName ${{ env.AZURE_WEBAPP_NAME }} -Service Dispatcher -ExpectedRevision '${{ github.sha }}'

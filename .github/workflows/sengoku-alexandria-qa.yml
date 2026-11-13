@@ -31,7 +31,7 @@ jobs:
     - name: Restore
       run: dotnet restore "${{ env.WORKING_DIRECTORY }}"
     - name: Build
-      run: dotnet build "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-restore
+      run: dotnet build "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-restore -p:SourceRevisionId=${{ github.sha }}
     - name: Test
       run: dotnet test "${{ env.WORKING_DIRECTORY }}" --configuration ${{ env.CONFIGURATION }} --no-build
     - name: Publish API
@@ -53,6 +53,12 @@ jobs:
         name: webapp
         path: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
         if-no-files-found: error
+  integration:
+    if: github.ref == 'refs/heads/master'
+    uses: ./.github/workflows/local-e2e.yml
+    secrets:
+      PRIVATE_DATABASE_FIXTURES_B64: ${{ secrets.PRIVATE_DATABASE_FIXTURES_B64 }}
+
   deploy:
     # Other branches still build, but Azure OIDC currently trusts only master.
     if: github.ref == 'refs/heads/master'
@@ -60,8 +66,9 @@ jobs:
       group: deploy-sengoku-alexandria-qa
       cancel-in-progress: false
     runs-on: windows-latest
-    needs: build
+    needs: [build, integration]
     steps:
+    - uses: actions/checkout@v4
     - name: Download artifact from build job
       uses: actions/download-artifact@v4
       with:
@@ -73,8 +80,14 @@ jobs:
         client-id: ${{ secrets.AZURE_CLIENT_ID }}
         tenant-id: ${{ secrets.AZURE_TENANT_ID}}
         subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+    - name: Configuration preflight
+      shell: pwsh
+      run: ./.github/scripts/Test-DeploymentReadiness.ps1 -AppName ${{ env.AZURE_WEBAPP_NAME }} -Service Provider -ConfigurationOnly
     - name: Deploy to Azure WebApp
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         package: ${{ env.AZURE_WEBAPP_PACKAGE_PATH }}
+    - name: Verify deployed revision and Provider readiness
+      shell: pwsh
+      run: ./.github/scripts/Test-DeploymentReadiness.ps1 -AppName ${{ env.AZURE_WEBAPP_NAME }} -Service Provider -ExpectedRevision '${{ github.sha }}'

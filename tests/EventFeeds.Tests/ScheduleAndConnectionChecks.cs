@@ -30,7 +30,7 @@ static class ScheduleAndConnectionChecks
                 CREATE TABLE user_sessions(token_hash text PRIMARY KEY,user_id int,expires_at timestamptz);
                 CREATE TABLE games(id int PRIMARY KEY,game_name text);
                 CREATE TABLE events(id serial PRIMARY KEY,link_id int UNIQUE,event_name text,event_description text,region text,address_id int,start_time timestamp,end_time timestamp,closing_registration_date timestamp,registration_open bool,online_tournament bool,url_slug text,last_updated timestamp,city text,addr_state text,country_code text);
-                CREATE TABLE tournament_links(id int PRIMARY KEY,event_link int,game_id int,url_slug text,entrants_num int,last_updated timestamp,viewership text[]);
+                CREATE TABLE tournament_links(id int PRIMARY KEY,event_link int,game_id int,url_slug text,entrants_num int,last_updated timestamp,viewership text[],start_time timestamptz);
                 """);
             await conn.ExecuteAsync((await File.ReadAllTextAsync("database/schema/event-feed-tables-before.sql")).Replace("public.",schema+"."));
             await conn.ExecuteAsync($"SET search_path={schema}");
@@ -48,7 +48,9 @@ static class ScheduleAndConnectionChecks
                 """,new{legacy,legacyDelivery});
             await conn.ExecuteAsync((await File.ReadAllTextAsync("database/migrations/20261020_shared_event_feeds.sql")).Replace("public.",schema+"."));
             await conn.ExecuteAsync("CREATE TABLE players(id int primary key); CREATE TABLE leagues(id int primary key); CREATE TABLE legends(id int primary key);");
-            await conn.ExecuteAsync(await File.ReadAllTextAsync("database/migrations/20261104_major_calendar_deliverables.sql"));
+            // The original calendar migration was never committed. Exercise its recovered current
+            // contract locally without presenting that snapshot as a safe production migration.
+            await conn.ExecuteAsync((await File.ReadAllTextAsync("database/schema/event-feed-calendar-current.sql")).Replace("public.",schema+"."));
             Check(await conn.ExecuteScalarAsync<string>("SELECT destination_protected FROM event_feed_subscriptions WHERE id=@legacy",new{legacy})=="encrypted-value","migration preserves encrypted destination");
             Check(await conn.ExecuteScalarAsync<Guid>("SELECT subscription_id FROM event_feed_deliveries WHERE id=@legacyDelivery",new{legacyDelivery})==legacy,"migration preserves history");
             Check(await conn.ExecuteScalarAsync<int>("SELECT count(*) FROM information_schema.columns WHERE table_schema=@schema AND table_name='event_feeds' AND column_name IN ('destination_protected','discord_guild_id','discord_channel_id','next_run_at')",new{schema})==0,"shared definition contains no destination or dispatch state");
@@ -131,6 +133,7 @@ static class ScheduleAndConnectionChecks
             Check(await store.Unsubscribe(2,a.Id,default) && await store.Get(3,feed.Id,default)!=null,"unsubscribe preserves shared feed");
             Check(await store.Delete(1,feed.Id,default) && await store.GetSubscription(3,b.Id,default)==null,"admin delete cascades subscriptions");
             await CalendarDeliveryChecks.Run(connection);
+            await TimelineDeliveryChecks.Run(connection);
             Console.WriteLine("PASS schema migration, admin permissions, subscriptions, encryption, fan-out, failure isolation, OAuth and insert delivery");
         }
         finally { await admin.ExecuteAsync($"DROP SCHEMA {schema} CASCADE"); }

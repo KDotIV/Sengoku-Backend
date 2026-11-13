@@ -1,0 +1,1686 @@
+{
+  "info": {
+    "_postman_id": "0e43c836-bba6-4f60-a2a3-f9bf53da91fd",
+    "name": "Sengoku Core \u2014 QA and Local",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "One collection, two environments. Import the QA or Local environment and keep Postman\u2019s cookie jar enabled. Run 00 Authentication, then 10 Feed workflow for a write-enabled local E2E run, or 20 Feed inspection for QA diagnostics. HTTPS is required by the __Host- session and CSRF cookies. Protected writes fetch a fresh CSRF token; authentication uses cookies, not Basic/Bearer tokens. Secrets are never copied into collection variables. Credentials/webhook URLs should be private environment values. Enable Keep variable values and Save cookies after collection run when continuing in the desktop app. No write or notification is automatically retried. See postman/README.md for startup, flags, concurrency and endpoint corrections."
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function stop(message) { pm.execution.skipRequest(); throw new Error(message); }",
+          "const base = pm.environment.get('baseUrl');",
+          "if (!base || !/^https:\\/\\//i.test(base)) stop('Select the QA or Local environment with an HTTPS baseUrl.');",
+          "const actualUrl = pm.variables.replaceIn(pm.request.url.toString());",
+          "if (!actualUrl.startsWith(base + '/')) stop('Request origin differs from the selected environment.');",
+          "const path = actualUrl.substring(base.length).split('?')[0];",
+          "const method = pm.request.method.toUpperCase();",
+          "const write = !['GET', 'HEAD', 'OPTIONS'].includes(method);",
+          "const readPost = ['/api/event-feeds/preview', '/api/players/GetPlayerStandings'].includes(path);",
+          "const account = ['/api/user/Login', '/api/user/Logout'].includes(path);",
+          "const manual = path.includes('/discord/connect') || path.endsWith('/discord/callback') || path.startsWith('/api/exclusights/');",
+          "const notify = path.endsWith('/discord/webhook') || path.endsWith('/SendLeaderboardUpdateMessage');",
+          "let skip = false;",
+          "if (write && !readPost && !account && pm.environment.get('allowWrites') !== 'true') skip = true;",
+          "if (method === 'DELETE' && pm.environment.get('allowDeletes') !== 'true') skip = true;",
+          "if (manual && pm.environment.get('allowManualIntegrations') !== 'true') skip = true;",
+          "if (notify && pm.environment.get('allowExternalMessages') !== 'true') skip = true;",
+          "if (skip) {",
+          " console.info('Skipped by the selected environment flags: ' + pm.info.requestName);",
+          " pm.execution.skipRequest();",
+          "} else {",
+          " // The cookie jar owns session cookies; never copy them into exportable variables or Authorization.",
+          " pm.request.headers.remove('Authorization');",
+          " pm.request.headers.remove('Cookie');",
+          " pm.request.headers.remove('X-CSRF-TOKEN');",
+          " pm.variables.set('startEpoch', String(Math.floor(Date.now()/1000)));",
+          " pm.variables.set('endEpoch', String(Math.floor(Date.now()/1000) + 14*86400));",
+          " pm.variables.set('futureStart', new Date(Date.now()+3*86400000).toISOString());",
+          " pm.variables.set('futureEnd', new Date(Date.now()+3*86400000+6*3600000).toISOString());",
+          " const template = pm.request.url.toString() + (pm.request.body ? pm.request.body.raw || '' : '');",
+          " const required = [...template.matchAll(/\\{\\{([^}]+)\\}\\}/g)].map(match => match[1]);",
+          " const missing = required.filter(key => { const value = pm.variables.get(key); return value === undefined || value === null || String(value).trim() === ''; });",
+          " if (missing.length) stop('Set required environment variables: ' + [...new Set(missing)].join(', '));",
+          " if (pm.request.body && pm.request.body.mode === 'raw') {",
+          "   // Escape string values (including passwords containing quotes) and retain numeric/array types.",
+          "   const expanded = pm.request.body.raw.replace(/(\"\\{\\{([^}]+)\\}\\}\"|\\{\\{([^}]+)\\}\\})/g,",
+          "     (match, whole, quoted, raw) => quoted ? JSON.stringify(String(pm.variables.get(quoted))) : String(pm.variables.get(raw)));",
+          "   try { pm.request.body.update(JSON.stringify(JSON.parse(expanded))); }",
+          "   catch (_) { stop('Request body variables must contain valid JSON numbers or arrays where indicated.'); }",
+          " }",
+          " if (path === '/api/user/Login' && (!pm.environment.get('email') || !pm.environment.get('password'))) {",
+          "   pm.execution.skipRequest(); throw new Error('Set your email and password as private environment values.');",
+          " }",
+          " if (notify && !pm.environment.get('webhookUrl')) { pm.execution.skipRequest(); throw new Error('Set a private webhookUrl before connecting or sending.'); }",
+          " const csrf = write && (path.startsWith('/api/event-feeds') || ['/api/user/Login','/api/user/Logout','/api/user/CreateUser','/api/startgg/Authorize'].includes(path));",
+          " if (csrf) {",
+          "   pm.sendRequest({url:base+'/api/user/Csrf',method:'GET'}, (error, response) => {",
+          "   let token;",
+          "   try { if (!error && response.code === 200) token = response.json().requestToken; } catch (_) { }",
+          "   if (!token) stop('CSRF bootstrap failed; request was not sent.');",
+          "   pm.request.headers.upsert({key:'X-CSRF-TOKEN',value:token});",
+          "   });",
+          " }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('HTTP request succeeded', () => pm.expect(pm.response.code).to.be.within(200, 299));",
+          "if (pm.response.code === 401) console.warn('Session expired or absent. Run Login in this environment, then retry manually.');",
+          "if (pm.response.code === 403) console.warn('The signed-in account does not have the required role or ownership.');",
+          "if (pm.response.code === 409) console.warn('Reload the feed or subscription to refresh its version before retrying.');",
+          "// Do not automatically replay writes or external sends after an error or timeout."
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Authentication",
+      "description": "Run Login once per environment. Keep the cookie jar enabled. Secure cookies require HTTPS, including localhost.",
+      "item": [
+        {
+          "name": "Get CSRF cookie",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/Csrf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "Csrf"
+              ]
+            },
+            "description": "Bootstraps the antiforgery cookie. Protected writes fetch their own request token automatically; no manual copying is necessary."
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/Login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "Login"
+              ]
+            },
+            "description": "Creates an eight-hour server-side session. The collection obtains an anonymous CSRF token first. Postman retains the Secure, HttpOnly session cookie automatically. Keep credentials private.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  " pm.environment.set('userId', pm.response.json().userId);",
+                  " pm.environment.set('playerId', pm.response.json().playerId);",
+                  " pm.test('Session cookie issued', () => pm.expect(pm.response.headers.get('Set-Cookie')).to.include('__Host-sengoku-session'));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Check current session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/Session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "Session"
+              ]
+            },
+            "description": "Requires the session cookie. Returns identity and the current database-backed admin role; verifies cookie persistence between requests."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05 Health",
+      "description": "Read-only hosting checks; no notifications are sent.",
+      "item": [
+        {
+          "name": "Provider liveness",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": "Process liveness. Does not check the database, keys or queues."
+          },
+          "response": []
+        },
+        {
+          "name": "Provider readiness",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Returns 200 only when the database and Dispatcher delivery checks pass on the same source revision. Returns 503 otherwise. Available in QA after this change is deployed."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10 Feed workflow",
+      "description": "Run after Authentication. Local executes against captured external services. QA writes and notifications are off by default. This workflow leaves the feed/subscription available for inspection.",
+      "item": [
+        {
+          "name": "Feed options",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "options"
+              ]
+            },
+            "description": "Authenticated catalogue of supported games, regions and schedules. Use returned IDs in gameIds."
+          },
+          "response": []
+        },
+        {
+          "name": "Create feed (admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/create",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "create"
+              ]
+            },
+            "description": "Admin and CSRF required. Saves feedId and feedVersion. OnInsert announces each matching parent edition once.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{feedName}}\",\n  \"providers\": [\n    \"Discord\"\n  ],\n  \"filter\": {\n    \"gameIds\": {{gameIds}},\n    \"regionIds\": [\n      \"southeast\"\n    ],\n    \"states\": [],\n    \"city\": null,\n    \"attendance\": \"InPerson\",\n    \"lookAheadDays\": 14,\n    \"minimumEntrants\": 0,\n    \"registrationOpenOnly\": true,\n    \"maxEvents\": 5\n  },\n  \"schedule\": {\n    \"mode\": \"OnInsert\"\n  },\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set('workflowStartedAt',new Date().toISOString());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  " const data = pm.response.json();",
+                  " pm.environment.set('feedId', data.id);",
+                  " pm.environment.set('feedVersion', data.version);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Subscribe",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/{{feedId}}/subscriptions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "{{feedId}}",
+                "subscriptions"
+              ]
+            },
+            "description": "Authenticated, CSRF-protected and idempotent for the current account/feed/provider. Saves subscriptionId and subscriptionVersion.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"Discord\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  " const data = pm.response.json();",
+                  " pm.environment.set('subscriptionId', data.id);",
+                  " pm.environment.set('subscriptionVersion', data.version);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Connect existing Discord webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/discord/webhook",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "discord",
+                "webhook"
+              ]
+            },
+            "description": "Requires ownership, CSRF, allowWrites and allowExternalMessages. Verifies and encrypts the URL in Dispatcher, sends an acknowledgement and enables delivery. Reconnecting can send a current digest. expectedVersion is the subscription version.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"feedId\": \"{{feedId}}\",\n  \"webhookUrl\": \"{{webhookUrl}}\",\n  \"expectedVersion\": {{subscriptionVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  " const data = pm.response.json();",
+                  " pm.environment.set('subscriptionId', data.id);",
+                  " pm.environment.set('subscriptionVersion', data.version);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Intake event by start.gg tournament ID",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/LinkTournamentByEventIdCommand",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "LinkTournamentByEventIdCommand"
+              ]
+            },
+            "description": "Imports the parent tournament and bracket links. Locally uses the synthetic start.gg fixture. QA contacts start.gg. Database change triggers feed the delivery outbox.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventLinkId\": {{eventLinkId}},\n  \"topic\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Wait for confirmed delivery",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/subscriptions/{{subscriptionId}}/deliveries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "deliveries"
+              ]
+            },
+            "description": "Reads owner-scoped history. Polls GET only for up to 75 seconds, looking for a Sent delivery after the workflow started. Normal delivery polling is 30 seconds; an existing subscription may be in its one-hour cooldown."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const base = pm.environment.get('baseUrl');",
+                  "const since = Date.parse(pm.environment.get('workflowStartedAt') || new Date(0).toISOString());",
+                  "let deliveries = pm.response.code === 200 ? pm.response.json() : [];",
+                  "let found = deliveries.find(x => x.status === 'Sent' && Date.parse(x.completedAtUtc || x.completedAt) >= since);",
+                  "let attempts=0;",
+                  "function finish() {",
+                  " pm.test('A new digest was confirmed Sent',()=>pm.expect(Boolean(found)).to.equal(true));",
+                  " if (found) pm.environment.set('lastMessageId',found.messageId || '');",
+                  "}",
+                  "function poll() {",
+                  " if (found || attempts++ >= 75) return finish();",
+                  " setTimeout(() => pm.sendRequest(base+'/api/event-feeds/subscriptions/'+pm.environment.get('subscriptionId')+'/deliveries', (error,response) => {",
+                  "   if (error || response.code !== 200) return finish();",
+                  "   deliveries=response.json();",
+                  "   found=deliveries.find(x=>x.status==='Sent' && Date.parse(x.completedAtUtc || x.completedAt)>=since);",
+                  "   if (deliveries.some(x=>['Failed','Unknown'].includes(x.status) && Date.parse(x.completedAtUtc || x.completedAt)>=since)) return finish();",
+                  "   poll();",
+                  " }),1000);",
+                  "}",
+                  "poll();"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20 Feed inspection",
+      "description": "Read-only diagnostics plus a non-mutating CSRF-protected preview.",
+      "item": [
+        {
+          "name": "List feeds",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds"
+              ]
+            },
+            "description": "Authenticated shared catalogue; admins can also see disabled definitions."
+          },
+          "response": []
+        },
+        {
+          "name": "Get feed",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/{{feedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "{{feedId}}"
+              ]
+            },
+            "description": "Refresh feedVersion before editing the definition."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  " const data = pm.response.json();",
+                  " pm.environment.set('feedId', data.id);",
+                  " pm.environment.set('feedVersion', data.version);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Preview matching editions",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "preview"
+              ]
+            },
+            "description": "Authenticated and CSRF-protected preview; does not create deliveries or send messages.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gameIds\": {{gameIds}},\n  \"regionIds\": [\n    \"southeast\"\n  ],\n  \"states\": [],\n  \"city\": null,\n  \"attendance\": \"InPerson\",\n  \"lookAheadDays\": 14,\n  \"minimumEntrants\": 0,\n  \"registrationOpenOnly\": true,\n  \"maxEvents\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List my subscriptions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/subscriptions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "subscriptions"
+              ]
+            },
+            "description": "Returns only the signed-in account\u2019s subscriptions."
+          },
+          "response": []
+        },
+        {
+          "name": "Get subscription",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/subscriptions/{{subscriptionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "subscriptions",
+                "{{subscriptionId}}"
+              ]
+            },
+            "description": "Refresh subscriptionVersion before reconnecting. Feed and subscription versions are separate."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  " const data = pm.response.json();",
+                  " pm.environment.set('subscriptionId', data.id);",
+                  " pm.environment.set('subscriptionVersion', data.version);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Delivery history",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/subscriptions/{{subscriptionId}}/deliveries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "deliveries"
+              ]
+            },
+            "description": "Latest 50 owner-scoped outcomes. Failed/SecretUnavailable means key access failed and the subscription was paused. Unknown requires checking delivery history before retrying."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "30 Feed administration",
+      "description": "Optional mutations; not needed for read-only QA inspection.",
+      "item": [
+        {
+          "name": "Update feed (admin)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/{{feedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "{{feedId}}"
+              ]
+            },
+            "description": "Admin and CSRF required. Uses feedVersion; reload Get feed after a 409.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"{{feedName}}\",\n  \"providers\": [\n    \"Discord\"\n  ],\n  \"filter\": {\n    \"gameIds\": {{gameIds}},\n    \"regionIds\": [\n      \"southeast\"\n    ],\n    \"states\": [],\n    \"city\": null,\n    \"attendance\": \"InPerson\",\n    \"lookAheadDays\": 14,\n    \"minimumEntrants\": 0,\n    \"registrationOpenOnly\": true,\n    \"maxEvents\": 5\n  },\n  \"schedule\": {\n    \"mode\": \"OnInsert\"\n  },\n  \"enabled\": true,\n  \"expectedVersion\": {{feedVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300) {",
+                  " const data = pm.response.json();",
+                  " pm.environment.set('feedId', data.id);",
+                  " pm.environment.set('feedVersion', data.version);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List major calendar",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/major-calendar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "major-calendar"
+              ]
+            },
+            "description": "Admin session required. Calendar entries can qualify before start.gg intake."
+          },
+          "response": []
+        },
+        {
+          "name": "Create major calendar edition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/major-calendar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "major-calendar"
+              ]
+            },
+            "description": "Admin and CSRF required. Calendar games and registration availability still need to match feed filters.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Local major calendar example\",\n  \"gameIds\": {{gameIds}},\n  \"startsAt\": \"{{futureStart}}\",\n  \"endsAt\": \"{{futureEnd}}\",\n  \"city\": \"Atlanta\",\n  \"state\": \"GA\",\n  \"country\": \"US\",\n  \"online\": false,\n  \"active\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "40 Events",
+      "description": "Optional endpoint examples; supply environment-specific IDs and select individual requests.",
+      "item": [
+        {
+          "name": "Intake events by location",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/IntakeEventsByLocation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "IntakeEventsByLocation"
+              ]
+            },
+            "description": "Imports start.gg tournaments for stateCode and Unix-second startDate/endDate; perPage limits a page. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"perPage\": 10,\n  \"stateCode\": \"GA\",\n  \"startDate\": {{startEpoch}},\n  \"endDate\": {{endEpoch}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Query events by location",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/QueryEventsByLocation?regionId={{regionId}}&gameIds={{gameId}}&perPage=10&priority=local",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "QueryEventsByLocation"
+              ],
+              "query": [
+                {
+                  "key": "regionId",
+                  "value": "{{regionId}}"
+                },
+                {
+                  "key": "gameIds",
+                  "value": "{{gameId}}"
+                },
+                {
+                  "key": "perPage",
+                  "value": "10"
+                },
+                {
+                  "key": "priority",
+                  "value": "local"
+                }
+              ]
+            },
+            "description": "Queries stored tournaments by ZIP-like regionId and gameIds; perPage limits results. Repeat the gameIds query parameter for multiple games. Read operation. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites."
+          },
+          "response": []
+        },
+        {
+          "name": "Intake tournaments by game IDs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/events/IntakeTournamentsByGameIds",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "events",
+                "IntakeTournamentsByGameIds"
+              ]
+            },
+            "description": "Imports start.gg brackets for gameIDs (JSON integer array) and a Unix-second date window. topic=0 uses the event intake route. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page\": 1,\n  \"stateCode\": \"GA\",\n  \"startDate\": {{startEpoch}},\n  \"endDate\": {{endEpoch}},\n  \"gameIDs\": {{gameIds}},\n  \"topic\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "40 Players and brackets",
+      "description": "Optional endpoint examples; supply environment-specific IDs and select individual requests.",
+      "item": [
+        {
+          "name": "Intake players by tournament",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/IntakePlayersByTournament",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "players",
+                "IntakePlayersByTournament"
+              ]
+            },
+            "description": "tournamentLink is the numeric start.gg bracket/event ID, not the parent tournament ID or a URL. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tournamentLink\": {{tournamentId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Query player standings",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/GetPlayerStandings",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "players",
+                "GetPlayerStandings"
+              ]
+            },
+            "description": "Read-only POST with the local numeric playerId. The former GET QueryPlayerStandings route does not exist. Read operation. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"playerId\": {{playerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Onboard prior player tournaments",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/OnboardPreviousTournamentDataByPlayer",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "players",
+                "OnboardPreviousTournamentDataByPlayer"
+              ]
+            },
+            "description": "Uses the local playerId and gamerTag to import prior tournament standings. This can start multiple upstream requests. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"playerId\": {{playerId}},\n  \"gamerTag\": \"{{gamerTag}}\",\n  \"perPage\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Onboard bracket runner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/OnboardBracketRunnerByBracketSlug",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "players",
+                "OnboardBracketRunnerByBracketSlug"
+              ]
+            },
+            "description": "Imports bracket history for playerId and bracketSlug. A 202 response saves operationId; poll Bracket processing status instead of resubmitting. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bracketSlug\": \"{{bracketSlug}}\",\n  \"playerId\": {{playerId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code===202) { const d=pm.response.json(); if(d.operationId) pm.environment.set('operationId',d.operationId); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get bracket paths by player IDs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/GetBracketPathByPlayerIds?playerIds={{playerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "players",
+                "GetBracketPathByPlayerIds"
+              ],
+              "query": [
+                {
+                  "key": "playerIds",
+                  "value": "{{playerId}}"
+                }
+              ]
+            },
+            "description": "Uses local player IDs. For multiple players, repeat playerIds in the query string. Returns every matching path row grouped by player. Read operation. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites."
+          },
+          "response": []
+        },
+        {
+          "name": "Bracket processing status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/players/BracketProcessing/{{operationId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "players",
+                "BracketProcessing",
+                "{{operationId}}"
+              ]
+            },
+            "description": "For an accepted asynchronous bracket import, read the operationId saved from the 202 response. Poll this GET until terminal; do not resubmit the mutation."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "40 Leagues",
+      "description": "Optional endpoint examples; supply environment-specific IDs and select individual requests.",
+      "item": [
+        {
+          "name": "Send leaderboard to Discord",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leagues/SendLeaderboardUpdateMessage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leagues",
+                "SendLeaderboardUpdateMessage"
+              ]
+            },
+            "description": "Sends messageContent to the private webhookUrl. Requires allowExternalMessages=true in addition to allowWrites. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhookUrl\": \"{{webhookUrl}}\",\n  \"messageContent\": \"Local leaderboard test\",\n  \"roleMentionIds\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add tournaments to league",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leagues/AddTournamentToLeague",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leagues",
+                "AddTournamentToLeague"
+              ]
+            },
+            "description": "tournamentIds is a JSON integer array; leagueId is a local league ID. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tournamentIds\": {{tournamentIds}},\n  \"leagueId\": {{leagueId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add players to league",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leagues/AddPlayerToLeague",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leagues",
+                "AddPlayerToLeague"
+              ]
+            },
+            "description": "playerIds is a JSON integer array of local player IDs; leagueId is a local league ID. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"playerIds\": {{playerIds}},\n  \"leagueId\": {{leagueId}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Onboard tournament standings to league",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leagues/OnboardTournamentStandingstoLeague",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leagues",
+                "OnboardTournamentStandingstoLeague"
+              ]
+            },
+            "description": "Uses tournamentLinks (JSON integer array), eventLinkSlug, leagueId, gameIds and open. This corrects the old mislabeled bracket request. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tournamentLinks\": {{tournamentIds}},\n  \"eventLinkSlug\": \"{{eventSlug}}\",\n  \"leagueId\": {{leagueId}},\n  \"gameIds\": {{gameIds}},\n  \"open\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update league leaderboard",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leagues/UpdateLeaderboardStandingsLeague",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leagues",
+                "UpdateLeaderboardStandingsLeague"
+              ]
+            },
+            "description": "Recalculates standings for leagueIds (JSON integer array). Does not send a Discord message. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leagueIds\": {{leagueIds}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get league leaderboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/leagues/GetLeaderboardResultsByLeagueId?leagueIds={{leagueId}}&topN=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "leagues",
+                "GetLeaderboardResultsByLeagueId"
+              ],
+              "query": [
+                {
+                  "key": "leagueIds",
+                  "value": "{{leagueId}}"
+                },
+                {
+                  "key": "topN",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Reads rankings for leagueIds and topN. Repeat leagueIds in the query for multiple leagues. Read operation. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "40 Organizations",
+      "description": "Optional endpoint examples; supply environment-specific IDs and select individual requests.",
+      "item": [
+        {
+          "name": "Create travel co-op",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/orgs/CreateTravelCoOp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "orgs",
+                "CreateTravelCoOp"
+              ]
+            },
+            "description": "Creates an organization operation with operationName, local userId, userName, fundingGoal, currentFunding, currentItems and collabUserIds. Use fixture IDs for local testing. Mutates application data; requires allowWrites=true in this collection. Legacy endpoints do not all declare the same session/CSRF policy as account and feed routes. Use appropriate IDs for the selected environment. Local upstream stubs currently cover tournament intake; player/bracket/league integration fixtures are exercised by their dedicated regression suites.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"operationName\": \"Local travel example\",\n  \"userId\": {{userId}},\n  \"userName\": \"LocalAdmin\",\n  \"fundingGoal\": 100,\n  \"currentItems\": [],\n  \"collabUserIds\": [],\n  \"currentFunding\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "80 Manual integrations",
+      "description": "Requires allowManualIntegrations=true. OAuth and socket-bot workflows require real external application credentials and are not simulated locally.",
+      "item": [
+        {
+          "name": "Begin Discord OAuth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/subscriptions/{{subscriptionId}}/discord/connect",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "subscriptions",
+                "{{subscriptionId}}",
+                "discord",
+                "connect"
+              ]
+            },
+            "description": "Ownership and CSRF required. Uses a subscription ID, not a feed ID. The response includes authorizationUrl with single-use state. Complete this in the original authenticated session; Postman cookies do not automatically transfer to a browser."
+          },
+          "response": []
+        },
+        {
+          "name": "Discord OAuth callback (manual only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/discord/callback?state={{oauthState}}&code={{oauthCode}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "discord",
+                "callback"
+              ],
+              "query": [
+                {
+                  "key": "state",
+                  "value": "{{oauthState}}"
+                },
+                {
+                  "key": "code",
+                  "value": "{{oauthCode}}"
+                }
+              ]
+            },
+            "description": "Normally handled by the browser redirect in the original authenticated session. State and code are single-use; do not replay or put them in shared exports."
+          },
+          "response": []
+        },
+        {
+          "name": "Add Discord server listener",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/exclusights/AddDiscordServerListener",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "exclusights",
+                "AddDiscordServerListener"
+              ]
+            },
+            "description": "Requires the separately configured socket integration. Disabled in the local harness; this does not control event-feed webhook delivery."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "90 Cleanup (explicit)",
+      "description": "Do not run this folder when preserving the session for follow-up requests. Deletions are off by default.",
+      "item": [
+        {
+          "name": "Unsubscribe",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/subscriptions/{{subscriptionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "subscriptions",
+                "{{subscriptionId}}"
+              ]
+            },
+            "description": "Ownership and CSRF required. Requires allowDeletes=true. Removes this account\u2019s subscription; does not delete a Discord webhook."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete feed (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/event-feeds/{{feedId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "event-feeds",
+                "{{feedId}}"
+              ]
+            },
+            "description": "Admin and CSRF required. Requires allowDeletes=true. Deletes the feed and all its subscriptions. Confirm the selected feedId first."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/user/Logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "user",
+                "Logout"
+              ]
+            },
+            "description": "Revokes the current session and clears its cookie. Run at the end of a session, not between sequential requests."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.unset('userId'); pm.environment.unset('lastMessageId');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,34 +1,47 @@
-# Provider and Dispatcher deployment
+# Provider and Dispatcher QA deployment
 
-`EventTournamentScheduler.yml` now builds/tests the solution, publishes only `SengokuDispatcher.API`, and deploys the artifact to the existing `sengoku-dispatcher` Web App. It is manually triggered; select `master` to deploy. Other branches build/test only. Deployment uses `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID`, matching Provider's OIDC identity. That identity needs deployment access to the new app; being in the same resource group does not establish that an app-scoped role covers both apps. No workflow was triggered during this review.
+`master_sengoku-dispatcher.yml` deploys Dispatcher; `sengoku-alexandria-qa.yml` deploys Provider. Both build/test branch pushes; only `master` deploys. Deploy both from the same revision. Existing OIDC identities are retained. Deployment is serialized per app and depends on the private local integration job plus its build job.
 
-The Provider workflow continues to deploy `sengoku-alexandria-qa`. Neither package contains the retired scheduler or continuous Provider WebJobs.
+## Readiness gates
 
-## Verified Azure context (2026-10-22)
+Before deployment, `.github/scripts/Test-DeploymentReadiness.ps1` verifies .NET 8 hosting. Dispatcher also requires Always On, delivery/outbox/Service Bus flags, database/broker connections and internal authentication. Settings and keys are not logged.
 
-Both apps exist in resource group `Alexandria` in the selected subscription:
+After deployment it waits up to six minutes for the expected source revision:
 
-- Provider: `https://sengoku-alexandria-qa.azurewebsites.net`
-- Dispatcher: `https://sengoku-dispatcher-fvdfhpcrcdd3afag.eastus-01.azurewebsites.net`
+- Dispatcher `GET /internal/health/ready` requires `X-Dispatcher-Key`. It checks database/schema contracts, destination decryptability, recent successful feed/outbox cycles, paused subscriptions with failed/unknown last sends, and non-consuming queue peeks.
+- Provider `GET /health/ready` checks its session schema and Dispatcher's authenticated readiness. Both must have the same source revision. Its public response contains only status and revision.
+- `/health/live` checks process liveness only; it is not the deployment success criterion.
 
-Dispatcher currently reports Always On disabled and Windows runtime configuration `v9.0`. Enable Always On and configure/verify .NET 8 hosting for these net8.0 projects before cutover. No cloud configuration was changed.
+Checks do not send notifications, claim jobs or replay failures. Normal App Service deployment performs its application restart. An unconditional shutdown cannot recover a missing key and adds downtime, so it is not used as a repair mechanism. Failed readiness fails the job for investigation without automatically reconnecting, replaying or rolling back the database.
 
-## Required configuration before cutover
+The two workflows may overlap. Provider waits for the matching Dispatcher revision. If Dispatcher takes longer than the deadline, rerun Provider verification when Dispatcher is healthy. Deploying just one app from a different revision intentionally leaves Provider readiness unready.
 
-- Provider: set `Dispatcher__BaseUrl` to the exact Dispatcher URL above, `Dispatcher__ApiKey` to the same independent service key configured on Dispatcher, and `Dispatcher__DiscordOAuthEnabled=true` to expose Discord OAuth connection support. The browser continues to use Provider.
-- Dispatcher: set `DiscordOAuth__RedirectUri=https://sengoku-alexandria-qa.azurewebsites.net/api/event-feeds/discord/callback` and register this exact URI in the Discord application. The localhost value in the supplied settings is for local development.
-- Both applications must use the same persistent Data Protection key ring and `Sengoku.Accounts` application name. A blank `Authentication__DataProtectionKeyPath` gives separate app-local keys. Matching path strings on separate app-local disks do not share keys; configure a genuinely shared mounted store and preserve the existing keys.
-- `Dispatcher__DiscordEnabled` enables the ExclusiveInsights socket bot, not EventFeeds webhook delivery. Set it to false unless `ExclusiveInsightsSettings__CustomerPoolConnectionString`, `ExclusiveInsightsSettings__DiscordBotToken`, and the reporting settings (`SendGridSettings__ApiKey`, `SendGridSettings__FromEmail`) are supplied. EventFeeds delivery and OAuth still work independently when this flag is false.
-- `EventFeeds__DeliveryEnabled=true` starts feed processing. `Dispatcher__ServiceBusEnabled=true` starts broker consumption/publishing; `Dispatcher__SchedulingEnabled=true` starts intake scheduling and requires Service Bus. Stop all legacy deployed workers/schedulers before enabling the replacements.
-- Keep exactly one scheduling instance enabled. `IntakeScheduleRunner` prevents overlap only within its process and runs two jobs on startup; multiple replicas would each schedule the same work. Distributed scheduling coordination is not implemented by this extraction.
-- The supplied `Dispatcher__ApiKey` has the format of a Discord bot token. Use a distinct randomly generated service key shared only by Provider and Dispatcher; bot credentials belong in their bot setting.
+## Verified hosting and recovery (November 11, 2026)
 
-The ignored local file `local-settings/sengoku-dispatcher.azure-settings.json` is an exact flattening of the supplied settings for Azure Portal Environment variables / App settings / Advanced edit. It preserves the localhost callback, blank key path, and enabled bot flag, so apply the corrections above before importing it. All values are strings, hierarchy uses double underscores, and array keys end in `__0` through `__3`. Keep this credential-bearing file out of commits and build artifacts.
+Resource group: `Alexandria`.
 
-## Boundary review
+| Service | URL |
+| --- | --- |
+| Provider | `https://sengoku-alexandria-qa.azurewebsites.net` |
+| Dispatcher | `https://sengoku-dispatcher-fvdfhpcrcdd3afag.eastus-01.azurewebsites.net` |
 
-Provider retains frontend controllers, cookie authentication/CSRF, feed management, tournament queries and aggregation/intake orchestration. It resolves remote adapters for Service Bus publishing, Discord OAuth/webhook validation, Discord notifications and ExclusiveInsights. Sharing orchestration implementations from Dispatcher.Library does not register background workers in Provider.
+Dispatcher has .NET 8 hosting, Always On and one worker. `SecretUnavailable` was caused by a destination protected with a local-only key. Reconnecting through Azure repaired it; a subsequent delivery was confirmed `Sent` at 22:21:09 UTC on November 11. Recovery is live. Readiness endpoints and workflow gates require deployment of these source changes.
 
-Dispatcher owns Service Bus clients and event/player/legend consumers, bracket outbox publishing, scheduled intake, EventFeeds delivery, Discord socket listeners, Discord HTTP calls and reporting integrations. Its API controllers expose only authenticated `/internal` operations; `/health/live` is the public liveness endpoint. The two transport SDKs are referenced only by Dispatcher.Library.
+## Data Protection and authentication
 
-The final review corrected shared GraphQL authentication for array configuration and removed embedded token-rotation credentials in favor of configured tokens. Regression coverage checks the configured token, Provider remote adapters, private endpoint authentication, frontend controller ownership, worker propagation and full data workflows.
+Keep Data Protection and application name `Sengoku.Accounts`. Session tokens remain random, hashed database-backed values. Changing key storage does not require removing session authentication or CSRF. Antiforgery and encrypted destinations still require persistent keys.
+
+`Authentication__DataProtectionKeyPath` is an optional override. App Service's default persistent location is `%HOME%\ASP.NET\DataProtection-Keys`. Dispatcher's explicit path already points there, so it can remain without another storage service. Preserve its existing files. Microsoft documents these [persistence defaults](https://learn.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/default-settings?view=aspnetcore-8.0).
+
+Provider authenticates/enforces CSRF and delegates Discord connections to Dispatcher, which alone encrypts/decrypts destinations. These separate applications do not need a shared ring for this flow. Instances of the same application must retain access to that application's keys. Local testing uses separate keys and a separate database. Moving a destination between rings requires the original plaintext connection or preservation of its original keys; restarting cannot recreate a missing key.
+
+## Required configuration
+
+- Provider: set `Dispatcher__BaseUrl` to Azure Dispatcher and `Dispatcher__ApiKey` to its independent internal key. `Dispatcher__DiscordOAuthEnabled` controls frontend OAuth availability. Restrict Dispatcher ingress to intended callers where hosting permits.
+- Dispatcher: enable `EventFeeds__DeliveryEnabled`, `EventFeeds__CommsDeliverablesEnabled`, `Dispatcher__ServiceBusEnabled`; supply the Alexandria database, intake queue connection/names and `ServiceBusSettings__CommsDeliverablesConnection` for `commsdeliverablesqueue`.
+- Scheduling requires Service Bus. Keep one scheduling instance: coordination is process-local.
+- `Dispatcher__DiscordEnabled` controls the socket bot, not feed webhook delivery. Enable only with its bot/customer-pool/reporting configuration.
+- Register the Provider callback URI with Discord for OAuth. Keep bot credentials separate from the service authentication key.
+- No local Dispatcher may use `alexandia-qa.postgres.database.azure.com` database `qa`. The startup guard requires the QA App Service identity; it prevents configuration mistakes, not malicious credential use.
+
+The trusted integration job uses `PRIVATE_DATABASE_FIXTURES_B64` and temporary PostgreSQL. It does not run QA migrations. See [local testing](../docs/local-testing.md) for fixture maintenance and transport limits. Public clones deliberately exclude the database definitions.

@@ -35,6 +35,8 @@ public static class DispatcherConfiguration
 {
     public static void AddDispatcher(this WebApplicationBuilder builder, bool backgroundHost = true)
     {
+        if (backgroundHost) DispatcherEnvironmentGuard.Validate(builder.Configuration);
+        builder.Services.AddSingleton<SengokuDispatcher.Library.Services.Diagnostics.WorkerActivity>();
         builder.Services.AddOperationLogging();
         builder.Services.AddSingleton<OperationResultPolicy>(_ => OperationResultConfiguration.Create());
         //constant config variables

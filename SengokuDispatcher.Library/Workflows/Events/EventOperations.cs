@@ -294,6 +294,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
                             EventId = currentEvent.Id,
                             GameId = tournament?.Videogame?.Id ?? 0,
                             EntrantsNum = tournament?.NumEntrants ?? 0,
+                            StartTimeUtc = tournament?.StartAt is > 0 ? DateTimeOffset.FromUnixTimeSeconds(tournament.StartAt.Value).UtcDateTime : null,
                             LastUpdated = DateTime.UtcNow
                         };
                         tournamentBatch.Add(newTournamentData);
@@ -320,6 +321,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
                         EventId = currentLink.TournamentLink?.EventLink?.Id ?? 0,
                         GameId = currentLink.TournamentLink?.Videogame?.Id ?? 0,
                         EntrantsNum = currentLink.TournamentLink?.NumEntrants ?? 0,
+                        StartTimeUtc = currentLink.TournamentLink?.StartAt is > 0 ? DateTimeOffset.FromUnixTimeSeconds(currentLink.TournamentLink.StartAt.Value).UtcDateTime : null,
                         LastUpdated = DateTime.UtcNow
                     };
                     tournamentBatch.Add(newTournamentData);
@@ -559,7 +561,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
                 var tempQuery = @"query TournamentQuery($tournamentId: ID) {
                                 tournaments(query: {filter: {id: $tournamentId}}) {
                                     nodes { id, name, addrState,countryCode, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug,
-                                        events { id, slug, numEntrants, videogame { id }}}}}";
+                                        events { id, slug, startAt, numEntrants, videogame { id }}}}}";
 
                 var request = new GraphQLHttpRequest
                 {
@@ -625,7 +627,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
                             filter: {
                               videogameIds: $videogameIds, addrState: $state, afterDate: $yearStart, beforeDate: $yearEnd
                             }}) {
-                            nodes { id name slug startAt endAt addrState countryCode city lat lng venueAddress registrationClosesAt isRegistrationOpen isOnline events { id, slug, numEntrants, videogame { id }}}}}";
+                            nodes { id name slug startAt endAt addrState countryCode city lat lng venueAddress registrationClosesAt isRegistrationOpen isOnline events { id, slug, startAt, numEntrants, videogame { id }}}}}";
 
                 var request = new GraphQLHttpRequest
                 {
@@ -695,7 +697,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
             filter: {
                 addrState: $state,afterDate: $yearStart,beforeDate: $yearEnd
                     }}) {
-                    nodes { id,name,addrState,countryCode,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, numEntrants, videogame { id }}}
+                    nodes { id,name,addrState,countryCode,lat,lng,registrationClosesAt,isRegistrationOpen,city,isOnline,venueAddress,startAt,endAt, slug, events { id, slug, startAt, numEntrants, videogame { id }}}
                     pageInfo { total totalPages page perPage }}}";
 
                 var allNodes = new List<EventNode>();
@@ -779,7 +781,7 @@ namespace SengokuDispatcher.Library.Workflows.Events
             return await Sengoku.Observability.OperationLog.RunAsync<TournamentLinkGraphQLResult?>("EventOperations.QueryStartggTournamentDataByLinkId", async () =>
             {
                 var tempQuery = @"query getEventById($id: ID) {
-                                        event(id: $id) { id slug numEntrants videogame { id }
+                                        event(id: $id) { id slug startAt numEntrants videogame { id }
                                             tournament { id, name, addrState,countryCode, lat, lng, registrationClosesAt, isRegistrationOpen, city, isOnline, venueAddress, startAt, endAt, slug }}}";
                 var request = new GraphQLHttpRequest
                 {
