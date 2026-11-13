@@ -55,7 +55,8 @@ internal static class TimelineDeliveryChecks
                     """, new { sub.Id }), "only a non-secret ID cursor survives successful delivery");
                 if (mode == "OnInsert")
                     Check(await db.ExecuteScalarAsync<int>("SELECT count(*) FROM event_feed_edition_work WHERE subscription_id=@id", new { sub.Id }) > 0, "reconnect wake-up retained for overflow");
-                await db.ExecuteAsync("UPDATE event_feed_deliveries SET completed_at=now()-interval '2 hours' WHERE subscription_id=@id AND status='Sent'", new { sub.Id });
+                // Move successful sends beyond the five-hour cooldown before requesting another page.
+                await db.ExecuteAsync("UPDATE event_feed_deliveries SET completed_at=now()-interval '6 hours' WHERE subscription_id=@id AND status='Sent'", new { sub.Id });
             }
             Check(outlet.Digests.Count > 1 && outlet.Digests.Sum(d => d.Events.Count) == 10 && outlet.Digests.SelectMany(d => d.Events).Select(e => e.Name).Distinct().Count() == 10,
                 mode + " delivers every tournament once across full-message pages");
@@ -66,12 +67,12 @@ internal static class TimelineDeliveryChecks
             }
             if (mode == "Daily")
             {
-                await db.ExecuteAsync("UPDATE event_feed_deliveries SET completed_at=now()-interval '2 hours' WHERE subscription_id=@id AND status='Sent'", new { sub.Id });
+                await db.ExecuteAsync("UPDATE event_feed_deliveries SET completed_at=now()-interval '6 hours' WHERE subscription_id=@id AND status='Sent'", new { sub.Id });
                 await db.ExecuteAsync("UPDATE event_feed_subscriptions SET next_run_at=now()-interval '1 second' WHERE id=@id", new { sub.Id });
                 Check(await store.PrepareNext(query, default) && await store.DispatchNext(outlet, default), "fresh scheduled cycle starts");
                 feed = (await store.Save(1, feed.Id, new SaveEventFeedRequest { Name = "Edited daily feed", Enabled = true, Filter = filter,
                     Schedule = new() { Mode = "Daily", UtcTime = "16:00" }, ExpectedVersion = feed.Version }, default))!;
-                await db.ExecuteAsync("UPDATE event_feed_deliveries SET completed_at=now()-interval '2 hours' WHERE subscription_id=@id AND status='Sent'", new { sub.Id });
+                await db.ExecuteAsync("UPDATE event_feed_deliveries SET completed_at=now()-interval '6 hours' WHERE subscription_id=@id AND status='Sent'", new { sub.Id });
                 await db.ExecuteAsync("UPDATE event_feed_subscriptions SET next_run_at=now()-interval '1 second' WHERE id=@id", new { sub.Id });
                 Check(await store.PrepareNext(query, default) && await store.DispatchNext(outlet, default), "edited schedule can send");
                 Check(outlet.Digests.Last().Events[0].Name == outlet.Digests[0].Events[0].Name, "definition edits invalidate the old overflow cursor");
